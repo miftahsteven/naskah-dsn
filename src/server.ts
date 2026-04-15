@@ -1,15 +1,16 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
-import authRouter from './modules/auth/auth.router';
-import usersRouter from './modules/users/users.router';
-import rolesRouter from './modules/roles/roles.router';
-import documentsRouter from './modules/documents/documents.router';
-import workflowRouter from './modules/workflow/workflow.router';
-import auditRouter from './modules/audit/audit.router';
-import notificationsRouter from './modules/notifications/notifications.router';
-import dashboardRouter from './modules/dashboard/dashboard.router';
+import authRouter from './modules/auth/auth.router.js';
+import usersRouter from './modules/users/users.router.js';
+import rolesRouter from './modules/roles/roles.router.js';
+import documentsRouter from './modules/documents/documents.router.js';
+import workflowRouter from './modules/workflow/workflow.router.js';
+import auditRouter from './modules/audit/audit.router.js';
+import notificationsRouter from './modules/notifications/notifications.router.js';
+import dashboardRouter from './modules/dashboard/dashboard.router.js';
 
 dotenv.config();
 

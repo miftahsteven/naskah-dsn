@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../modules/auth/auth.service';
-import { prisma } from '../lib/prisma';
+import type { Request, Response, NextFunction } from 'express';
+import { AuthService } from '../modules/auth/auth.service.js';
+import { prisma } from '../lib/prisma.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -19,6 +19,9 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
   }
 
   const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized: Invalid token format' });
+  }
   const decoded = AuthService.verifyToken(token);
 
   if (!decoded) {

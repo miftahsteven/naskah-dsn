@@ -1,9 +1,11 @@
-import { Router, Response, Request } from 'express';
+import { Router } from 'express';
+import type { Response, Request } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { prisma } from '../../lib/prisma';
-import { authenticate, AuthRequest } from '../../middleware/auth';
+import { prisma } from '../../lib/prisma.js';
+import { authenticate } from '../../middleware/auth.js';
+import type { AuthRequest } from '../../middleware/auth.js';
 
 const router = Router();
 
