@@ -16,7 +16,7 @@ router.get('/', authenticate, authorize(['SUPER_ADMIN', 'ORG_ADMIN']), async (re
         organizationId: req.user!.organizationId,
         ...(userId && { userId: String(userId) }),
         ...(action && { action: String(action) }),
-        ...(resource && { resource: String(resource) }),
+        ...(resource && { module: String(resource) }),
         ...(startDate && endDate && {
           createdAt: {
             gte: new Date(String(startDate)),
@@ -54,10 +54,10 @@ export const recordAuditLog = async (data: {
         userId: data.userId,
         organizationId: data.organizationId,
         action: data.action,
-        resource: data.resource,
-        resourceId: data.resourceId,
-        details: data.details,
-        ip: data.ip,
+        module: data.resource,
+        entityId: data.resourceId,
+        newValue: data.details,
+        ipAddress: data.ip,
         userAgent: data.userAgent,
       },
     });

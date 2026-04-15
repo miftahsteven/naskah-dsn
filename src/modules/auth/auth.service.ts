@@ -19,11 +19,11 @@ export class AuthService {
   }
 
   static generateAccessToken(payload: any): string {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY as SignOptions['expiresIn'] });
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY as any });
   }
 
   static generateRefreshToken(payload: any): string {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY as SignOptions['expiresIn'] });
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY as any });
   }
 
   static verifyToken(token: string): any {

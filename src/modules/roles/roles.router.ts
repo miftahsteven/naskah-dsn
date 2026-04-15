@@ -12,7 +12,7 @@ router.get('/', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthReques
     const roles = await prisma.role.findMany({
       include: {
         _count: {
-          select: { users: true }
+          select: { User: true }
         }
       },
       orderBy: { name: 'asc' },
@@ -40,7 +40,7 @@ router.get('/:id/permissions', authenticate, authorize(['SUPER_ADMIN']), async (
   try {
     const { id } = req.params;
     const rolePermissions = await prisma.rolePermission.findMany({
-      where: { roleId: id },
+      where: { roleId: String(id) },
       include: { permission: true },
     });
     res.json({ status: 'success', data: rolePermissions });
@@ -59,7 +59,7 @@ router.post('/:id/permissions', authenticate, authorize(['SUPER_ADMIN']), async 
     await prisma.$transaction([
       // Delete existing permissions for this role
       prisma.rolePermission.deleteMany({
-        where: { roleId: id },
+        where: { roleId: String(id) },
       }),
       // Create new ones
       prisma.rolePermission.createMany({

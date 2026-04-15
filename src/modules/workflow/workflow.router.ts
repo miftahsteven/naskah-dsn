@@ -22,7 +22,7 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
     }
 
     // Create workflow instance and steps
-    const workflow = await prisma.workflowInstance.create({
+    const workflow = await prisma.documentWorkflowInstance.create({
       data: {
         documentId,
         status: 'PENDING',
@@ -53,13 +53,13 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
 // ── GET APPROVAL QUEUE ──
 router.get('/queue', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const queue = await prisma.workflowStep.findMany({
+    const queue = await prisma.documentWorkflowStep.findMany({
       where: {
         approverId: req.user!.id,
         status: 'PENDING',
       },
       include: {
-        instance: {
+        workflowInstance: {
           include: {
             document: {
               include: {
@@ -85,9 +85,9 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
   try {
     const { stepId, action, comment } = req.body; // action: 'APPROVE' or 'REJECT'
 
-    const step = await prisma.workflowStep.findUnique({
+    const step = await prisma.documentWorkflowStep.findUnique({
       where: { id: stepId },
-      include: { instance: true },
+      include: { workflowInstance: true },
     });
 
     if (!step || step.approverId !== req.user!.id || step.status !== 'PENDING') {
@@ -96,16 +96,16 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
 
     if (action === 'REJECT') {
       await prisma.$transaction([
-        prisma.workflowStep.update({
+        prisma.documentWorkflowStep.update({
           where: { id: stepId },
-          data: { status: 'REJECTED', comment, actionDate: new Date() },
+          data: { status: 'REJECTED', comment, actionedAt: new Date() },
         }),
-        prisma.workflowInstance.update({
-          where: { id: step.instanceId },
+        prisma.documentWorkflowInstance.update({
+          where: { id: step.workflowInstanceId },
           data: { status: 'REJECTED' },
         }),
         prisma.document.update({
-          where: { id: step.instance.documentId },
+          where: { id: step.workflowInstance.documentId },
           data: { status: 'REJECTED' },
         }),
       ]);
@@ -113,29 +113,29 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
     }
 
     if (action === 'APPROVE') {
-      const isLastStep = step.stepNumber === step.instance.totalSteps;
+      const isLastStep = step.stepNumber === step.workflowInstance.totalSteps;
 
       if (isLastStep) {
         await prisma.$transaction([
-          prisma.workflowStep.update({
+          prisma.documentWorkflowStep.update({
             where: { id: stepId },
-            data: { status: 'APPROVED', comment, actionDate: new Date() },
+            data: { status: 'APPROVED', comment, actionedAt: new Date() },
           }),
-          prisma.workflowInstance.update({
-            where: { id: step.instanceId },
+          prisma.documentWorkflowInstance.update({
+            where: { id: step.workflowInstanceId },
             data: { status: 'COMPLETED' },
           }),
           prisma.document.update({
-            where: { id: step.instance.documentId },
+            where: { id: step.workflowInstance.documentId },
             data: { status: 'SIGNED' }, // Simplified: moving directly to signed for now
           }),
           // Create digital signature record
-          prisma.digitalSignature.create({
+          prisma.documentSignature.create({
             data: {
-              documentId: step.instance.documentId,
+              documentId: step.workflowInstance.documentId,
               userId: req.user!.id,
-              signatureType: 'E_SIGN',
-              status: 'COMPLETED',
+              // signatureType missing in schema? I'll remove it if it causes error or keep if user wanted it. 
+              // Schema line 196: DocumentSignature. id, documentId, userId, signatureX, signatureY, pageNumber, signedAt.
               signedAt: new Date(),
             }
           })
@@ -145,16 +145,16 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
         // Move to next step
         const nextStepNumber = step.stepNumber + 1;
         await prisma.$transaction([
-          prisma.workflowStep.update({
+          prisma.documentWorkflowStep.update({
             where: { id: stepId },
-            data: { status: 'APPROVED', comment, actionDate: new Date() },
+            data: { status: 'APPROVED', comment, actionedAt: new Date() },
           }),
-          prisma.workflowStep.updateMany({
-            where: { instanceId: step.instanceId, stepNumber: nextStepNumber },
+          prisma.documentWorkflowStep.updateMany({
+            where: { workflowInstanceId: step.workflowInstanceId, stepNumber: nextStepNumber },
             data: { status: 'PENDING' },
           }),
-          prisma.workflowInstance.update({
-            where: { id: step.instanceId },
+          prisma.documentWorkflowInstance.update({
+            where: { id: step.workflowInstanceId },
             data: { currentStep: nextStepNumber },
           }),
         ]);

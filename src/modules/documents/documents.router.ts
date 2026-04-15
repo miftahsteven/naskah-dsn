@@ -126,7 +126,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const document = await prisma.document.findUnique({
-      where: { id },
+      where: { id: String(id) },
       include: {
         category: true,
         classification: true,

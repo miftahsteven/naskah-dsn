@@ -25,7 +25,7 @@ router.patch('/:id/read', authenticate, async (req: AuthRequest, res: Response) 
   try {
     const { id } = req.params;
     await prisma.notification.update({
-      where: { id, userId: req.user!.id },
+      where: { id: String(id), userId: req.user!.id },
       data: { isRead: true },
     });
     res.json({ status: 'success', message: 'Notification marked as read' });
@@ -49,7 +49,7 @@ export const sendNotification = async (data: {
         type: data.type,
         title: data.title,
         message: data.message,
-        link: data.link,
+        link: data.link ?? null,
       },
     });
   } catch (error) {

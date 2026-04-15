@@ -36,7 +36,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { id: String(id) },
       include: {
         role: true,
         unit: true,
@@ -93,7 +93,7 @@ router.patch('/:id', authenticate, authorize(['SUPER_ADMIN', 'ORG_ADMIN']), asyn
     const { fullName, roleId, unitId, jobTitle, isActive } = req.body;
 
     const updatedUser = await prisma.user.update({
-      where: { id },
+      where: { id: String(id) },
       data: {
         fullName,
         roleId,
@@ -116,7 +116,7 @@ router.post('/:id/reset-2fa', authenticate, authorize(['SUPER_ADMIN', 'ORG_ADMIN
     const { id } = req.params;
 
     await prisma.user.update({
-      where: { id },
+      where: { id: String(id) },
       data: {
         twoFactorEnabled: false,
         twoFactorSecret: null,
