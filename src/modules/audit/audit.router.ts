@@ -55,10 +55,10 @@ export const recordAuditLog = async (data: {
         organizationId: data.organizationId,
         action: data.action,
         module: data.resource,
-        entityId: data.resourceId,
+        entityId: data.resourceId ?? null,
         newValue: data.details,
-        ipAddress: data.ip,
-        userAgent: data.userAgent,
+        ipAddress: data.ip ?? null,
+        userAgent: data.userAgent ?? null,
       },
     });
   } catch (error) {

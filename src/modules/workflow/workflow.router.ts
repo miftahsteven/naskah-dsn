@@ -27,11 +27,10 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
         documentId,
         status: 'PENDING',
         currentStep: 1,
-        totalSteps: stepConfig.length,
         steps: {
           create: stepConfig.map((s: any) => ({
             stepNumber: s.stepNumber,
-            approverId: s.userId,
+            userId: s.userId,
             status: s.stepNumber === 1 ? 'PENDING' : 'WAITING',
           })),
         },
@@ -55,7 +54,7 @@ router.get('/queue', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const queue = await prisma.documentWorkflowStep.findMany({
       where: {
-        approverId: req.user!.id,
+        userId: req.user!.id,
         status: 'PENDING',
       },
       include: {
@@ -87,10 +86,16 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
 
     const step = await prisma.documentWorkflowStep.findUnique({
       where: { id: stepId },
-      include: { workflowInstance: true },
+      include: { 
+        workflowInstance: {
+          include: {
+            _count: { select: { steps: true } }
+          }
+        } 
+      },
     });
 
-    if (!step || step.approverId !== req.user!.id || step.status !== 'PENDING') {
+    if (!step || step.userId !== req.user!.id || step.status !== 'PENDING') {
       return res.status(400).json({ status: 'error', message: 'Invalid step or unauthorized' });
     }
 
@@ -113,7 +118,7 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
     }
 
     if (action === 'APPROVE') {
-      const isLastStep = step.stepNumber === step.workflowInstance.totalSteps;
+      const isLastStep = step.stepNumber === step.workflowInstance._count.steps;
 
       if (isLastStep) {
         await prisma.$transaction([
