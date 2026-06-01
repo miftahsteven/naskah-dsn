@@ -55,7 +55,7 @@ export class AuthService {
       secret,
       encoding: 'base32',
       token,
-      window: 1, // Allow 30s window
+      window: 3, // Allow 90s window (3 steps of 30s) for better reliability against time drift
     });
   }
 }

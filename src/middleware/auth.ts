@@ -6,9 +6,12 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
+    fullName: string; // ── NEW
     role: string;
+    permissions: string[]; // ── NEW
     organizationId: string;
     unitId?: string | null;
+    roleId: string; // ── NEW
   };
 }
 
@@ -31,7 +34,15 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
   // Check if user still exists and is active
   const user = await prisma.user.findUnique({
     where: { id: decoded.id },
-    include: { role: true },
+    include: { 
+      role: {
+        include: {
+          rolePermissions: {
+            include: { permission: true }
+          }
+        }
+      } 
+    },
   });
 
   if (!user || !user.isActive) {
@@ -41,9 +52,12 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
   req.user = {
     id: user.id,
     email: user.email,
+    fullName: user.fullName, // ── NEW
     role: user.role.name,
+    permissions: user.role.rolePermissions.map(rp => rp.permission.code),
     organizationId: user.organizationId,
     unitId: user.unitId,
+    roleId: user.roleId, // ── NEW
   };
 
   next();
@@ -56,7 +70,23 @@ export const authorize = (roles: string[]) => {
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ status: 'error', message: 'Forbidden: Insufficient permissions' });
+      return res.status(403).json({ status: 'error', message: 'Forbidden: Insufficient role' });
+    }
+
+    next();
+  };
+};
+
+export const checkPermission = (permissionCode: string) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+
+    // Removed SUPER_ADMIN and ORG_ADMIN bypass to allow strict testing/enforcement
+
+    if (!req.user.permissions.includes(permissionCode)) {
+      return res.status(403).json({ status: 'error', message: `Forbidden: Missing permission ${permissionCode}` });
     }
 
     next();

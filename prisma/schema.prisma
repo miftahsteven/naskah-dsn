@@ -1,6 +1,5 @@
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -29,6 +28,25 @@ model OrganizationUnit {
   documents      Document[]
 }
 
+// ── NEW: Department Reference Table ─────────────────────────────────────────
+model Department {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+}
+
+// ── NEW: Jabatan (Position) Reference Table ──────────────────────────────────
+model Jabatan {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+}
+
 model Role {
   id              String           @id @default(uuid())
   name            String           @unique
@@ -42,7 +60,7 @@ model Role {
 
 model Permission {
   id              String           @id @default(uuid())
-  code            String           @unique // e.g., 'DOC_VIEW', 'USER_CREATE'
+  code            String           @unique
   name            String
   description     String?
   createdAt       DateTime         @default(now())
@@ -62,28 +80,35 @@ model RolePermission {
 }
 
 model User {
-  id                String             @id @default(uuid())
-  email             String             @unique
-  passwordHash      String
-  fullName          String
-  jobTitle          String?
-  organizationId    String
-  organization      Organization       @relation(fields: [organizationId], references: [id])
-  unitId            String?
-  unit              OrganizationUnit?  @relation(fields: [unitId], references: [id])
-  roleId            String // Default/Primary Role
-  role              Role               @relation(fields: [roleId], references: [id])
-  userRoles         UserRole[]
-  isActive          Boolean            @default(true)
-  twoFactorEnabled  Boolean            @default(false)
-  twoFactorSecret   String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  documentsCreated  Document[]         @relation("DocumentCreator")
-  workflowSteps     DocumentWorkflowStep[]
-  notifications     Notification[]
-  auditLogs         AuditLog[]
-  signatures        DocumentSignature[]
+  id               String            @id @default(uuid())
+  email            String            @unique
+  passwordHash     String
+  fullName         String
+  jobTitle         String?
+  phone            String?           // ── NEW
+  organizationId   String
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  unitId           String?
+  unit             OrganizationUnit? @relation(fields: [unitId], references: [id])
+  departmentId     String?           // ── NEW
+  department       Department?       @relation(fields: [departmentId], references: [id])
+  jabatanId        String?           // ── NEW
+  jabatan          Jabatan?          @relation(fields: [jabatanId], references: [id])
+  roleId           String
+  role             Role              @relation(fields: [roleId], references: [id])
+  userRoles        UserRole[]
+  isActive         Boolean           @default(true)
+  twoFactorEnabled Boolean           @default(false)
+  twoFactorSecret  String?
+  pushToken        String?           // ── NEW: For Push Notifications
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  documentsCreated Document[]        @relation("DocumentCreator")
+  workflowSteps    DocumentWorkflowStep[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  signatures       DocumentSignature[]
+  biometrics       UserBiometric[]
 }
 
 model UserRole {
@@ -107,7 +132,7 @@ model DocumentCategory {
 
 model DocumentClassification {
   id        String     @id @default(uuid())
-  level     String     @unique // e.g., 'UMUM', 'TERBATAS', 'RAHASIA', 'SANGAT_RAHASIA'
+  level     String     @unique
   name      String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -115,23 +140,26 @@ model DocumentClassification {
 }
 
 model Document {
-  id                String                  @id @default(uuid())
+  id                String                   @id @default(uuid())
   title             String
-  documentNumber    String?                 @unique
+  documentNumber    String?                  @unique
   organizationId    String
-  organization      Organization            @relation(fields: [organizationId], references: [id])
+  organization      Organization             @relation(fields: [organizationId], references: [id])
   unitId            String?
-  unit              OrganizationUnit?       @relation(fields: [unitId], references: [id])
+  unit              OrganizationUnit?        @relation(fields: [unitId], references: [id])
   categoryId        String
-  category          DocumentCategory        @relation(fields: [categoryId], references: [id])
+  category          DocumentCategory         @relation(fields: [categoryId], references: [id])
   classificationId  String
-  classification    DocumentClassification  @relation(fields: [classificationId], references: [id])
+  classification    DocumentClassification   @relation(fields: [classificationId], references: [id])
   creatorId         String
-  creator           User                    @relation("DocumentCreator", fields: [creatorId], references: [id])
-  status            String                  @default("DRAFT") // DRAFT, PENDING_APPROVAL, SIGNED, REJECTED, ARCHIVED
-  currentVersion    Int                     @default(1)
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  creator           User                     @relation("DocumentCreator", fields: [creatorId], references: [id])
+  documentType      String                   @default("OUTGOING")
+  approvalFlowType  String                   @default("SEQUENTIAL")
+  certificateUrl    String?
+  status            String                   @default("DRAFT")
+  currentVersion    Int                      @default(1)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
   versions          DocumentVersion[]
   workflowInstances DocumentWorkflowInstance[]
   signatures        DocumentSignature[]
@@ -161,7 +189,7 @@ model WorkflowTemplate {
   organizationId    String
   createdAt         DateTime                   @default(now())
   updatedAt         DateTime                   @updatedAt
-  steps             Json // Sequence of roles/users required
+  steps             Json
   workflowInstances DocumentWorkflowInstance[]
 }
 
@@ -171,7 +199,7 @@ model DocumentWorkflowInstance {
   document      Document               @relation(fields: [documentId], references: [id])
   templateId    String?
   template      WorkflowTemplate?      @relation(fields: [templateId], references: [id])
-  status        String                 @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  status        String                 @default("ACTIVE")
   currentStep   Int                    @default(1)
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
@@ -186,34 +214,34 @@ model DocumentWorkflowStep {
   roleId             String?
   userId             String?
   user               User?                    @relation(fields: [userId], references: [id])
-  status             String                   @default("PENDING") // PENDING, APPROVED, REJECTED
+  status             String                   @default("PENDING")
   comment            String?
-  actionedAt         DateTime?
+  actionedAt        DateTime?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
 }
 
 model DocumentSignature {
-  id         String    @id @default(uuid())
+  id         String   @id @default(uuid())
   documentId String
-  document   Document  @relation(fields: [documentId], references: [id])
+  document   Document @relation(fields: [documentId], references: [id])
   userId     String
-  user       User      @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
   signatureX Float?
   signatureY Float?
   pageNumber Int?
-  signedAt   DateTime  @default(now())
+  signedAt   DateTime @default(now())
 }
 
 model DocumentPublication {
-  id           String    @id @default(uuid())
+  id           String   @id @default(uuid())
   documentId   String
-  document     Document  @relation(fields: [documentId], references: [id])
+  document     Document @relation(fields: [documentId], references: [id])
   publishedBy  String
-  channel      String    @default("INTERNAL") // INTERNAL, EXTERNAL, PUBLIC
+  channel      String   @default("INTERNAL")
   shareUrl     String?
   expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
 }
 
 model Notification {
@@ -222,7 +250,7 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id])
   title     String
   message   String
-  type      String   @default("INFO") // INFO, WARNING, SUCCESS, URGENT
+  type      String   @default("INFO")
   isRead    Boolean  @default(false)
   link      String?
   createdAt DateTime @default(now())
@@ -242,4 +270,16 @@ model AuditLog {
   ipAddress      String?
   userAgent      String?
   createdAt      DateTime     @default(now())
+}
+
+model UserBiometric {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  deviceId  String
+  tokenHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, deviceId])
 }

@@ -13,26 +13,40 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
 
     const [
       totalDocs,
-      pendingApprovals,
+      inProgress,
+      needsAction,
       signedDocs,
-      rejectedDocs,
-      totalUsers,
     ] = await Promise.all([
+      // 1. Total semua dokumen
       prisma.document.count({ where: { organizationId: orgId } }),
-      prisma.document.count({ where: { organizationId: orgId, status: 'PENDING_APPROVAL' } }),
+      // 2. Yang sedang dalam proses flow (In Progress)
+      prisma.document.count({ 
+        where: { 
+          organizationId: orgId, 
+          status: { in: ['PENDING_APPROVAL', 'REVISION'] } 
+        } 
+      }),
+      // 3. Perlu tindakan (Hanya yang Menunggu TTE/Approval)
+      prisma.documentWorkflowStep.count({
+        where: {
+          OR: [
+            { userId: req.user!.id },
+            { AND: [{ userId: null }, { roleId: req.user!.roleId }] }
+          ],
+          status: 'PENDING',
+        }
+      }),
+      // 4. Selesai diproses (SIGNED)
       prisma.document.count({ where: { organizationId: orgId, status: 'SIGNED' } }),
-      prisma.document.count({ where: { organizationId: orgId, status: 'REJECTED' } }),
-      prisma.user.count({ where: { organizationId: orgId } }),
     ]);
 
     res.json({
       status: 'success',
       data: {
         totalDocs,
-        pendingApprovals,
+        inProgress,
+        needsAction,
         signedDocs,
-        rejectedDocs,
-        totalUsers,
       },
     });
   } catch (error: any) {

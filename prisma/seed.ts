@@ -24,7 +24,7 @@ async function main() {
   });
 
   // 2. Create Roles
-  const roles = [
+  const rolesData = [
     { name: 'SUPER_ADMIN', description: 'System Administrator with full access' },
     { name: 'ORG_ADMIN', description: 'Organization Administrator' },
     { name: 'APPROVER', description: 'Officer responsible for reviewing documents' },
@@ -33,12 +33,70 @@ async function main() {
     { name: 'EXTERNAL_VIEWER', description: 'Limited external access' },
   ];
 
-  for (const role of roles) {
+  for (const role of rolesData) {
     await prisma.role.upsert({
       where: { name: role.name },
       update: { description: role.description },
       create: role,
     });
+  }
+
+  // ── NEW: Create Permissions ──
+  const permissionsData = [
+    // MANAJEMEN DOKUMEN
+    { code: 'DOC_UPLOAD', name: 'Upload Dokumen', description: 'Mampu mengunggah dokumen baru' },
+    { code: 'DOC_EDIT', name: 'Edit Dokumen', description: 'Mampu merubah metadata dokumen' },
+    { code: 'DOC_VIEW', name: 'Lihat Dokumen', description: 'Mampu melihat isi dokumen (Reader)' },
+    { code: 'DOC_DELETE', name: 'Hapus Dokumen', description: 'Mampu menghapus versi dokumen' },
+    { code: 'DOC_APPROVE', name: 'Approve Dokumen', description: 'Mampu menyetujui dokumen di workflow' },
+    { code: 'DOC_REJECT', name: 'Reject Dokumen', description: 'Mampu menolak dokumen di workflow' },
+    { code: 'DOC_REVISE', name: 'Revisi Dokumen', description: 'Mampu meminta revisi dokumen' },
+    
+    // MANAJEMEN USER
+    { code: 'USER_ADD', name: 'Tambah User', description: 'Mampu menambah user baru' },
+    { code: 'USER_EDIT', name: 'Edit User', description: 'Mampu mengubah data user' },
+    { code: 'USER_DELETE', name: 'Hapus User', description: 'Mampu menghapus user' },
+    
+    // MANAJEMEN ROLE
+    { code: 'ROLE_MANAGE', name: 'Kelola Role & Permission', description: 'Mampu mengatur hak akses role' },
+  ];
+
+  const createdPermissions = [];
+  for (const perm of permissionsData) {
+    const p = await prisma.permission.upsert({
+      where: { code: perm.code },
+      update: { name: perm.name, description: perm.description },
+      create: perm,
+    });
+    createdPermissions.push(p);
+  }
+
+  // ── NEW: Map Permissions to Roles ──
+  const allRoles = await prisma.role.findMany();
+  const permMap = createdPermissions.reduce((acc, p) => ({ ...acc, [p.code]: p.id }), {} as Record<string, string>);
+
+  for (const role of allRoles) {
+    let rolePerms: string[] = [];
+    
+    if (['SUPER_ADMIN', 'ORG_ADMIN'].includes(role.name)) {
+      rolePerms = createdPermissions.map(p => p.id);
+    } else if (role.name === 'APPROVER') {
+      rolePerms = [permMap['DOC_VIEW'], permMap['DOC_APPROVE'], permMap['DOC_REJECT'], permMap['DOC_REVISE']];
+    } else if (role.name === 'STAFF') {
+      rolePerms = [permMap['DOC_UPLOAD'], permMap['DOC_VIEW']];
+    }
+
+    if (rolePerms.length > 0) {
+      for (const pId of rolePerms) {
+        await prisma.rolePermission.upsert({
+          where: { 
+            roleId_permissionId: { roleId: role.id, permissionId: pId } 
+          },
+          update: {},
+          create: { roleId: role.id, permissionId: pId }
+        });
+      }
+    }
   }
 
   const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });

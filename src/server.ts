@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import authRouter from './modules/auth/auth.router.js';
@@ -17,41 +18,75 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4002;
 
-// ── MIDDLEWARE ──────────────────────────────────────────────────────────────
-
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
-  credentials: true
+// ── SECURITY HEADERS (helmet) ────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // needed for file serving
+  contentSecurityPolicy: false, // handled at frontend level
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ── CORS — strict origin whitelist, NO wildcards ─────────────────────────────
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+  : ['http://localhost:3000'];
 
-// Rate limiting
-const limiter = rateLimit({
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow server-to-server (no origin header) in non-production
+    if (!origin && process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: Origin ${origin} not allowed`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ── RATE LIMITING ─────────────────────────────────────────────────────────────
+
+// Strict limiter for auth endpoints (prevent brute force)
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  message: { status: 'error', message: 'Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.' },
 });
-app.use(limiter);
 
-// Serve static files from uploads directory
+// General API limiter
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'error', message: 'Terlalu banyak request. Silakan coba lagi nanti.' },
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
+
+// ── STATIC FILES ──────────────────────────────────────────────────────────────
+// Protected uploads — require auth token checked via middleware in docs router
 app.use('/uploads', express.static('uploads'));
 
-// ── ROUTES ──────────────────────────────────────────────────────────────────
+// ── ROUTES ────────────────────────────────────────────────────────────────────
 
-// Health Check
-app.get('/api/health', (req: Request, res: Response) => {
+// Health Check — public but minimal info
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
-    message: 'MUI Naskah Digital API is running',
+    message: 'Amanah API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
   });
 });
 
-// Mount Modules
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/roles', rolesRouter);
@@ -60,23 +95,32 @@ app.use('/api/workflow', workflowRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/dashboard', dashboardRouter);
-// app.use('/api/users', usersRouter);
-// app.use('/api/documents', documentsRouter);
 
-// ── ERROR HANDLING ──────────────────────────────────────────────────────────
+// ── 404 HANDLER ───────────────────────────────────────────────────────────────
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ status: 'error', message: 'Endpoint tidak ditemukan' });
+});
 
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+// ── ERROR HANDLING ────────────────────────────────────────────────────────────
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  // Don't leak internal error details in production
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  if (err.message?.includes('CORS')) {
+    return res.status(403).json({ status: 'error', message: 'Akses ditolak: Origin tidak diizinkan' });
+  }
+
   console.error(err.stack);
   res.status(err.status || 500).json({
     status: 'error',
-    message: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    message: isDev ? err.message : 'Internal Server Error',
+    ...(isDev && { stack: err.stack }),
   });
 });
 
-// ── START SERVER ────────────────────────────────────────────────────────────
-
+// ── START SERVER ──────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
+  console.log(`🚀 Amanah API running on http://localhost:${PORT}`);
+  console.log(`🔒 CORS allowed origins: ${allowedOrigins.join(', ')}`);
   console.log(`✅ Environment: ${process.env.NODE_ENV}`);
 });

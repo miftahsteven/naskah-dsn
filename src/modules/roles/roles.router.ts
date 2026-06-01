@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
-import { authenticate, authorize } from '../../middleware/auth.js';
+import { authenticate, authorize, checkPermission } from '../../middleware/auth.js';
 import type { AuthRequest } from '../../middleware/auth.js';
 
 const router = Router();
 
 // ── GET ALL ROLES ──
-router.get('/', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, checkPermission('ROLE_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
     const roles = await prisma.role.findMany({
       include: {
@@ -24,7 +24,7 @@ router.get('/', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthReques
 });
 
 // ── GET ALL PERMISSIONS ──
-router.get('/permissions', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+router.get('/permissions', authenticate, checkPermission('ROLE_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
     const permissions = await prisma.permission.findMany({
       orderBy: { code: 'asc' },
@@ -36,7 +36,7 @@ router.get('/permissions', authenticate, authorize(['SUPER_ADMIN']), async (req:
 });
 
 // ── GET ROLE PERMISSIONS ──
-router.get('/:id/permissions', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+router.get('/:id/permissions', authenticate, checkPermission('ROLE_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const rolePermissions = await prisma.rolePermission.findMany({
@@ -50,7 +50,7 @@ router.get('/:id/permissions', authenticate, authorize(['SUPER_ADMIN']), async (
 });
 
 // ── UPDATE ROLE PERMISSIONS ──
-router.post('/:id/permissions', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+router.post('/:id/permissions', authenticate, checkPermission('ROLE_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { permissionIds } = req.body; // Array of permission IDs
