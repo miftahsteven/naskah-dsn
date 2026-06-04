@@ -105,7 +105,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       const document = await prisma.document.create({
         data: {
           title,
-          documentNumber,
+          documentNumber: documentNumber ? String(documentNumber).trim() || null : null,
           organizationId: req.user!.organizationId,
           categoryId,
           classificationId,
