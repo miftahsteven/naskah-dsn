@@ -184,8 +184,10 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ status: 'error', message: 'Forbidden: No access to this document' });
     }
     
-    // Transform fileUrl to HTTP download URL for mobile compatibility
-    const baseUrl = `${req.protocol}://${req.get('host')}/api`;
+    // Transform fileUrl to HTTP/HTTPS download URL for mobile compatibility
+    const protoHeader = req.headers['x-forwarded-proto'];
+    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
+    const baseUrl = `${protocol}://${req.get('host')}/api`;
     const transformedDocument = {
       ...document,
       fileUrl: `${baseUrl}/documents/${document.id}/download`,
