@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { prisma } from '../../lib/prisma.js';
 import { authenticate } from '../../middleware/auth.js';
+// Trigger reload after prisma client generation
 import type { AuthRequest } from '../../middleware/auth.js';
 
 const router = Router();
@@ -391,6 +392,76 @@ router.post('/biometric/login', async (req: Request, res: Response) => {
           permissions: user.role.rolePermissions.map(rp => rp.permission.code),
         },
       },
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── CHECK PIN ──
+router.get('/check-pin', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id }
+    });
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User tidak ditemukan' });
+    }
+    res.json({
+      status: 'success',
+      data: {
+        hasPin: !!user.pinHash
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── SETUP PIN ──
+router.post('/setup-pin', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { pin } = req.body;
+    if (!pin || typeof pin !== 'string' || pin.length !== 6 || !/^\d+$/.test(pin)) {
+      return res.status(400).json({ status: 'error', message: 'PIN harus berupa 6 digit angka' });
+    }
+
+    const pinHash = await AuthService.hashPassword(pin);
+
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { pinHash }
+    });
+
+    res.json({ status: 'success', message: 'PIN berhasil dikonfigurasi' });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── VERIFY PIN ──
+router.post('/verify-pin', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { pin } = req.body;
+    if (!pin || typeof pin !== 'string') {
+      return res.status(400).json({ status: 'error', message: 'PIN wajib diisi' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id }
+    });
+
+    if (!user || !user.pinHash) {
+      return res.status(400).json({ status: 'error', message: 'PIN belum dikonfigurasi' });
+    }
+
+    const isValid = await AuthService.comparePassword(pin, user.pinHash);
+
+    res.json({
+      status: 'success',
+      data: {
+        valid: isValid
+      }
     });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
