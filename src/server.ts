@@ -62,7 +62,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Strict limiter for auth endpoints (prevent brute force)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 5000, // Increased from 20 to support heavy demoing/testing
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: 'error', message: 'Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.' },
@@ -71,7 +71,7 @@ const authLimiter = rateLimit({
 // General API limiter
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 50000, // Increased from 300 to support heavy demoing/testing
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: 'error', message: 'Terlalu banyak request. Silakan coba lagi nanti.' },
