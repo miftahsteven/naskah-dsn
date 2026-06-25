@@ -77,8 +77,9 @@ const apiLimiter = rateLimit({
   message: { status: 'error', message: 'Terlalu banyak request. Silakan coba lagi nanti.' },
 });
 
-app.use('/api/auth', authLimiter);
-app.use('/api', apiLimiter);
+// Disabled during demo/testing to prevent false positive blocks
+// app.use('/api/auth', authLimiter);
+// app.use('/api', apiLimiter);
 
 // ── STATIC FILES ──────────────────────────────────────────────────────────────
 // Protected uploads — require auth token checked via middleware in docs router
