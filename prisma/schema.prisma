@@ -110,6 +110,7 @@ model User {
   auditLogs        AuditLog[]
   signatures       DocumentSignature[]
   biometrics       UserBiometric[]
+  disposisiLogs    DisposisiLog[]
 }
 
 model UserRole {
@@ -158,6 +159,7 @@ model Document {
   approvalFlowType  String                   @default("SEQUENTIAL")
   certificateUrl    String?
   status            String                   @default("DRAFT")
+  disposisiStatus   String?                  // "BARU", "DIPROSES", "SELESAI"
   currentVersion    Int                      @default(1)
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
@@ -165,6 +167,7 @@ model Document {
   workflowInstances DocumentWorkflowInstance[]
   signatures        DocumentSignature[]
   publications      DocumentPublication[]
+  disposisiLogs     DisposisiLog[]
 }
 
 model DocumentVersion {
@@ -284,3 +287,128 @@ model UserBiometric {
 
   @@unique([userId, deviceId])
 }
+
+model DpsMember {
+  id                 String   @id @default(uuid())
+  status             String   // 'Calon DPS' | 'Aktif' | 'Nonaktif'
+  jenisPenugasan     String   // 'Penuh Waktu' | 'Paruh Waktu'
+  tanggalPengajuan   String
+  namaLengkap        String
+  fotoUrl            String?
+  tempatLahir        String
+  tanggalLahir       String
+  jenisKelamin       String
+  kewarganegaraan    String
+  agama              String
+  npwp               String
+  alamatDomisili     String
+  rtRw               String
+  kelurahan          String
+  kecamatan          String
+  kotaKabupaten      String
+  provinsi           String
+  kodePos            String
+  noTelepon          String
+  noHp               String
+  email              String
+  pendidikanTerakhir String
+  perguruanTinggi    String
+  tahunLulus         String
+
+  // Tab 2 fields
+  lembagaPenempatan  String?
+  jabatanDps         String?
+  skPengangkatan     String?
+  tanggalSk          String?
+  masaJabatanMulai   String?
+  masaJabatanSelesai String?
+  riwayatJabatan     Json?    // Array of { lembaga, jabatan, periode }
+
+  // Tab 3 fields
+  sertifikatPelatihan Json?   // Array of { nama, lembaga, tahun }
+  bidangKeahlian     Json?    // Array of strings
+  pengalamanProfesional String?
+
+  // Tab 4 fields
+  dokumenFiles       Json?    // Array of { tipe, namaFile }
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model DisposisiLog {
+  id                String                   @id @default(uuid())
+  documentId        String
+  document          Document                 @relation(fields: [documentId], references: [id])
+  userId            String?
+  user              User?                    @relation(fields: [userId], references: [id])
+  action            String
+  description       String?
+  metadata          Json?
+  createdAt         DateTime                 @default(now())
+}
+
+model Fatwa {
+  id           String   @id @default(uuid())
+  title        String
+  agendaNumber String   @unique
+  status       String   // 'PERMOHONAN' | 'KAJIAN' | 'BPH' | 'PLENO' | 'TTE' | 'PUBLIKASI'
+  applicant    String   // Pengaju / Pihak terkait
+  tanggal      DateTime @default(now())
+  keterangan   String?  // Catatan / Deskripsi fatwa
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Meeting {
+  id             String   @id @default(uuid())
+  title          String
+  agendaNumber   String?  @unique
+  dateTime       DateTime
+  endDateTime    DateTime?
+  location       String
+  description    String?
+  targetType     String   // 'ALL' | 'EXECUTIVE' | 'ALL_BOARD' | 'SECRETARIAT' | 'FINANCE' | 'DEPARTMENT' | 'CROSS_AGENCY' | 'CROSS_INTERNAL'
+  departmentId   String?
+  status         String   @default("DRAFT") // 'DRAFT' | 'SELESAI' | 'BATAL' | 'ARSIP'
+  attendees      Json     // Array of attendees: [{ userId, name, email, department, jabatan, isExternal, status }]
+  invitationSent Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ── Letter Template Model ────────────────────────────────────────────────────
+model LetterTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  code         String?  @unique // e.g., "PKS-SYARIAH", "OPINI-SYARIAH"
+  category     String   // e.g., "Pernyataan", "Opini", "Perjanjian"
+  description  String?
+  // HTML template with {{variable}} placeholders
+  htmlContent  String   @db.Text
+  // JSON array of variable definitions: [{ key, label, type, required, defaultValue? }]
+  variables    Json
+  isArchived   Boolean  @default(false)
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Notula {
+  id            String   @id @default(uuid())
+  meetingId     String?  @unique
+  title         String
+  agendaNumber  String?
+  dateTime      DateTime
+  location      String
+  content       String   // Isi risalah / pembahasan rapat
+  decisions     String?  // Keputusan yang diambil (opsional)
+  notes         String?  // Catatan tambahan (opsional)
+  creatorId     String
+  creatorName   String
+  attendees     Json     // Menyalin daftar peserta rapat beserta status hadirnya: [{ userId, name, email, department, jabatan, isExternal, status }]
+  sharedWithIds Json     // Array user ID untuk pengguna yang dibagikan akses: string[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+

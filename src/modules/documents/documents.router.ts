@@ -8,6 +8,7 @@ import { authenticate, checkPermission } from '../../middleware/auth.js';
 import type { AuthRequest } from '../../middleware/auth.js';
 import { PushService } from '../../lib/push.js';
 import { sendNotification } from '../notifications/notifications.router.js';
+import { triggerQueueUpdate } from '../../lib/firebase.js';
 
 const router = Router();
 
@@ -32,6 +33,70 @@ const upload = multer({
   limits: { fileSize: Number(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 }, // Default 10MB
 });
 
+// ── GENERATE DOCUMENT NUMBER ──
+// Returns the next sequential document number for the current year
+// Format: XXX/KODE/DSN-MUI/MM/YYYY
+// Resets to 001 every new year
+router.get('/generate-number', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { templateCode } = req.query;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-indexed
+
+    // Count documents created in the current year for this organization
+    const startOfYear = new Date(currentYear, 0, 1); // Jan 1
+    const endOfYear = new Date(currentYear + 1, 0, 1); // Jan 1 next year
+
+    const docCount = await prisma.document.count({
+      where: {
+        organizationId: req.user!.organizationId,
+        createdAt: {
+          gte: startOfYear,
+          lt: endOfYear,
+        },
+      },
+    });
+
+    // Next number is count + 1, formatted as 3-digit zero-padded
+    const nextNumber = (docCount + 1).toString().padStart(3, '0');
+
+    // Roman numeral month for standard Indonesian government format
+    const romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    const monthRoman = romanMonths[currentMonth - 1];
+
+    // Template code mapping for standard letter types
+    const codeMap: Record<string, string> = {
+      rutin: 'SR',
+      pengantar: 'SP',
+      keputusan: 'SK',
+      mandat: 'SM',
+      tugas: 'ST',
+      informasi: 'SI',
+    };
+
+    const code = codeMap[String(templateCode || '')] || String(templateCode || 'SR').toUpperCase();
+
+    // Standard format: 001/SK/DSN-MUI/VI/2026
+    const documentNumber = `${nextNumber}/${code}/DSN-MUI/${monthRoman}/${currentYear}`;
+
+    res.json({
+      status: 'success',
+      data: {
+        documentNumber,
+        sequenceNumber: nextNumber,
+        templateCode: code,
+        month: monthRoman,
+        monthNumeric: currentMonth.toString().padStart(2, '0'),
+        year: currentYear,
+        totalThisYear: docCount,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // ── GET CATEGORIES & CLASSIFICATIONS ──
 router.get('/meta', authenticate, async (req: Request, res: Response) => {
   try {
@@ -53,7 +118,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const documents = await prisma.document.findMany({
       where: {
         organizationId: req.user!.organizationId,
-        ...(status && { status: String(status) }),
+        status: status ? String(status) : { not: 'ARCHIVED' },
         ...(categoryId && { categoryId: String(categoryId) }),
         ...(classificationId && { classificationId: String(classificationId) }),
         ...(documentType && { documentType: String(documentType) }),
@@ -68,6 +133,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         category: true,
         classification: true,
         creator: { select: { fullName: true, email: true } },
+        versions: { orderBy: { versionNum: 'desc' } },
         workflowInstances: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -81,7 +147,21 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       orderBy: { updatedAt: 'desc' },
     });
 
-    res.json({ status: 'success', data: documents });
+    // Transform fileUrl to HTTP/HTTPS download URL for consistency & mobile compatibility
+    const protoHeader = req.headers['x-forwarded-proto'];
+    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
+    const baseUrl = `${protocol}://${req.get('host')}/api`;
+
+    const transformedDocs = documents.map(doc => ({
+      ...doc,
+      fileUrl: `${baseUrl}/documents/${doc.id}/download`,
+      versions: doc.versions.map(v => ({
+        ...v,
+        fileUrl: `${baseUrl}/documents/${doc.id}/versions/${v.id}/download`
+      }))
+    }));
+
+    res.json({ status: 'success', data: transformedDocs });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
@@ -216,6 +296,32 @@ router.patch('/:id/archive', authenticate, checkPermission('DOC_EDIT'), async (r
     res.json({ status: 'success', message: 'Document archived' });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── RESTORE DOCUMENT ──
+router.patch('/:id/restore', authenticate, checkPermission('DOC_EDIT'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const doc = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: { workflowInstances: true }
+    });
+
+    if (!doc) {
+      return res.status(404).json({ status: 'error', message: 'Document not found' });
+    }
+
+    const hasCompletedWorkflow = doc.workflowInstances.some(w => w.status === 'COMPLETED');
+    const restoredStatus = hasCompletedWorkflow ? 'SIGNED' : 'DRAFT';
+
+    await prisma.document.update({
+      where: { id: String(id) },
+      data: { status: restoredStatus }
+    });
+    res.json({ status: 'success', message: 'Document restored', restoredStatus });
+  } catch (error: any) {
+    res.status(550).json({ status: 'error', message: error.message });
   }
 });
 

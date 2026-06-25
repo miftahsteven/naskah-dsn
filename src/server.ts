@@ -12,6 +12,13 @@ import workflowRouter from './modules/workflow/workflow.router.js';
 import auditRouter from './modules/audit/audit.router.js';
 import notificationsRouter from './modules/notifications/notifications.router.js';
 import dashboardRouter from './modules/dashboard/dashboard.router.js';
+import dpsRouter from './modules/dps/dps.router.js';
+import disposisiRouter from './modules/disposisi/disposisi.router.js';
+import fatwaRouter from './modules/fatwa/fatwa.router.js';
+import meetingRouter from './modules/meeting/meeting.router.js';
+import notulaRouter from './modules/notula/notula.router.js';
+import letterTemplateRouter from './modules/letter-template/letter-template.router.js';
+
 
 dotenv.config();
 
@@ -96,6 +103,13 @@ app.use('/api/workflow', workflowRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/dps', dpsRouter);
+app.use('/api/disposisi', disposisiRouter);
+app.use('/api/fatwa', fatwaRouter);
+app.use('/api/meeting', meetingRouter);
+app.use('/api/notula', notulaRouter);
+app.use('/api/letter-templates', letterTemplateRouter);
+
 
 // ── 404 HANDLER ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

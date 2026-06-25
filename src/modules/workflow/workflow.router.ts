@@ -6,6 +6,7 @@ import type { AuthRequest } from '../../middleware/auth.js';
 import { AuthService } from '../auth/auth.service.js';
 import { PushService } from '../../lib/push.js';
 import { sendNotification } from '../notifications/notifications.router.js';
+import { triggerQueueUpdate } from '../../lib/firebase.js';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
     const workflow = await prisma.documentWorkflowInstance.create({
       data: {
         documentId,
-        status: 'PENDING',
+        status: 'ACTIVE',
         currentStep: 1,
         steps: {
           create: stepConfig.map((s: any) => ({
@@ -50,20 +51,25 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
     const firstApprovers = stepConfig.filter((s: any) => s.stepNumber === 1);
     for (const approver of firstApprovers) {
       if (approver.userId) {
-        await PushService.sendNotification({
-          userId: approver.userId,
-          title: 'Dokumen Baru untuk Diperiksa',
-          body: `Anda memiliki dokumen baru "${doc.title}" yang menunggu tindakan Anda.`,
-          data: { documentId: doc.id, type: 'WORKFLOW_PENDING' }
-        });
+        // Trigger real-time database update immediately (do not await)
+        triggerQueueUpdate(approver.userId).catch(() => {});
 
-        await sendNotification({
-          userId: approver.userId,
-          type: 'WORKFLOW_PENDING',
-          title: 'Dokumen Baru untuk Diperiksa',
-          message: `Anda memiliki dokumen baru "${doc.title}" yang menunggu tindakan Anda.`,
-          link: `/documents/${doc.id}`
-        });
+        // Send notifications asynchronously in parallel
+        Promise.all([
+          PushService.sendNotification({
+            userId: approver.userId,
+            title: 'Dokumen Baru untuk Diperiksa',
+            body: `Anda memiliki dokumen baru "${doc.title}" yang menunggu tindakan Anda.`,
+            data: { documentId: doc.id, type: 'WORKFLOW_PENDING' }
+          }).catch(() => {}),
+          sendNotification({
+            userId: approver.userId,
+            type: 'WORKFLOW_PENDING',
+            title: 'Dokumen Baru untuk Diperiksa',
+            message: `Anda memiliki dokumen baru "${doc.title}" yang menunggu tindakan Anda.`,
+            link: `/documents/${doc.id}`
+          }).catch(() => {})
+        ]).catch(() => {});
       }
     }
 
@@ -193,8 +199,23 @@ router.get('/queue', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }));
 
+    // Filter queueSteps to only show steps whose turn it is currently (sequential step matching)
+    const activeQueueSteps = finalQueueSteps.filter((step: any) => {
+      const wi = step.workflowInstance;
+      if (!wi) return false;
+      if (wi.status !== 'ACTIVE') return false;
+
+      const doc = wi.document;
+      if (!doc) return false;
+
+      if (doc.approvalFlowType === 'SEQUENTIAL') {
+        return step.stepNumber === wi.currentStep;
+      }
+      return true;
+    });
+
     // Combine both
-    const finalQueue = [...finalQueueSteps, ...revisionItems];
+    const finalQueue = [...activeQueueSteps, ...revisionItems];
 
     res.json({ status: 'success', data: finalQueue });
   } catch (error: any) {
@@ -315,20 +336,26 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
       const docTitle = step.workflowInstance.document.title;
       const creatorId = step.workflowInstance.document.creatorId;
 
-      await PushService.sendNotification({
-        userId: creatorId,
-        title: 'Dokumen Ditolak',
-        body: `Dokumen Anda "${docTitle}" telah ditolak oleh ${req.user!.fullName}.`,
-        data: { documentId: step.workflowInstance.documentId, type: 'DOC_REJECTED' }
-      });
+      // Trigger real-time updates immediately (do not await)
+      triggerQueueUpdate(creatorId).catch(() => {});
+      triggerQueueUpdate(req.user!.id).catch(() => {});
 
-      await sendNotification({
-        userId: creatorId,
-        type: 'DOC_REJECTED',
-        title: 'Dokumen Ditolak',
-        message: `Dokumen Anda "${docTitle}" telah ditolak oleh ${req.user!.fullName}.`,
-        link: `/documents/${step.workflowInstance.documentId}`
-      });
+      // Send notifications asynchronously
+      Promise.all([
+        PushService.sendNotification({
+          userId: creatorId,
+          title: 'Dokumen Ditolak',
+          body: `Dokumen Anda "${docTitle}" telah ditolak oleh ${req.user!.fullName}.`,
+          data: { documentId: step.workflowInstance.documentId, type: 'DOC_REJECTED' }
+        }).catch(() => {}),
+        sendNotification({
+          userId: creatorId,
+          type: 'DOC_REJECTED',
+          title: 'Dokumen Ditolak',
+          message: `Dokumen Anda "${docTitle}" telah ditolak oleh ${req.user!.fullName}.`,
+          link: `/documents/${step.workflowInstance.documentId}`
+        }).catch(() => {})
+      ]).catch(() => {});
 
       return;
     }
@@ -354,20 +381,26 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
       const docTitle = step.workflowInstance.document.title;
       const creatorId = step.workflowInstance.document.creatorId;
 
-      await PushService.sendNotification({
-        userId: creatorId,
-        title: 'Permintaan Revisi',
-        body: `Dokumen Anda "${docTitle}" memerlukan revisi dari ${req.user!.fullName}.`,
-        data: { documentId: step.workflowInstance.documentId, type: 'DOC_REVISION' }
-      });
+      // Trigger real-time updates immediately (do not await)
+      triggerQueueUpdate(creatorId).catch(() => {});
+      triggerQueueUpdate(req.user!.id).catch(() => {});
 
-      await sendNotification({
-        userId: creatorId,
-        type: 'DOC_REVISION',
-        title: 'Permintaan Revisi',
-        message: `Dokumen Anda "${docTitle}" memerlukan revisi dari ${req.user!.fullName}.`,
-        link: `/documents/${step.workflowInstance.documentId}`
-      });
+      // Send notifications asynchronously
+      Promise.all([
+        PushService.sendNotification({
+          userId: creatorId,
+          title: 'Permintaan Revisi',
+          body: `Dokumen Anda "${docTitle}" memerlukan revisi dari ${req.user!.fullName}.`,
+          data: { documentId: step.workflowInstance.documentId, type: 'DOC_REVISION' }
+        }).catch(() => {}),
+        sendNotification({
+          userId: creatorId,
+          type: 'DOC_REVISION',
+          title: 'Permintaan Revisi',
+          message: `Dokumen Anda "${docTitle}" memerlukan revisi dari ${req.user!.fullName}.`,
+          link: `/documents/${step.workflowInstance.documentId}`
+        }).catch(() => {})
+      ]).catch(() => {});
 
       return;
     }
@@ -375,7 +408,7 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
 
     if (action === 'APPROVE') {
       let isAllApproved = false;
-      if (approvalFlowType === 'PARALLEL') {
+      if (approvalFlowType === 'PARALLEL' || approvalFlowType === 'NOTIF_ONLY') {
         const remainingSteps = await prisma.documentWorkflowStep.count({
           where: {
             workflowInstanceId: step.workflowInstanceId,
@@ -415,20 +448,26 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
         const docTitle = step.workflowInstance.document.title;
         const creatorId = step.workflowInstance.document.creatorId;
 
-        await PushService.sendNotification({
-          userId: creatorId,
-          title: 'Dokumen Selesai Ditandatangani',
-          body: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh semua pihak.`,
-          data: { documentId: step.workflowInstance.documentId, type: 'DOC_SIGNED' }
-        });
+        // Trigger real-time updates immediately (do not await)
+        triggerQueueUpdate(creatorId).catch(() => {});
+        triggerQueueUpdate(req.user!.id).catch(() => {});
 
-        await sendNotification({
-          userId: creatorId,
-          type: 'DOC_SIGNED',
-          title: 'Dokumen Selesai Ditandatangani',
-          message: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh semua pihak.`,
-          link: `/documents/${step.workflowInstance.documentId}`
-        });
+        // Send notifications asynchronously
+        Promise.all([
+          PushService.sendNotification({
+            userId: creatorId,
+            title: 'Dokumen Selesai Ditandatangani',
+            body: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh semua pihak.`,
+            data: { documentId: step.workflowInstance.documentId, type: 'DOC_SIGNED' }
+          }).catch(() => {}),
+          sendNotification({
+            userId: creatorId,
+            type: 'DOC_SIGNED',
+            title: 'Dokumen Selesai Ditandatangani',
+            message: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh semua pihak.`,
+            link: `/documents/${step.workflowInstance.documentId}`
+          }).catch(() => {})
+        ]).catch(() => {});
 
         return;
       } else {
@@ -464,20 +503,25 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
             if (nextStep.userId) {
               const docTitle = step.workflowInstance.document.title;
 
-              await PushService.sendNotification({
-                userId: nextStep.userId,
-                title: 'Giliran Anda Memeriksa Dokumen',
-                body: `Dokumen "${docTitle}" telah disetujui sebelumnya, sekarang giliran Anda.`,
-                data: { documentId: step.workflowInstance.documentId, type: 'WORKFLOW_PENDING' }
-              });
+              // Trigger real-time database update immediately (do not await)
+              triggerQueueUpdate(nextStep.userId).catch(() => {});
 
-              await sendNotification({
-                userId: nextStep.userId,
-                type: 'WORKFLOW_PENDING',
-                title: 'Giliran Anda Memeriksa Dokumen',
-                message: `Dokumen "${docTitle}" telah disetujui sebelumnya, sekarang giliran Anda.`,
-                link: `/documents/${step.workflowInstance.documentId}`
-              });
+              // Send notifications asynchronously
+              Promise.all([
+                PushService.sendNotification({
+                  userId: nextStep.userId,
+                  title: 'Giliran Anda Memeriksa Dokumen',
+                  body: `Dokumen "${docTitle}" telah disetujui sebelumnya, sekarang giliran Anda.`,
+                  data: { documentId: step.workflowInstance.documentId, type: 'WORKFLOW_PENDING' }
+                }).catch(() => {}),
+                sendNotification({
+                  userId: nextStep.userId,
+                  type: 'WORKFLOW_PENDING',
+                  title: 'Giliran Anda Memeriksa Dokumen',
+                  message: `Dokumen "${docTitle}" telah disetujui sebelumnya, sekarang giliran Anda.`,
+                  link: `/documents/${step.workflowInstance.documentId}`
+                }).catch(() => {})
+              ]).catch(() => {});
             }
           }
         } else {
@@ -501,20 +545,26 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
         const docTitle = step.workflowInstance.document.title;
         const creatorId = step.workflowInstance.document.creatorId;
 
-        await PushService.sendNotification({
-          userId: creatorId,
-          title: 'Dokumen Disetujui Sebagian',
-          body: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
-          data: { documentId: step.workflowInstance.documentId, type: 'DOC_PARTIAL_APPROVE' }
-        });
+        // Trigger real-time updates immediately (do not await)
+        triggerQueueUpdate(creatorId).catch(() => {});
+        triggerQueueUpdate(req.user!.id).catch(() => {});
 
-        await sendNotification({
-          userId: creatorId,
-          type: 'DOC_PARTIAL_APPROVE',
-          title: 'Dokumen Disetujui Sebagian',
-          message: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
-          link: `/documents/${step.workflowInstance.documentId}`
-        });
+        // Send notifications asynchronously
+        Promise.all([
+          PushService.sendNotification({
+            userId: creatorId,
+            title: 'Dokumen Disetujui Sebagian',
+            body: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
+            data: { documentId: step.workflowInstance.documentId, type: 'DOC_PARTIAL_APPROVE' }
+          }).catch(() => {}),
+          sendNotification({
+            userId: creatorId,
+            type: 'DOC_PARTIAL_APPROVE',
+            title: 'Dokumen Disetujui Sebagian',
+            message: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
+            link: `/documents/${step.workflowInstance.documentId}`
+          }).catch(() => {})
+        ]).catch(() => {});
 
         return;
       }
