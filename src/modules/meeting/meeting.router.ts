@@ -19,7 +19,7 @@ function formatDateStr(dateVal: Date | string) {
 const router = Router();
 
 // Helper to calculate attendees based on targetType
-async function calculateAttendees(
+export async function calculateAttendees(
   targetType: string,
   departmentId?: string,
   customAttendeeIds?: string[],
@@ -149,7 +149,23 @@ async function calculateAttendees(
 // ── GET ALL MEETINGS ──
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    const { date } = req.query;
+    let where: any = {};
+    if (date) {
+      const startOfDay = new Date(String(date));
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(String(date));
+      endOfDay.setHours(23, 59, 59, 999);
+      where.dateTime = {
+        gte: startOfDay,
+        lte: endOfDay,
+      };
+    }
     const list = await prisma.meeting.findMany({
+      where,
+      include: {
+        discussedDocs: true
+      },
       orderBy: { dateTime: 'desc' },
     });
     res.json({ status: 'success', data: list });
@@ -164,6 +180,9 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const meeting = await prisma.meeting.findUnique({
       where: { id: String(id) },
+      include: {
+        discussedDocs: true
+      }
     });
     if (!meeting) {
       return res.status(404).json({ status: 'error', message: 'Agenda rapat tidak ditemukan' });
@@ -177,7 +196,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 // ── CREATE MEETING ──
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, agendaNumber, dateTime, endDateTime, location, description, targetType, departmentId, customAttendeeIds, externalEmails } = req.body;
+    const { title, agendaNumber, dateTime, endDateTime, location, description, targetType, departmentId, customAttendeeIds, externalEmails, discussedDocIds } = req.body;
 
     if (!title || !dateTime || !location || !targetType) {
       return res.status(400).json({
@@ -206,19 +225,30 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       externalEmails
     );
 
+    const meetingData: any = {
+      title,
+      agendaNumber: agendaNumber || null,
+      dateTime: new Date(dateTime),
+      endDateTime: endDateTime ? new Date(endDateTime) : null,
+      location,
+      description: description || null,
+      targetType: targetType.toUpperCase(),
+      departmentId: departmentId || null,
+      status: 'DRAFT',
+      attendees: resolvedAttendees
+    };
+
+    if (discussedDocIds && discussedDocIds.length > 0) {
+      meetingData.discussedDocs = {
+        connect: discussedDocIds.map((docId: string) => ({ id: docId }))
+      };
+    }
+
     const newMeeting = await prisma.meeting.create({
-      data: {
-        title,
-        agendaNumber: agendaNumber || null,
-        dateTime: new Date(dateTime),
-        endDateTime: endDateTime ? new Date(endDateTime) : null,
-        location,
-        description: description || null,
-        targetType: targetType.toUpperCase(),
-        departmentId: departmentId || null,
-        status: 'DRAFT',
-        attendees: resolvedAttendees
-      },
+      data: meetingData,
+      include: {
+        discussedDocs: true
+      }
     });
 
     // Notify attendees if meeting is active/not draft
@@ -303,9 +333,20 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     delete updateData.customAttendeeIds;
     delete updateData.externalEmails;
 
+    if (updateData.hasOwnProperty('discussedDocIds')) {
+      const discussedDocIds = updateData.discussedDocIds;
+      updateData.discussedDocs = {
+        set: (discussedDocIds || []).map((docId: string) => ({ id: docId }))
+      };
+      delete updateData.discussedDocIds;
+    }
+
     const updated = await prisma.meeting.update({
       where: { id: String(id) },
       data: updateData,
+      include: {
+        discussedDocs: true
+      }
     });
 
     res.json({ status: 'success', data: updated });

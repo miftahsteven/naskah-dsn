@@ -111,6 +111,7 @@ model User {
   signatures       DocumentSignature[]
   biometrics       UserBiometric[]
   disposisiLogs    DisposisiLog[]
+  evidenceFiles    EvidenceFile[]
 }
 
 model UserRole {
@@ -168,6 +169,10 @@ model Document {
   signatures        DocumentSignature[]
   publications      DocumentPublication[]
   disposisiLogs     DisposisiLog[]
+  evidenceFolders   EvidenceFolder[]
+  evidenceFiles     EvidenceFile[]
+  meetings          Meeting[]
+  discussedInMeetings Meeting[] @relation("MeetingDiscussedDocs")
 }
 
 model DocumentVersion {
@@ -373,6 +378,9 @@ model Meeting {
   status         String   @default("DRAFT") // 'DRAFT' | 'SELESAI' | 'BATAL' | 'ARSIP'
   attendees      Json     // Array of attendees: [{ userId, name, email, department, jabatan, isExternal, status }]
   invitationSent Boolean  @default(false)
+  documentId     String?
+  document       Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  discussedDocs  Document[] @relation("MeetingDiscussedDocs")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -401,7 +409,9 @@ model Notula {
   agendaNumber  String?
   dateTime      DateTime
   location      String
-  content       String   // Isi risalah / pembahasan rapat
+  content       String?  // Isi risalah / pembahasan rapat (opsional jika upload file)
+  fileUrl       String?  // Path/URL file hasil rapat (opsional)
+  fileName      String?  // Nama file hasil rapat (opsional)
   decisions     String?  // Keputusan yang diambil (opsional)
   notes         String?  // Catatan tambahan (opsional)
   creatorId     String
@@ -410,5 +420,34 @@ model Notula {
   sharedWithIds Json     // Array user ID untuk pengguna yang dibagikan akses: string[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model EvidenceFolder {
+  id         String           @id @default(uuid())
+  name       String
+  documentId String
+  document   Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parentId   String?
+  parent     EvidenceFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children   EvidenceFolder[] @relation("FolderHierarchy")
+  files      EvidenceFile[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+model EvidenceFile {
+  id         String          @id @default(uuid())
+  name       String
+  fileUrl    String
+  fileSize   Int
+  mimeType   String
+  folderId   String?
+  folder     EvidenceFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploaderId String?
+  uploader   User?           @relation(fields: [uploaderId], references: [id])
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 }
 

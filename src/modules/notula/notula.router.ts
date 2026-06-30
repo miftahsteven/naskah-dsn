@@ -7,7 +7,31 @@ import { PushService } from '../../lib/push.js';
 import { sendNotification } from '../notifications/notifications.router.js';
 import { triggerQueueUpdate } from '../../lib/firebase.js';
 
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
 const router = Router();
+
+const uploadDir = process.env.UPLOAD_DIR || 'uploads';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: Number(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 }, // Default 10MB
+});
 
 // ── GET ALL NOTULA (WITH ACCESS CONTROL) ──
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
@@ -78,7 +102,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ── CREATE NOTULA ──
-router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     const userName = req.user?.fullName || 'User';
@@ -87,11 +111,12 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const { meetingId, title, agendaNumber, dateTime, location, content, decisions, notes, attendees } = req.body;
+    const file = req.file;
 
-    if (!title || !dateTime || !location || !content) {
+    if (!title || !dateTime || !location || (!content && !file)) {
       return res.status(400).json({
         status: 'error',
-        message: 'Field Judul, Waktu, Lokasi, dan Pembahasan wajib diisi.',
+        message: 'Field Judul, Waktu, Lokasi, dan Risalah/File Rapat wajib diisi.',
       });
     }
 
@@ -108,6 +133,15 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    let parsedAttendees = attendees;
+    if (typeof attendees === 'string') {
+      try {
+        parsedAttendees = JSON.parse(attendees);
+      } catch (err) {
+        parsedAttendees = [];
+      }
+    }
+
     const newNotula = await prisma.notula.create({
       data: {
         meetingId: meetingId || null,
@@ -115,12 +149,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         agendaNumber: agendaNumber || null,
         dateTime: new Date(dateTime),
         location,
-        content,
+        content: content || null,
+        fileUrl: file ? file.path : null,
+        fileName: file ? file.originalname : null,
         decisions: decisions || null,
         notes: notes || null,
         creatorId: userId,
         creatorName: userName,
-        attendees: attendees || [],
+        attendees: parsedAttendees || [],
         sharedWithIds: [],
       },
     });
@@ -161,7 +197,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ── UPDATE NOTULA ──
-router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.patch('/:id', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
@@ -187,6 +223,28 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const updateData = { ...req.body };
     if (updateData.dateTime) {
       updateData.dateTime = new Date(updateData.dateTime);
+    }
+
+    if (typeof updateData.attendees === 'string') {
+      try {
+        updateData.attendees = JSON.parse(updateData.attendees);
+      } catch (err) {
+        delete updateData.attendees;
+      }
+    }
+
+    if (typeof updateData.sharedWithIds === 'string') {
+      try {
+        updateData.sharedWithIds = JSON.parse(updateData.sharedWithIds);
+      } catch (err) {
+        delete updateData.sharedWithIds;
+      }
+    }
+
+    const file = req.file;
+    if (file) {
+      updateData.fileUrl = file.path;
+      updateData.fileName = file.originalname;
     }
 
     const updated = await prisma.notula.update({

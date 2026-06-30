@@ -1,3 +1,6 @@
+
+import { calculateAttendees } from '../meeting/meeting.router.js';
+
 import { Router } from 'express';
 import type { Response, Request } from 'express';
 import multer from 'multer';
@@ -142,6 +145,9 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
               include: { user: { select: { fullName: true } } }
             }
           }
+        },
+        meetings: {
+          orderBy: { dateTime: 'asc' }
         }
       },
       orderBy: { updatedAt: 'desc' },
@@ -170,7 +176,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 // ── UPLOAD DOCUMENT ──
   router.post('/', authenticate, checkPermission('DOC_UPLOAD'), upload.single('file'), async (req: AuthRequest, res: Response) => {
     try {
-      const { title, categoryId, classificationId, documentNumber, documentType, approvalFlowType } = req.body;
+      const { title, categoryId, classificationId, documentNumber, documentType, approvalFlowType, status } = req.body;
       const file = req.file;
   
       if (!file) {
@@ -192,7 +198,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
           documentType: documentType || 'OUTGOING',
           approvalFlowType: approvalFlowType || 'SEQUENTIAL',
           creatorId: req.user!.id,
-          status: 'DRAFT',
+          status: status || 'DRAFT',
         versions: {
           create: {
             versionNum: 1,
@@ -247,6 +253,9 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
               }
             }
           }
+        },
+        meetings: {
+          orderBy: { dateTime: 'asc' }
         }
       },
     });
@@ -329,7 +338,7 @@ router.patch('/:id/restore', authenticate, checkPermission('DOC_EDIT'), async (r
 router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, categoryId, classificationId, documentNumber } = req.body;
+    const { title, categoryId, classificationId, documentNumber, status } = req.body;
     const file = req.file;
 
     const existingDoc = await prisma.document.findUnique({
@@ -343,6 +352,23 @@ router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('fil
 
     // Update Metadata
     const updatedDoc = await prisma.$transaction(async (tx) => {
+      if (status === 'DRAFT') {
+        const instances = await tx.documentWorkflowInstance.findMany({
+          where: { documentId: String(id) },
+          select: { id: true }
+        });
+        const instanceIds = instances.map(inst => inst.id);
+        
+        if (instanceIds.length > 0) {
+          await tx.documentWorkflowStep.deleteMany({
+            where: { workflowInstanceId: { in: instanceIds } }
+          });
+          await tx.documentWorkflowInstance.deleteMany({
+            where: { id: { in: instanceIds } }
+          });
+        }
+      }
+
       let doc = await tx.document.update({
         where: { id: String(id) },
         data: {
@@ -350,6 +376,7 @@ router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('fil
           categoryId: categoryId || undefined,
           classificationId: classificationId || undefined,
           documentNumber: documentNumber || undefined,
+          status: status || undefined,
         }
       });
 
@@ -603,5 +630,328 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
+
+
+// ── GET EVIDENCE FOLDERS AND FILES ──
+router.get('/:id/evidence', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parentId = req.query.parentId && req.query.parentId !== 'null' ? String(req.query.parentId) : null;
+
+    // Verify document belongs to user's organization
+    const doc = await prisma.document.findUnique({ where: { id: String(id) } });
+    if (!doc) return res.status(404).json({ status: 'error', message: 'Document not found' });
+    if (doc.organizationId !== req.user!.organizationId) {
+      return res.status(403).json({ status: 'error', message: 'Forbidden' });
+    }
+
+    const folders = await prisma.evidenceFolder.findMany({
+      where: { documentId: String(id), parentId: parentId },
+      orderBy: { name: 'asc' }
+    });
+
+    const files = await prisma.evidenceFile.findMany({
+      where: { documentId: String(id), folderId: parentId },
+      include: { uploader: { select: { fullName: true } } },
+      orderBy: { name: 'asc' }
+    });
+
+    const breadcrumbs = [];
+    if (parentId) {
+      let currentFolder = await prisma.evidenceFolder.findUnique({ where: { id: parentId } });
+      while (currentFolder) {
+        breadcrumbs.unshift({ id: currentFolder.id, name: currentFolder.name });
+        if (currentFolder.parentId) {
+          currentFolder = await prisma.evidenceFolder.findUnique({ where: { id: currentFolder.parentId } });
+        } else {
+          break;
+        }
+      }
+    }
+
+    const protoHeader = req.headers['x-forwarded-proto'];
+    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
+    const baseUrl = `${protocol}://${req.get('host')}/api`;
+
+    const transformedFiles = files.map(file => ({
+      ...file,
+      fileUrl: `${baseUrl}/documents/${id}/evidence/files/${file.id}/download`,
+    }));
+
+    res.json({
+      status: 'success',
+      data: { folders, files: transformedFiles, breadcrumbs }
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── CREATE EVIDENCE FOLDER ──
+router.post('/:id/evidence/folders', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, parentId } = req.body;
+
+    if (!name) return res.status(400).json({ status: 'error', message: 'Folder name is required' });
+
+    const doc = await prisma.document.findUnique({ where: { id: String(id) } });
+    if (!doc) return res.status(404).json({ status: 'error', message: 'Document not found' });
+    if (doc.organizationId !== req.user!.organizationId) {
+      return res.status(403).json({ status: 'error', message: 'Forbidden' });
+    }
+
+    const folder = await prisma.evidenceFolder.create({
+      data: {
+        name,
+        documentId: String(id),
+        parentId: parentId && parentId !== 'null' ? String(parentId) : null
+      }
+    });
+
+    res.status(201).json({ status: 'success', data: folder });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── UPLOAD EVIDENCE FILE ──
+router.post('/:id/evidence/files', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { folderId } = req.body;
+    const file = req.file;
+
+    if (!file) return res.status(400).json({ status: 'error', message: 'File is required' });
+
+    const doc = await prisma.document.findUnique({ where: { id: String(id) } });
+    if (!doc) return res.status(404).json({ status: 'error', message: 'Document not found' });
+    if (doc.organizationId !== req.user!.organizationId) {
+      return res.status(403).json({ status: 'error', message: 'Forbidden' });
+    }
+
+    const evidenceFile = await prisma.evidenceFile.create({
+      data: {
+        name: file.originalname,
+        fileUrl: file.path,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        documentId: String(id),
+        folderId: folderId && folderId !== 'null' ? String(folderId) : null,
+        uploaderId: req.user!.id
+      },
+      include: { uploader: { select: { fullName: true } } }
+    });
+
+    const protoHeader = req.headers['x-forwarded-proto'];
+    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
+    const baseUrl = `${protocol}://${req.get('host')}/api`;
+
+    const transformedFile = {
+      ...evidenceFile,
+      fileUrl: `${baseUrl}/documents/${id}/evidence/files/${evidenceFile.id}/download`,
+    };
+
+    res.status(201).json({ status: 'success', data: transformedFile });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── DOWNLOAD EVIDENCE FILE ──
+router.get('/:id/evidence/files/:fileId/download', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { fileId } = req.params;
+
+    const evidenceFile = await prisma.evidenceFile.findUnique({ where: { id: String(fileId) } });
+    if (!evidenceFile) return res.status(404).json({ status: 'error', message: 'File not found' });
+    if (!fs.existsSync(evidenceFile.fileUrl)) {
+      return res.status(404).json({ status: 'error', message: 'Physical file not found' });
+    }
+
+    res.setHeader('Content-Type', evidenceFile.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${evidenceFile.name}"`);
+
+    const fileStream = fs.createReadStream(evidenceFile.fileUrl);
+    fileStream.pipe(res);
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── DELETE EVIDENCE FILE ──
+router.delete('/:id/evidence/files/:fileId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { fileId } = req.params;
+    const file = await prisma.evidenceFile.findUnique({ where: { id: String(fileId) } });
+    if (!file) return res.status(404).json({ status: 'error', message: 'File not found' });
+
+    if (fs.existsSync(file.fileUrl)) {
+      fs.unlinkSync(file.fileUrl);
+    }
+
+    await prisma.evidenceFile.delete({ where: { id: String(fileId) } });
+    res.json({ status: 'success', message: 'File deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── DELETE EVIDENCE FOLDER ──
+router.delete('/:id/evidence/folders/:folderId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { folderId } = req.params;
+    const folder = await prisma.evidenceFolder.findUnique({ where: { id: String(folderId) } });
+    if (!folder) return res.status(404).json({ status: 'error', message: 'Folder not found' });
+
+    const deleteFolderFilesPhysically = async (fid: string) => {
+      const files = await prisma.evidenceFile.findMany({ where: { folderId: fid } });
+      for (const file of files) {
+        if (fs.existsSync(file.fileUrl)) {
+          fs.unlinkSync(file.fileUrl);
+        }
+      }
+      const subfolders = await prisma.evidenceFolder.findMany({ where: { parentId: fid } });
+      for (const sub of subfolders) {
+        await deleteFolderFilesPhysically(sub.id);
+      }
+    };
+
+    await deleteFolderFilesPhysically(String(folderId));
+    await prisma.evidenceFolder.delete({ where: { id: String(folderId) } });
+    res.json({ status: 'success', message: 'Folder and contents deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── GET MEETINGS LINKED TO DOCUMENT ──
+router.get('/:id/meetings', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const meetings = await prisma.meeting.findMany({
+      where: { documentId: String(id) },
+      orderBy: { dateTime: 'desc' }
+    });
+    res.json({ status: 'success', data: meetings });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── CREATE MEETING & LINK TO DOCUMENT ──
+router.post('/:id/meetings', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, dateTime, endDateTime, location, description, targetType, departmentId, customAttendeeIds, externalEmails } = req.body;
+    let { agendaNumber } = req.body;
+
+    if (!title || !dateTime || !location || !targetType) {
+      return res.status(400).json({ status: 'error', message: 'Missing fields' });
+    }
+
+    const doc = await prisma.document.findUnique({ where: { id: String(id) } });
+    if (!doc) return res.status(404).json({ status: 'error', message: 'Document not found' });
+
+    // Auto-generate agendaNumber if not provided
+    if (!agendaNumber) {
+      const meetingDate = new Date(dateTime);
+      const year = meetingDate.getFullYear();
+      const month = meetingDate.getMonth() + 1;
+
+      const startOfYear = new Date(year, 0, 1);
+      const endOfYear = new Date(year + 1, 0, 1);
+
+      const meetingCount = await prisma.meeting.count({
+        where: {
+          createdAt: {
+            gte: startOfYear,
+            lt: endOfYear
+          }
+        }
+      });
+      const seqMeeting = (meetingCount + 1).toString().padStart(3, '0');
+
+      const romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+      const monthRoman = romanMonths[month - 1];
+
+      let docNumPart = '000';
+      if (doc.documentNumber) {
+        const parts = doc.documentNumber.split('/');
+        if (parts.length > 0) {
+          docNumPart = parts[0] || '000';
+        }
+      }
+
+      agendaNumber = `${seqMeeting}/${monthRoman}/${year}/${docNumPart}`;
+
+      // Check unique constraint
+      const existing = await prisma.meeting.findUnique({ where: { agendaNumber } });
+      if (existing) {
+        agendaNumber = `${seqMeeting}-${Date.now()}/${monthRoman}/${year}/${docNumPart}`;
+      }
+    } else {
+      const existing = await prisma.meeting.findUnique({ where: { agendaNumber } });
+      if (existing) return res.status(400).json({ status: 'error', message: 'Agenda number already in use' });
+    }
+
+    const resolvedAttendees = await calculateAttendees(String(targetType), departmentId ? String(departmentId) : undefined, customAttendeeIds, externalEmails);
+
+    const newMeeting = await prisma.meeting.create({
+      data: {
+        title,
+        agendaNumber: agendaNumber || null,
+        dateTime: new Date(dateTime),
+        endDateTime: endDateTime ? new Date(endDateTime) : null,
+        location,
+        description: description || null,
+        targetType: targetType.toUpperCase(),
+        departmentId: departmentId || null,
+        status: 'DRAFT',
+        attendees: resolvedAttendees,
+        documentId: String(id)
+      }
+    });
+
+    res.status(201).json({ status: 'success', data: newMeeting });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── LINK EXISTING MEETING TO DOCUMENT ──
+router.post('/:id/meetings/:meetingId/link', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id, meetingId } = req.params;
+
+    const updated = await prisma.meeting.update({
+      where: { id: String(meetingId) },
+      data: { documentId: String(id) }
+    });
+
+    res.json({ status: 'success', data: updated });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+
+
+// ── UNLINK MEETING FROM DOCUMENT ──
+router.delete('/:id/meetings/:meetingId/link', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { meetingId } = req.params;
+
+    const updated = await prisma.meeting.update({
+      where: { id: String(meetingId) },
+      data: { documentId: null }
+    });
+
+    res.json({ status: 'success', data: updated });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 
 export default router;
