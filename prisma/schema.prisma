@@ -162,6 +162,8 @@ model Document {
   status            String                   @default("DRAFT")
   disposisiStatus   String?                  // "BARU", "DIPROSES", "SELESAI"
   currentVersion    Int                      @default(1)
+  documentDate      DateTime?
+  receivedDate      DateTime?
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
   versions          DocumentVersion[]

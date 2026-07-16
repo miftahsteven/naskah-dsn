@@ -148,6 +148,9 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         },
         meetings: {
           orderBy: { dateTime: 'asc' }
+        },
+        evidenceFiles: {
+          select: { id: true }
         }
       },
       orderBy: { updatedAt: 'desc' },
@@ -176,7 +179,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 // ── UPLOAD DOCUMENT ──
   router.post('/', authenticate, checkPermission('DOC_UPLOAD'), upload.single('file'), async (req: AuthRequest, res: Response) => {
     try {
-      const { title, categoryId, classificationId, documentNumber, documentType, approvalFlowType, status } = req.body;
+      const { title, categoryId, classificationId, documentNumber, documentType, approvalFlowType, status, documentDate, receivedDate } = req.body;
       const file = req.file;
   
       if (!file) {
@@ -199,17 +202,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
           approvalFlowType: approvalFlowType || 'SEQUENTIAL',
           creatorId: req.user!.id,
           status: status || 'DRAFT',
-        versions: {
-          create: {
-            versionNum: 1,
-            fileUrl: file.path,
-            fileName: file.originalname,
-            fileSize: file.size,
-            mimeType: file.mimetype,
-            createdBy: req.user!.id,
+          documentDate: documentDate ? new Date(documentDate) : null,
+          receivedDate: receivedDate ? new Date(receivedDate) : null,
+          versions: {
+            create: {
+              versionNum: 1,
+              fileUrl: file.path,
+              fileName: file.originalname,
+              fileSize: file.size,
+              mimeType: file.mimetype,
+              createdBy: req.user!.id,
+            },
           },
         },
-      },
       include: {
         versions: true,
       },
@@ -338,7 +343,7 @@ router.patch('/:id/restore', authenticate, checkPermission('DOC_EDIT'), async (r
 router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, categoryId, classificationId, documentNumber, status } = req.body;
+    const { title, categoryId, classificationId, documentNumber, status, documentDate, receivedDate } = req.body;
     const file = req.file;
 
     const existingDoc = await prisma.document.findUnique({
@@ -369,15 +374,22 @@ router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('fil
         }
       }
 
+      const updateData: any = {};
+      if (title) updateData.title = title;
+      if (categoryId) updateData.categoryId = categoryId;
+      if (classificationId) updateData.classificationId = classificationId;
+      if (documentNumber !== undefined) updateData.documentNumber = documentNumber || null;
+      if (status) updateData.status = status;
+      if (documentDate !== undefined) {
+        updateData.documentDate = documentDate ? new Date(documentDate) : null;
+      }
+      if (receivedDate !== undefined) {
+        updateData.receivedDate = receivedDate ? new Date(receivedDate) : null;
+      }
+
       let doc = await tx.document.update({
         where: { id: String(id) },
-        data: {
-          title: title || undefined,
-          categoryId: categoryId || undefined,
-          classificationId: classificationId || undefined,
-          documentNumber: documentNumber || undefined,
-          status: status || undefined,
-        }
+        data: updateData
       });
 
       if (file) {

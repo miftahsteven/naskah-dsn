@@ -103,10 +103,9 @@ async function main() {
 
   // 3. Create Default Classifications
   const classifications = [
-    { level: 'UMUM', name: 'Umum' },
-    { level: 'INTERNAL', name: 'Internal' },
-    { level: 'RAHASIA', name: 'Rahasia' },
-    { level: 'SANGAT_RAHASIA', name: 'Sangat Rahasia' },
+    { level: 'BIDANG_FATWA', name: 'Bidang Fatwa' },
+    { level: 'BIDANG_LAYANAN', name: 'Bidang Layanan' },
+    { level: 'DIARSIPKAN', name: 'Diarsipkan' },
   ];
 
   for (const item of classifications) {
@@ -118,7 +117,17 @@ async function main() {
   }
 
   // 4. Create Default Categories
-  const categories = ['Surat Official', 'Fatwa', 'Nota Dinas', 'Berita Acara', 'Keputusan', 'Invoice'];
+  const categories = [
+    'Permohonan Fatwa',
+    'Rekomendasi DPS',
+    'Rekomendasi TAS',
+    'Pernyataan Kesesuaian Syariah',
+    'Pernyataan Keselarasan Syariah',
+    'Sertifikat Kesesuaian Syariah',
+    'Laporan Hasil Pengawasan DPS',
+    'Surat Pengaduan',
+    'Umum',
+  ];
   for (const cat of categories) {
     await prisma.documentCategory.upsert({
       where: { name: cat },
