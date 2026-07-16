@@ -4,6 +4,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+
+// ── Load env FIRST — before any module that reads process.env (e.g. Multer limits) ──
+dotenv.config();
+
 import authRouter from './modules/auth/auth.router.js';
 import usersRouter from './modules/users/users.router.js';
 import rolesRouter from './modules/roles/roles.router.js';
@@ -19,8 +23,6 @@ import meetingRouter from './modules/meeting/meeting.router.js';
 import notulaRouter from './modules/notula/notula.router.js';
 import letterTemplateRouter from './modules/letter-template/letter-template.router.js';
 
-
-dotenv.config();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -54,8 +56,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
 // ── RATE LIMITING ─────────────────────────────────────────────────────────────
 
