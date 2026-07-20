@@ -25,6 +25,28 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
       return res.status(400).json({ status: 'error', message: 'Document invalid or not in draft status' });
     }
 
+    // Determine initial PENDING statuses
+    const hasPemparaf = stepConfig.some((s: any) => s.role === 'PEMPARAF');
+    const hasApprover = stepConfig.some((s: any) => s.role === 'APPROVER');
+
+    const stepsToCreate = stepConfig.map((s: any, idx: number) => {
+      let initialStatus = 'WAITING';
+      if (hasPemparaf) {
+        initialStatus = s.role === 'PEMPARAF' ? 'PENDING' : 'WAITING';
+      } else if (hasApprover) {
+        initialStatus = s.role === 'APPROVER' ? 'PENDING' : 'WAITING';
+      } else {
+        initialStatus = idx === 0 ? 'PENDING' : 'WAITING';
+      }
+
+      return {
+        stepNumber: s.stepNumber || (idx + 1),
+        userId: s.userId,
+        roleId: s.role || null,
+        status: initialStatus,
+      };
+    });
+
     // Create workflow instance and steps
     const workflow = await prisma.documentWorkflowInstance.create({
       data: {
@@ -32,11 +54,7 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
         status: 'ACTIVE',
         currentStep: 1,
         steps: {
-          create: stepConfig.map((s: any) => ({
-            stepNumber: s.stepNumber,
-            userId: s.userId,
-            status: s.stepNumber === 1 ? 'PENDING' : 'WAITING',
-          })),
+          create: stepsToCreate,
         },
       },
     });
@@ -47,9 +65,9 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response) => 
       data: { status: 'PENDING_APPROVAL' },
     });
 
-    // Notify the first approvers
-    const firstApprovers = stepConfig.filter((s: any) => s.stepNumber === 1);
-    for (const approver of firstApprovers) {
+    // Notify all initial pending approvers/pemparaf
+    const initialPending = stepsToCreate.filter((s: any) => s.status === 'PENDING');
+    for (const approver of initialPending) {
       if (approver.userId) {
         // Trigger real-time database update immediately (do not await)
         triggerQueueUpdate(approver.userId).catch(() => {});
@@ -407,26 +425,35 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
 
 
     if (action === 'APPROVE') {
-      let isAllApproved = false;
-      if (approvalFlowType === 'PARALLEL' || approvalFlowType === 'NOTIF_ONLY') {
-        const remainingSteps = await prisma.documentWorkflowStep.count({
-          where: {
-            workflowInstanceId: step.workflowInstanceId,
-            status: { not: 'APPROVED' },
-            id: { not: stepId }
+      // 1. Mark current step as APPROVED and record signature if needed
+      await prisma.$transaction([
+        prisma.documentWorkflowStep.update({
+          where: { id: stepId },
+          data: { status: 'APPROVED', comment, actionedAt: new Date() },
+        }),
+        prisma.documentSignature.create({
+          data: {
+            documentId: step.workflowInstance.documentId,
+            userId: req.user!.id,
+            signedAt: new Date(),
           }
-        });
-        isAllApproved = remainingSteps === 0;
-      } else {
-        isAllApproved = step.stepNumber === step.workflowInstance._count.steps;
-      }
+        })
+      ]);
 
-      if (isAllApproved) {
+      const docTitle = step.workflowInstance.document.title;
+      const creatorId = step.workflowInstance.document.creatorId;
+
+      // Check if ALL steps in the entire workflowInstance are now APPROVED
+      const remainingTotalUnapproved = await prisma.documentWorkflowStep.count({
+        where: {
+          workflowInstanceId: step.workflowInstanceId,
+          status: { not: 'APPROVED' }
+        }
+      });
+
+      if (remainingTotalUnapproved === 0) {
+        // Complete Workflow
         await prisma.$transaction([
-          prisma.documentWorkflowStep.update({
-            where: { id: stepId },
-            data: { status: 'APPROVED', comment, actionedAt: new Date() },
-          }),
           prisma.documentWorkflowInstance.update({
             where: { id: step.workflowInstanceId },
             data: { status: 'COMPLETED' },
@@ -434,140 +461,185 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
           prisma.document.update({
             where: { id: step.workflowInstance.documentId },
             data: { status: 'SIGNED' },
-          }),
-          prisma.documentSignature.create({
-            data: {
-              documentId: step.workflowInstance.documentId,
-              userId: req.user!.id,
-              signedAt: new Date(),
-            }
           })
         ]);
-        res.json({ status: 'success', message: 'Document fully approved and signed' });
 
-        const docTitle = step.workflowInstance.document.title;
-        const creatorId = step.workflowInstance.document.creatorId;
-
-        // Trigger real-time updates immediately (do not await)
         triggerQueueUpdate(creatorId).catch(() => {});
         triggerQueueUpdate(req.user!.id).catch(() => {});
 
-        // Send notifications asynchronously
         Promise.all([
           PushService.sendNotification({
             userId: creatorId,
             title: 'Dokumen Selesai Ditandatangani',
-            body: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh semua pihak.`,
+            body: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh seluruh pihak.`,
             data: { documentId: step.workflowInstance.documentId, type: 'DOC_SIGNED' }
           }).catch(() => {}),
           sendNotification({
             userId: creatorId,
             type: 'DOC_SIGNED',
             title: 'Dokumen Selesai Ditandatangani',
-            message: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh semua pihak.`,
+            message: `Dokumen Anda "${docTitle}" telah selesai disetujui oleh seluruh pihak.`,
             link: `/documents/${step.workflowInstance.documentId}`
           }).catch(() => {})
         ]).catch(() => {});
 
-        return;
-      } else {
-        if (approvalFlowType === 'SEQUENTIAL') {
-          const nextStepNumber = step.stepNumber + 1;
-          await prisma.$transaction([
-            prisma.documentWorkflowStep.update({
-              where: { id: stepId },
-              data: { status: 'APPROVED', comment, actionedAt: new Date() },
-            }),
-            prisma.documentWorkflowStep.updateMany({
-              where: { workflowInstanceId: step.workflowInstanceId, stepNumber: nextStepNumber },
-              data: { status: 'PENDING' },
-            }),
-            prisma.documentWorkflowInstance.update({
-              where: { id: step.workflowInstanceId },
-              data: { currentStep: nextStepNumber },
-            }),
-            prisma.documentSignature.create({
-              data: {
-                documentId: step.workflowInstance.documentId,
-                userId: req.user!.id,
-                signedAt: new Date(),
-              }
-            })
-          ]);
+        return res.json({ status: 'success', message: 'Dokumen selesai disetujui dan ditandatangani' });
+      }
 
-          const nextSteps = await prisma.documentWorkflowStep.findMany({
-            where: { workflowInstanceId: step.workflowInstanceId, stepNumber: nextStepNumber, status: 'PENDING' }
+      // Workflow is still in progress: handle stage progression
+      const currentRole = step.roleId;
+
+      if (currentRole === 'PEMPARAF') {
+        // Check if any other PEMPARAF is still unapproved
+        const unapprovedPemparaf = await prisma.documentWorkflowStep.count({
+          where: {
+            workflowInstanceId: step.workflowInstanceId,
+            roleId: 'PEMPARAF',
+            status: { not: 'APPROVED' }
+          }
+        });
+
+        if (unapprovedPemparaf === 0) {
+          // All Pemparaf complete! Unlock Approvers or Penandatangan
+          const unapprovedApprovers = await prisma.documentWorkflowStep.findMany({
+            where: { workflowInstanceId: step.workflowInstanceId, roleId: 'APPROVER', status: 'WAITING' }
           });
 
-          for (const nextStep of nextSteps) {
-            if (nextStep.userId) {
-              const docTitle = step.workflowInstance.document.title;
+          if (unapprovedApprovers.length > 0) {
+            // Unlock all Approvers in parallel
+            await prisma.documentWorkflowStep.updateMany({
+              where: { workflowInstanceId: step.workflowInstanceId, roleId: 'APPROVER' },
+              data: { status: 'PENDING' }
+            });
 
-              // Trigger real-time database update immediately (do not await)
-              triggerQueueUpdate(nextStep.userId).catch(() => {});
-
-              // Send notifications asynchronously
-              Promise.all([
+            for (const appStep of unapprovedApprovers) {
+              if (appStep.userId) {
+                triggerQueueUpdate(appStep.userId).catch(() => {});
                 PushService.sendNotification({
-                  userId: nextStep.userId,
+                  userId: appStep.userId,
                   title: 'Giliran Anda Memeriksa Dokumen',
-                  body: `Dokumen "${docTitle}" telah disetujui sebelumnya, sekarang giliran Anda.`,
+                  body: `Pemparaf telah menyetujui dokumen "${docTitle}", sekarang giliran Anda.`,
                   data: { documentId: step.workflowInstance.documentId, type: 'WORKFLOW_PENDING' }
-                }).catch(() => {}),
-                sendNotification({
-                  userId: nextStep.userId,
-                  type: 'WORKFLOW_PENDING',
-                  title: 'Giliran Anda Memeriksa Dokumen',
-                  message: `Dokumen "${docTitle}" telah disetujui sebelumnya, sekarang giliran Anda.`,
-                  link: `/documents/${step.workflowInstance.documentId}`
-                }).catch(() => {})
-              ]).catch(() => {});
+                }).catch(() => {});
+              }
+            }
+          } else {
+            // No Approver, unlock first Penandatangan
+            const nextSigner = await prisma.documentWorkflowStep.findFirst({
+              where: {
+                workflowInstanceId: step.workflowInstanceId,
+                status: 'WAITING',
+                OR: [{ roleId: 'PENANDATANGAN' }, { roleId: null }]
+              },
+              orderBy: { stepNumber: 'asc' }
+            });
+
+            if (nextSigner) {
+              await prisma.documentWorkflowStep.update({
+                where: { id: nextSigner.id },
+                data: { status: 'PENDING' }
+              });
+
+              if (nextSigner.userId) {
+                triggerQueueUpdate(nextSigner.userId).catch(() => {});
+                PushService.sendNotification({
+                  userId: nextSigner.userId,
+                  title: 'Giliran Anda Menandatangani Dokumen',
+                  body: `Dokumen "${docTitle}" siap untuk Anda tandatangani.`,
+                  data: { documentId: step.workflowInstance.documentId, type: 'WORKFLOW_PENDING' }
+                }).catch(() => {});
+              }
             }
           }
-        } else {
-          await prisma.$transaction([
-            prisma.documentWorkflowStep.update({
-              where: { id: stepId },
-              data: { status: 'APPROVED', comment, actionedAt: new Date() },
-            }),
-            prisma.documentSignature.create({
-              data: {
-                documentId: step.workflowInstance.documentId,
-                userId: req.user!.id,
-                signedAt: new Date(),
-              }
-            })
-          ]);
         }
+      } else if (currentRole === 'APPROVER') {
+        // Check if any other APPROVER is still unapproved
+        const unapprovedApprover = await prisma.documentWorkflowStep.count({
+          where: {
+            workflowInstanceId: step.workflowInstanceId,
+            roleId: 'APPROVER',
+            status: { not: 'APPROVED' }
+          }
+        });
 
-        res.json({ status: 'success', message: 'Step approved' });
+        if (unapprovedApprover === 0) {
+          // All Approvers complete! Unlock first Penandatangan
+          const nextSigner = await prisma.documentWorkflowStep.findFirst({
+            where: {
+              workflowInstanceId: step.workflowInstanceId,
+              status: 'WAITING',
+              OR: [{ roleId: 'PENANDATANGAN' }, { roleId: null }]
+            },
+            orderBy: { stepNumber: 'asc' }
+          });
 
-        const docTitle = step.workflowInstance.document.title;
-        const creatorId = step.workflowInstance.document.creatorId;
+          if (nextSigner) {
+            await prisma.documentWorkflowStep.update({
+              where: { id: nextSigner.id },
+              data: { status: 'PENDING' }
+            });
 
-        // Trigger real-time updates immediately (do not await)
-        triggerQueueUpdate(creatorId).catch(() => {});
-        triggerQueueUpdate(req.user!.id).catch(() => {});
+            if (nextSigner.userId) {
+              triggerQueueUpdate(nextSigner.userId).catch(() => {});
+              PushService.sendNotification({
+                userId: nextSigner.userId,
+                title: 'Giliran Anda Menandatangani Dokumen',
+                body: `Dokumen "${docTitle}" telah disetujui Approver, siap untuk Anda tandatangani.`,
+                data: { documentId: step.workflowInstance.documentId, type: 'WORKFLOW_PENDING' }
+              }).catch(() => {});
+            }
+          }
+        }
+      } else {
+        // PENANDATANGAN (Sequential)
+        const nextSigner = await prisma.documentWorkflowStep.findFirst({
+          where: {
+            workflowInstanceId: step.workflowInstanceId,
+            status: 'WAITING',
+            OR: [{ roleId: 'PENANDATANGAN' }, { roleId: null }]
+          },
+          orderBy: { stepNumber: 'asc' }
+        });
 
-        // Send notifications asynchronously
-        Promise.all([
-          PushService.sendNotification({
-            userId: creatorId,
-            title: 'Dokumen Disetujui Sebagian',
-            body: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
-            data: { documentId: step.workflowInstance.documentId, type: 'DOC_PARTIAL_APPROVE' }
-          }).catch(() => {}),
-          sendNotification({
-            userId: creatorId,
-            type: 'DOC_PARTIAL_APPROVE',
-            title: 'Dokumen Disetujui Sebagian',
-            message: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
-            link: `/documents/${step.workflowInstance.documentId}`
-          }).catch(() => {})
-        ]).catch(() => {});
+        if (nextSigner) {
+          await prisma.documentWorkflowStep.update({
+            where: { id: nextSigner.id },
+            data: { status: 'PENDING' }
+          });
 
-        return;
+          if (nextSigner.userId) {
+            triggerQueueUpdate(nextSigner.userId).catch(() => {});
+            PushService.sendNotification({
+              userId: nextSigner.userId,
+              title: 'Giliran Anda Menandatangani Dokumen',
+              body: `Dokumen "${docTitle}" telah ditandatangani pejabat sebelumnya, sekarang giliran Anda.`,
+              data: { documentId: step.workflowInstance.documentId, type: 'WORKFLOW_PENDING' }
+            }).catch(() => {});
+          }
+        }
       }
+
+      triggerQueueUpdate(creatorId).catch(() => {});
+      triggerQueueUpdate(req.user!.id).catch(() => {});
+
+      // Send notifications asynchronously for partial approval
+      Promise.all([
+        PushService.sendNotification({
+          userId: creatorId,
+          title: 'Dokumen Disetujui Sebagian',
+          body: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
+          data: { documentId: step.workflowInstance.documentId, type: 'DOC_PARTIAL_APPROVE' }
+        }).catch(() => {}),
+        sendNotification({
+          userId: creatorId,
+          type: 'DOC_PARTIAL_APPROVE',
+          title: 'Dokumen Disetujui Sebagian',
+          message: `Dokumen Anda "${docTitle}" telah disetujui oleh ${req.user!.fullName} dan masih berproses.`,
+          link: `/documents/${step.workflowInstance.documentId}`
+        }).catch(() => {})
+      ]).catch(() => {});
+
+      return res.json({ status: 'success', message: 'Tindakan berhasil diproses' });
     }
 
     res.status(400).json({ status: 'error', message: 'Invalid action' });
