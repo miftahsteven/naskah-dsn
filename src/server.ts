@@ -89,7 +89,7 @@ const apiLimiter = rateLimit({
 
 // ── STATIC FILES ──────────────────────────────────────────────────────────────
 // Protected uploads — require auth token checked via middleware in docs router
-app.get('/uploads/*.html', async (req: Request, res: Response, next: NextFunction) => {
+app.get('/uploads/:filename.html', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const relativePath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
     const filePath = path.resolve(relativePath);
