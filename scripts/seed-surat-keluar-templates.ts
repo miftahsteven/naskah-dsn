@@ -273,6 +273,158 @@ const TEMPLATES = [
       { key: 'keteranganTambahan', label: 'Keterangan Tambahan', type: 'textarea', required: false, placeholder: 'Selama masa libur tersebut, koordinasi penting darurat dapat dilakukan secara online...' },
     ],
   },
+  {
+    name: 'Undangan Rapat Pimpinan Badan Pengurus (U-0638)',
+    code: 'U-0638-UNDANGAN-BPH',
+    category: 'Undangan',
+    description: 'Template resmi Undangan Rapat Pimpinan Badan Pengurus DSN-MUI.',
+    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
+  <!-- KOP SURAT DSN-MUI -->
+  <table style="width: 100%; border-collapse: collapse; border-bottom: 3px double #000000; padding-bottom: 8px; margin-bottom: 12px;">
+    <tr>
+      <td style="width: 65px; vertical-align: middle; padding: 0 8px 0 0;">
+        <img src="/images/logo-dsn.png" alt="Logo DSN-MUI" style="width: 55px; height: 55px; object-fit: contain;" />
+      </td>
+      <td style="text-align: left; vertical-align: middle; padding: 0;">
+        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #111827; letter-spacing: -0.2px; margin-bottom: 1px; line-height: 1.2; white-space: nowrap;">
+          DEWAN SYARIAH NASIONAL - MAJELIS ULAMA INDONESIA
+        </div>
+        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; font-weight: bold; color: #111827; margin-bottom: 3px; line-height: 1.2; white-space: nowrap;">
+          National Sharia Board - Indonesian Council of Ulama
+        </div>
+        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 7.5px; color: #374151; margin-bottom: 1px; line-height: 1.2; white-space: nowrap;">
+          SEKRETARIAT : Jl. Dempo No.19 Pegangsaan - Jakarta Pusat 10320
+        </div>
+        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 7.5px; color: #374151; line-height: 1.2; white-space: nowrap;">
+          Telp. (021) 3904146 &nbsp; Email: sekretariat@dsnmui.or.id &nbsp; Web: www.dsnmui.or.id
+        </div>
+      </td>
+      <td style="width: 70px; vertical-align: middle; text-align: right; padding: 0 0 0 8px;">
+        <div style="border: 1px solid #000000; padding: 3px; font-family: Arial, Helvetica, sans-serif; font-size: 6px; text-align: center; line-height: 1.1; font-weight: bold; color: #111827;">
+          <div style="border-bottom: 1px solid #000000; padding-bottom: 1px; margin-bottom: 1.5px; font-size: 5px;">REGISTERED</div>
+          <div style="font-weight: 800; font-size: 8px; letter-spacing: 0.5px; margin-bottom: 0.5px;">WQA</div>
+          <div style="font-size: 5px; margin: 1px 0;">ISO 9001:2015</div>
+          <div style="border-top: 1px dashed #000000; padding-top: 1px; margin-top: 1.5px; font-size: 4.5px;">UKAS 134</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- BASMALAH -->
+  <div style="text-align: center; font-size: 20px; font-family: 'Times New Roman', serif; margin-top: 12px; margin-bottom: 18px; color: #111827;">
+    بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ
+  </div>
+
+  <!-- TANGGAL SURAT -->
+  <div style="text-align: right; font-size: 11pt; margin-bottom: 15px; line-height: 1.3;">
+    Jakarta, {{tanggalHijriah}}<br />
+    {{tanggalMasehi}}
+  </div>
+
+  <!-- META SECTION (Nomor, Lampiran, Hal) -->
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11pt;">
+    <tr>
+      <td style="width: 80px; vertical-align: top;">Nomor</td>
+      <td style="width: 15px; vertical-align: top;">:</td>
+      <td>{{nomorSurat}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Lamp.</td>
+      <td style="vertical-align: top;">:</td>
+      <td>{{lampiran}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold;">Hal</td>
+      <td style="vertical-align: top; font-weight: bold;">:</td>
+      <td style="font-weight: bold;">{{perihal}}</td>
+    </tr>
+  </table>
+
+  <!-- KEPADA YTH -->
+  <div style="margin-bottom: 20px; font-size: 11pt; line-height: 1.4;">
+    <strong>Kepada Yth.:</strong><br />
+    <div style="white-space: pre-line; font-weight: bold; margin-bottom: 4px;">{{daftarPenerima}}</div>
+    di -<br />
+    &nbsp;&nbsp;&nbsp;&nbsp;<strong>{{tempatPenerima}}</strong>
+  </div>
+
+  <!-- SALAM PEMBUKA -->
+  <p style="margin-bottom: 12px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+
+  <!-- PARAGRAF ISI -->
+  <p style="text-align: justify; margin-bottom: 12px; text-indent: 30px;">
+    Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
+  </p>
+
+  <!-- JADWAL TABLE -->
+  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 11pt;">
+    <tr>
+      <td style="width: 140px; vertical-align: top; font-weight: bold;">Hari, tanggal</td>
+      <td style="width: 15px; vertical-align: top;">:</td>
+      <td style="font-weight: bold;">{{hariTanggalRapat}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold;">Waktu</td>
+      <td style="vertical-align: top;">:</td>
+      <td style="font-weight: bold;">{{waktuRapat}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold;">Tempat</td>
+      <td style="vertical-align: top;">:</td>
+      <td style="white-space: pre-line;"><strong>{{tempatRapat}}</strong></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold;">Agenda</td>
+      <td style="vertical-align: top;">:</td>
+      <td><strong>{{agendaRapat}}</strong></td>
+    </tr>
+  </table>
+
+  <!-- PARAGRAF PENUTUP -->
+  <p style="text-align: justify; margin-bottom: 12px;">
+    Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
+  </p>
+
+  <!-- SALAM PENUTUP -->
+  <p style="margin-bottom: 20px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
+
+  <!-- TANDA TANGAN SECTION -->
+  <div style="margin-top: 30px; page-break-inside: avoid;">
+    <div style="text-align: right; margin-bottom: 10px; font-weight: bold; font-size: 10pt; text-transform: uppercase; white-space: pre-line;">
+      {{headerTtd}}
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+      <div style="text-align: center; min-width: 200px;">
+        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
+        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
+      </div>
+      <div style="text-align: center; min-width: 200px;">
+        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
+        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>
+      </div>
+    </div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'nomorSurat', label: 'Nomor Surat Resmi', type: 'text', required: true, placeholder: 'U-0638/DSN-MUI/VIII/2026' },
+      { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '4 Agustus 2026 M' },
+      { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '20 Shafar 1448 H' },
+      { key: 'lampiran', label: 'Lampiran', type: 'text', required: false, placeholder: '1 (satu) berkas' },
+      { key: 'perihal', label: 'Perihal / Hal', type: 'text', required: true, placeholder: 'Undangan Rapat Pimpinan Badan Pengurus DSN-MUI' },
+      { key: 'daftarPenerima', label: 'Daftar Penerima (Satu per baris)', type: 'textarea', required: true, placeholder: '1. Pimpinan Badan Pengurus DSN-MUI\n2. Koordinator Bidang Fatwa DSN-MUI\n3. Koordinator Bidang Layanan...' },
+      { key: 'tempatPenerima', label: 'Tempat / Kota Penerima', type: 'text', required: true, placeholder: 'TEMPAT' },
+      { key: 'namaRapat', label: 'Nama Rapat', type: 'text', required: true, placeholder: 'Rapat Pimpinan Badan Pengurus DSN-MUI' },
+      { key: 'hariTanggalRapat', label: 'Hari & Tanggal Rapat', type: 'text', required: true, placeholder: 'Rabu, 5 Agustus 2026' },
+      { key: 'waktuRapat', label: 'Waktu Rapat', type: 'text', required: true, placeholder: '13.00 – 15.00 WIB' },
+      { key: 'tempatRapat', label: 'Tempat Rapat', type: 'textarea', required: true, placeholder: 'Kantor DSN-MUI\nJl. Dempo No. 19, Pegangsaan, Jakarta Pusat 10320' },
+      { key: 'agendaRapat', label: 'Agenda Rapat', type: 'text', required: true, placeholder: 'Terlampir' },
+      { key: 'headerTtd', label: 'Header Tanda Tangan', type: 'textarea', required: true, placeholder: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA' },
+      { key: 'jabatanKiri', label: 'Jabatan Kiri (e.g. Ketua)', type: 'text', required: true, placeholder: 'Ketua' },
+      { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
+      { key: 'jabatanKanan', label: 'Jabatan Kanan (e.g. Sekretaris)', type: 'text', required: true, placeholder: 'Sekretaris' },
+      { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' }
+    ]
+  },
 ];
 
 async function seedSuratKeluarTemplates() {
