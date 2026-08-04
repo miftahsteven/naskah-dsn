@@ -4,6 +4,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import fs from 'fs';
+import path from 'path';
+import QRCode from 'qrcode';
+import { prisma } from './lib/prisma.js';
 
 // ── Load env FIRST — before any module that reads process.env (e.g. Multer limits) ──
 dotenv.config();
@@ -85,6 +89,68 @@ const apiLimiter = rateLimit({
 
 // ── STATIC FILES ──────────────────────────────────────────────────────────────
 // Protected uploads — require auth token checked via middleware in docs router
+app.get('/uploads/*.html', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const relativePath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
+    const filePath = path.resolve(relativePath);
+
+    if (!fs.existsSync(filePath)) {
+      return next();
+    }
+
+    // Look up this version in DB
+    const version = await prisma.documentVersion.findFirst({
+      where: { fileUrl: relativePath },
+      include: {
+        document: true
+      }
+    });
+
+    if (!version || !version.document || version.document.status !== 'SIGNED') {
+      return next();
+    }
+
+    // It is signed! We should generate the QR code
+    let html = fs.readFileSync(filePath, 'utf8');
+
+    // Check if the HTML contains the placeholder comment
+    if (html.includes('<!-- QR_CODE_TTE_PLACEHOLDER -->')) {
+      const frontendUrl = process.env.ALLOWED_ORIGINS 
+        ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() 
+        : 'http://localhost:3000';
+      
+      const verifyUrl = `${frontendUrl}/verify/document/${version.document.id}`;
+      
+      // Generate QR Code as Base64 Data URL (dark color #006633)
+      const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+        color: {
+          dark: '#006633', // MUI green
+          light: '#ffffff'
+        },
+        margin: 1,
+        width: 120
+      });
+
+      // Digital Signature Badge Design
+      const qrHtml = `
+        <div style="text-align: center; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; border: 1.5px solid #006633; padding: 10px; border-radius: 12px; background: #ffffff; box-shadow: 0 4px 12px rgba(0, 102, 51, 0.08); font-family: Arial, sans-serif; margin: 0 15px;">
+          <img src="${qrDataUrl}" alt="QR Code TTE" style="width: 85px; height: 85px; object-fit: contain;" />
+          <div style="font-size: 8px; font-weight: bold; color: #006633; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 6px; white-space: nowrap;">TTE VERIFIED</div>
+          <div style="font-size: 6.5px; color: #64748b; margin-top: 1px; font-weight: 500; white-space: nowrap;">Scan untuk verifikasi</div>
+        </div>
+      `;
+
+      html = html.replace('<!-- QR_CODE_TTE_PLACEHOLDER -->', qrHtml);
+    }
+
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(html);
+  } catch (error) {
+    console.error('[Uploads Interceptor] Error serving HTML:', error);
+    next();
+  }
+});
+
 app.use('/uploads', express.static('uploads'));
 
 // ── ROUTES ────────────────────────────────────────────────────────────────────

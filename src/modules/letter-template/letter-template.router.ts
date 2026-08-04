@@ -503,11 +503,14 @@ const DEFAULT_TEMPLATES = [
     <div style="text-align: right; margin-bottom: 10px; font-weight: bold; font-size: 10pt; text-transform: uppercase; white-space: pre-line;">
       {{headerTtd}}
     </div>
-    <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
       <div style="text-align: center; min-width: 200px;">
         <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
         <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
       </div>
+      
+      <!-- QR_CODE_TTE_PLACEHOLDER -->
+      
       <div style="text-align: center; min-width: 200px;">
         <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
         <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>

@@ -100,6 +100,71 @@ router.get('/generate-number', authenticate, async (req: AuthRequest, res: Respo
   }
 });
 
+// ── PUBLIC DOCUMENT VERIFICATION ENDPOINT ──
+router.get('/:id/verify', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        category: true,
+        classification: true,
+        organization: true,
+        creator: { select: { fullName: true, email: true } },
+        signatures: {
+          include: {
+            user: { select: { fullName: true, email: true, jobTitle: true } }
+          },
+          orderBy: { signedAt: 'asc' }
+        },
+        workflowInstances: {
+          include: {
+            steps: {
+              include: {
+                user: { select: { fullName: true, email: true, jobTitle: true } }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Dokumen tidak ditemukan' });
+    }
+
+    res.json({
+      status: 'success',
+      data: {
+        id: document.id,
+        title: document.title,
+        documentNumber: document.documentNumber,
+        category: document.category.name,
+        classification: document.classification.name,
+        organization: document.organization.name,
+        status: document.status,
+        createdAt: document.createdAt,
+        creator: document.creator.fullName,
+        signatures: document.signatures.map(s => ({
+          userId: s.userId,
+          fullName: s.user.fullName,
+          email: s.user.email,
+          jobTitle: s.user.jobTitle || 'Pejabat',
+          signedAt: s.signedAt
+        })),
+        workflowSteps: document.workflowInstances[0]?.steps.map(s => ({
+          fullName: s.user?.fullName || 'Pejabat',
+          jobTitle: s.user?.jobTitle || s.roleId || 'Pejabat',
+          status: s.status,
+          actionedAt: s.actionedAt
+        })) || []
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // ── GET CATEGORIES & CLASSIFICATIONS ──
 router.get('/meta', authenticate, async (req: Request, res: Response) => {
   try {
