@@ -93,6 +93,11 @@ const uploadsRouter = express.Router();
 
 uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Only handle GET and HEAD requests — pass OPTIONS preflight through to CORS middleware
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return next();
+    }
+
     // req.path here is relative to /uploads, e.g. "/file-123.html"
     const subPath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
 
