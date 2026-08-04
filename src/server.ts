@@ -106,7 +106,8 @@ app.get('/uploads/*.html', async (req: Request, res: Response, next: NextFunctio
       }
     });
 
-    if (!version || !version.document || version.document.status !== 'SIGNED') {
+    const doc = version?.document;
+    if (!doc || doc.status !== 'SIGNED') {
       return next();
     }
 
@@ -115,11 +116,17 @@ app.get('/uploads/*.html', async (req: Request, res: Response, next: NextFunctio
 
     // Check if the HTML contains the placeholder comment
     if (html.includes('<!-- QR_CODE_TTE_PLACEHOLDER -->')) {
-      const frontendUrl = process.env.ALLOWED_ORIGINS 
-        ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() 
-        : 'http://localhost:3000';
+      const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
+      let frontendUrl = 'http://localhost:3000';
+      if (allowedOriginsEnv) {
+        const origins = allowedOriginsEnv.split(',');
+        const firstOrigin = origins[0];
+        if (firstOrigin) {
+          frontendUrl = firstOrigin.trim();
+        }
+      }
       
-      const verifyUrl = `${frontendUrl}/verify/document/${version.document.id}`;
+      const verifyUrl = `${frontendUrl}/verify/document/${doc.id}`;
       
       // Generate QR Code as Base64 Data URL (dark color #006633)
       const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
