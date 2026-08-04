@@ -647,7 +647,8 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
     }
 
     // Check if file exists
-    if (!fs.existsSync(version.fileUrl)) {
+    const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
+    if (!fs.existsSync(filePath)) {
       return res.status(404).json({ status: 'error', message: 'File not found on server' });
     }
 
@@ -656,7 +657,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
     res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     
-    const fileStream = fs.createReadStream(version.fileUrl);
+    const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
     
     fileStream.on('error', () => {
@@ -688,7 +689,8 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
     }
 
     // Check if file exists
-    if (!fs.existsSync(version.fileUrl)) {
+    const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
+    if (!fs.existsSync(filePath)) {
       return res.status(404).json({ status: 'error', message: 'File not found on server' });
     }
 
@@ -697,7 +699,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
     res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     
-    const fileStream = fs.createReadStream(version.fileUrl);
+    const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
     
     fileStream.on('error', () => {
