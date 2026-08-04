@@ -85,37 +85,40 @@ const apiLimiter = rateLimit({
 
 // Disabled during demo/testing to prevent false positive blocks
 // app.use('/api/auth', authLimiter);
-// app.use('/api', apiLimiter);
 
-// ── STATIC FILES ──────────────────────────────────────────────────────────────
-// Protected uploads — require auth token checked via middleware in docs router
-app.get('/uploads/:filename.html', async (req: Request, res: Response, next: NextFunction) => {
+// ── STATIC FILES / HTML INTERCEPTOR ─────────────────────────────────────────
+// Unified handler for /uploads/* — serves all files, but for .html files that
+// are SIGNED documents, dynamically injects the TTE QR code badge.
+const uploadsRouter = express.Router();
+
+uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const relativePath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
+    // req.path here is relative to /uploads, e.g. "/file-123.html"
+    const subPath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
+
+    // Only intercept HTML files — everything else served normally
+    if (!subPath.toLowerCase().endsWith('.html')) {
+      return next();
+    }
+
+    const relativePath = `uploads/${subPath}`;
     const filePath = path.resolve(relativePath);
 
     if (!fs.existsSync(filePath)) {
       return next();
     }
 
-    // Look up this version in DB
+    // Look up this version in DB to check if SIGNED
     const version = await prisma.documentVersion.findFirst({
       where: { fileUrl: relativePath },
-      include: {
-        document: true
-      }
+      include: { document: true }
     });
 
-    const doc = version?.document;
-    if (!doc || doc.status !== 'SIGNED') {
-      return next();
-    }
-
-    // It is signed! We should generate the QR code
     let html = fs.readFileSync(filePath, 'utf8');
 
-    // Check if the HTML contains the placeholder comment
-    if (html.includes('<!-- QR_CODE_TTE_PLACEHOLDER -->')) {
+    const doc = version?.document;
+    if (doc && doc.status === 'SIGNED' && html.includes('<!-- QR_CODE_TTE_PLACEHOLDER -->')) {
+      // Build frontend base URL from ALLOWED_ORIGINS env
       const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
       let frontendUrl = 'http://localhost:3000';
       if (allowedOriginsEnv) {
@@ -125,20 +128,20 @@ app.get('/uploads/:filename.html', async (req: Request, res: Response, next: Nex
           frontendUrl = firstOrigin.trim();
         }
       }
-      
+
       const verifyUrl = `${frontendUrl}/verify/document/${doc.id}`;
-      
-      // Generate QR Code as Base64 Data URL (dark color #006633)
+
+      // Generate QR Code as Base64 Data URL (dark color #006633 MUI green)
       const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
         color: {
-          dark: '#006633', // MUI green
+          dark: '#006633',
           light: '#ffffff'
         },
         margin: 1,
         width: 120
       });
 
-      // Digital Signature Badge Design
+      // Digital Signature Badge
       const qrHtml = `
         <div style="text-align: center; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; border: 1.5px solid #006633; padding: 10px; border-radius: 12px; background: #ffffff; box-shadow: 0 4px 12px rgba(0, 102, 51, 0.08); font-family: Arial, sans-serif; margin: 0 15px;">
           <img src="${qrDataUrl}" alt="QR Code TTE" style="width: 85px; height: 85px; object-fit: contain;" />
@@ -150,15 +153,20 @@ app.get('/uploads/:filename.html', async (req: Request, res: Response, next: Nex
       html = html.replace('<!-- QR_CODE_TTE_PLACEHOLDER -->', qrHtml);
     }
 
-    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (error) {
-    console.error('[Uploads Interceptor] Error serving HTML:', error);
+    console.error('[Uploads HTML Interceptor] Error:', error);
     next();
   }
 });
 
-app.use('/uploads', express.static('uploads'));
+// Fallback static file server for non-HTML files (images, etc.)
+uploadsRouter.use(express.static('uploads'));
+
+app.use('/uploads', uploadsRouter);
+
+
 
 // ── ROUTES ────────────────────────────────────────────────────────────────────
 
