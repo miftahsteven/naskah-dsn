@@ -514,6 +514,26 @@ const DEFAULT_TEMPLATES = [
       </div>
     </div>
   </div>
+
+  <!-- PAGE BREAK FOR LAMPIRAN 1 -->
+  <div style="page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan Rapat Pimpinan Badan Pengurus DSN-MUI</p>
+    <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
+    
+    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+      {{daftarUndangan}}
+    </div>
+  </div>
+
+  <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
+  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat Pimpinan Badan Pengurus DSN-MUI</p>
+    <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
+    
+    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+      {{agendaDetail}}
+    </div>
+  </div>
 </div>`,
     variables: [
       { key: 'nomorSurat', label: 'Nomor Surat Resmi', type: 'text', required: true, placeholder: 'U-0638/DSN-MUI/VIII/2026' },
@@ -532,7 +552,10 @@ const DEFAULT_TEMPLATES = [
       { key: 'jabatanKiri', label: 'Jabatan Kiri (e.g. Ketua)', type: 'text', required: true, placeholder: 'Ketua' },
       { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
       { key: 'jabatanKanan', label: 'Jabatan Kanan (e.g. Sekretaris)', type: 'text', required: true, placeholder: 'Sekretaris' },
-      { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' }
+      { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
+      { key: 'daftarUndangan', label: 'Daftar Undangan Detail (Lampiran 1)', type: 'textarea', required: true, placeholder: '1. Unsur Pimpinan:\n   Ketua : K.H. M. Cholil Nafis, Lc., Ph.D...' },
+      { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: 'Pukul 13.00 - 15.00 WIB:\n1. Laporan...' },
+      { key: 'showAgendaDetail', label: 'Show Agenda Detail', type: 'text', required: false, placeholder: 'block' }
     ]
   }
 ];
