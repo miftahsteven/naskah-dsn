@@ -678,9 +678,10 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
 
     const fileExtension = path.extname(filePath).toLowerCase();
     const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+    const previewMode = String(req.query.preview) === 'html';
 
     if (isHtml) {
-      // Try to convert HTML to PDF with embedded QR codes for signed signatures
+      // Convert HTML to PDF with embedded QR codes for signed signatures, or return HTML preview if requested.
       try {
         const rawHtml = await fs.promises.readFile(filePath, 'utf8');
         const baseDir = path.dirname(filePath);
@@ -714,6 +715,13 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
           const signatureBlock = `<div style="page-break-before:always; padding:20px; font-family:Arial,Helvetica,sans-serif;">\n<h2 style=\"color:${HTML_PDF_PRIMARY_COLOR};\">Digital Signing Info</h2>\n${itemsHtml}\n</div>`;
           if (/<\/body>/i.test(htmlContent)) htmlContent = htmlContent.replace(/<\/body>/i, `${signatureBlock}</body>`);
           else htmlContent += signatureBlock;
+        }
+
+        if (previewMode) {
+          res.setHeader('Content-Type', 'text/html');
+          res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          return res.end(htmlContent);
         }
 
         const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
@@ -787,9 +795,10 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
 
     const fileExtension = path.extname(filePath).toLowerCase();
     const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+    const previewMode = String(req.query.preview) === 'html';
 
     if (isHtml) {
-      // Convert HTML to PDF (embed QR for signed signatures) with fallback to raw HTML
+      // Convert HTML to PDF with embedded QR codes for signed signatures, or return HTML preview if requested.
       try {
         const rawHtml = await fs.promises.readFile(filePath, 'utf8');
         const baseDir = path.dirname(filePath);
@@ -821,6 +830,13 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
           const signatureBlock = `<div style="page-break-before:always; padding:20px; font-family:Arial,Helvetica,sans-serif;">\n<h2 style=\"color:${HTML_PDF_PRIMARY_COLOR};\">Digital Signing Info</h2>\n${itemsHtml}\n</div>`;
           if (/<\/body>/i.test(htmlContent)) htmlContent = htmlContent.replace(/<\/body>/i, `${signatureBlock}</body>`);
           else htmlContent += signatureBlock;
+        }
+
+        if (previewMode) {
+          res.setHeader('Content-Type', 'text/html');
+          res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          return res.end(htmlContent);
         }
 
         const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
