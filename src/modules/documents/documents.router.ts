@@ -795,7 +795,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       return res.status(404).json({ status: 'error', message: 'No version found' });
     }
 
-    // Check if file exists
+    const isRaw = req.query.raw === 'true';
     const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ status: 'error', message: 'File not found on server' });
@@ -803,6 +803,14 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
 
     const fileExtension = path.extname(filePath).toLowerCase();
     const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+
+    if (isHtml && isRaw) {
+      res.setHeader('Content-Type', version.mimeType || 'text/html');
+      res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      const fileStream = fs.createReadStream(filePath);
+      return fileStream.pipe(res);
+    }
 
     if (isHtml) {
       const pdfBuffer = await generatePdfFromHtml(filePath, document.signatures || []);
@@ -852,7 +860,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
       return res.status(404).json({ status: 'error', message: 'Version not found' });
     }
 
-    // Check if file exists
+    const isRaw = req.query.raw === 'true';
     const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ status: 'error', message: 'File not found on server' });
@@ -860,6 +868,14 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
 
     const fileExtension = path.extname(filePath).toLowerCase();
     const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+
+    if (isHtml && isRaw) {
+      res.setHeader('Content-Type', version.mimeType || 'text/html');
+      res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      const fileStream = fs.createReadStream(filePath);
+      return fileStream.pipe(res);
+    }
 
     if (isHtml) {
       const pdfBuffer = await generatePdfFromHtml(filePath, document.signatures || []);
