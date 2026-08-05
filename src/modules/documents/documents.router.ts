@@ -15,6 +15,19 @@ import { triggerQueueUpdate } from '../../lib/firebase.js';
 
 const router = Router();
 
+function getApiBaseUrl(req: Request) {
+  const rawProtoHeader = req.get('x-forwarded-proto') || req.get('x-forwarded-protocol');
+  const headerValue: string = typeof rawProtoHeader === 'string' ? rawProtoHeader : '';
+  const protocol = (headerValue.split(',')[0] ?? '').trim();
+  let resolvedProtocol = protocol || (req.secure ? 'https' : req.protocol);
+
+  if (process.env.NODE_ENV === 'production' && resolvedProtocol === 'http') {
+    resolvedProtocol = 'https';
+  }
+
+  return `${resolvedProtocol}://${req.get('host')}/api`;
+}
+
 // ── STORAGE CONFIG ──
 const uploadDir = process.env.UPLOAD_DIR || 'uploads';
 if (!fs.existsSync(uploadDir)) {
@@ -222,9 +235,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     });
 
     // Transform fileUrl to HTTP/HTTPS download URL for consistency & mobile compatibility
-    const protoHeader = req.headers['x-forwarded-proto'];
-    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
-    const baseUrl = `${protocol}://${req.get('host')}/api`;
+    const baseUrl = getApiBaseUrl(req);
 
     const transformedDocs = documents.map(doc => ({
       ...doc,
@@ -344,9 +355,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     }
     
     // Transform fileUrl to HTTP/HTTPS download URL for mobile compatibility
-    const protoHeader = req.headers['x-forwarded-proto'];
-    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
-    const baseUrl = `${protocol}://${req.get('host')}/api`;
+    const baseUrl = getApiBaseUrl(req);
     const transformedDocument = {
       ...document,
       fileUrl: `${baseUrl}/documents/${document.id}/download`,
@@ -748,9 +757,7 @@ router.get('/:id/evidence', authenticate, async (req: AuthRequest, res: Response
       }
     }
 
-    const protoHeader = req.headers['x-forwarded-proto'];
-    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
-    const baseUrl = `${protocol}://${req.get('host')}/api`;
+    const baseUrl = getApiBaseUrl(req);
 
     const transformedFiles = files.map(file => ({
       ...file,
@@ -822,9 +829,7 @@ router.post('/:id/evidence/files', authenticate, upload.single('file'), async (r
       include: { uploader: { select: { fullName: true } } }
     });
 
-    const protoHeader = req.headers['x-forwarded-proto'];
-    const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
-    const baseUrl = `${protocol}://${req.get('host')}/api`;
+    const baseUrl = getApiBaseUrl(req);
 
     const transformedFile = {
       ...evidenceFile,
