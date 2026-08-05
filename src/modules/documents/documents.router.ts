@@ -652,6 +652,41 @@ function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+async function launchPuppeteerBrowser() {
+  const launchOptions: any = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu'
+    ]
+  };
+
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  } else {
+    const commonPaths = [
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome'
+    ];
+    for (const p of commonPaths) {
+      if (fs.existsSync(p)) {
+        launchOptions.executablePath = p;
+        break;
+      }
+    }
+  }
+
+  return await puppeteer.launch(launchOptions);
+}
+
 function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: string; injected: boolean } {
   const rawName = row.rawName || '';
   if (!rawName) return { html: htmlContent, injected: false };
@@ -662,30 +697,45 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
 
   if (tokens.length === 0) return { html: htmlContent, injected: false };
 
-  const tokenRegexStr = tokens.map((t: string) => escapeRegExp(t)).join('.*?');
-  const elementRegex = new RegExp(`(<(div|p|td|span)[^>]*>(?:(?!<\\/(div|p|td|span)>).)*?` + tokenRegexStr + `(?:(?!<\\/(div|p|td|span)>).)*?<\\/(div|p|td|span)>)`, 'gi');
+  const namePattern = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s)+');
+  const nameRegex = new RegExp(namePattern, 'gi');
 
-  const match = elementRegex.exec(htmlContent);
+  const match = nameRegex.exec(htmlContent);
   if (match) {
-    const matchedElement = match[0];
     const matchIndex = match.index;
+    const matchedText = match[0];
     const prefix = htmlContent.substring(0, matchIndex);
-    const suffix = htmlContent.substring(matchIndex + matchedElement.length);
+
+    const lastOpenTagIndex = prefix.lastIndexOf('<');
+    let elementStartIndex = matchIndex;
+    if (lastOpenTagIndex !== -1) {
+      const tagSub = prefix.substring(Math.max(0, lastOpenTagIndex - 250));
+      const blockMatch = tagSub.match(/<(div|p|td|span|tr|li|b|u|strong)[^>]*>(?:(?!<\/(div|p|td|span|tr|li|b|u|strong)>).)*$/i);
+      if (blockMatch && typeof blockMatch.index === 'number') {
+        elementStartIndex = Math.max(0, lastOpenTagIndex - 250) + blockMatch.index;
+      } else {
+        elementStartIndex = lastOpenTagIndex;
+      }
+    }
+
+    const realPrefix = htmlContent.substring(0, elementStartIndex);
+    const elementAndSuffix = htmlContent.substring(elementStartIndex);
 
     const qrImageHtml = `<div style="display:flex; justify-content:center; align-items:center; margin:4px auto; text-align:center;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:75px; height:75px; object-fit:contain; display:block;" /></div>`;
-    const last300 = prefix.slice(-300);
+
+    const last300 = realPrefix.slice(-300);
 
     if (/margin-bottom:\s*\d+px/i.test(last300)) {
       const updatedLast300 = last300.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
-      return { html: prefix.slice(0, -300) + updatedLast300 + qrImageHtml + matchedElement + suffix, injected: true };
+      return { html: realPrefix.slice(0, -300) + updatedLast300 + qrImageHtml + elementAndSuffix, injected: true };
     } else if (/(<div[^>]*style="[^"]*(?:width|height|border)[^"]*"[^>]*>\s*<\/div>)/gi.test(last300)) {
       const updatedLast300 = last300.replace(/(<div[^>]*style="[^"]*(?:width|height|border)[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
-      return { html: prefix.slice(0, -300) + updatedLast300 + matchedElement + suffix, injected: true };
+      return { html: realPrefix.slice(0, -300) + updatedLast300 + elementAndSuffix, injected: true };
     } else if (/(?:<br\s*\/?>\s*){2,}/i.test(last300)) {
       const updatedLast300 = last300.replace(/(?:<br\s*\/?>\s*){2,}/gi, '<br/>');
-      return { html: prefix.slice(0, -300) + updatedLast300 + qrImageHtml + matchedElement + suffix, injected: true };
+      return { html: realPrefix.slice(0, -300) + updatedLast300 + qrImageHtml + elementAndSuffix, injected: true };
     } else {
-      return { html: prefix + qrImageHtml + matchedElement + suffix, injected: true };
+      return { html: realPrefix + qrImageHtml + elementAndSuffix, injected: true };
     }
   }
 
@@ -828,7 +878,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
           return res.end(htmlContent);
         }
 
-        const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
+        const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
         await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
         await page.emulateMediaType('screen');
@@ -844,14 +894,10 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.end(Buffer.from(pdfBuffer));
-      } catch (convErr) {
+      } catch (convErr: any) {
         console.error('[HTML->PDF] conversion failed:', convErr);
-        // fallback to streaming raw HTML
-        res.setHeader('Content-Type', version.mimeType || 'text/html');
-        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        const fileStream = fs.createReadStream(filePath);
-        return fileStream.pipe(res);
+        res.status(500).setHeader('Content-Type', 'application/json');
+        return res.json({ status: 'error', message: 'Gagal mengonversi dokumen ke PDF di server: ' + (convErr?.message || String(convErr)) });
       }
     }
 
@@ -930,7 +976,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
           return res.end(htmlContent);
         }
 
-        const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
+        const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
         await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
         await page.emulateMediaType('screen');
@@ -946,13 +992,10 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.end(Buffer.from(pdfBuffer));
-      } catch (convErr) {
+      } catch (convErr: any) {
         console.error('[HTML->PDF] conversion failed (version):', convErr);
-        res.setHeader('Content-Type', version.mimeType || 'text/html');
-        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        const fileStream = fs.createReadStream(filePath);
-        return fileStream.pipe(res);
+        res.status(500).setHeader('Content-Type', 'application/json');
+        return res.json({ status: 'error', message: 'Gagal mengonversi dokumen ke PDF di server: ' + (convErr?.message || String(convErr)) });
       }
     }
 
