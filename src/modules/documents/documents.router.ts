@@ -727,7 +727,7 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
 
   if (tokens.length === 0) return { html: htmlContent, injected: false };
 
-  const namePattern = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s)+');
+  const namePattern = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
   const nameRegex = new RegExp(namePattern, 'gi');
 
   const match = nameRegex.exec(htmlContent);
@@ -802,6 +802,21 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
   }
 
+  // Inject CSS rules to scale down large logo images in the letterhead
+  const imageStyle = `
+    <style id="amanah-kop-styles">
+      .kop-surat img, td img, img[src^="data:image"] {
+        max-width: 75px !important;
+        max-height: 90px !important;
+        height: auto !important;
+        width: auto !important;
+        display: inline-block !important;
+        vertical-align: middle !important;
+      }
+    </style>
+  `;
+  htmlContent = htmlContent.replace('</head>', `${imageStyle}\n</head>`);
+
   if (signatureRows.length > 0) {
     signatureRows.forEach(row => {
       const res = injectSignatureQrIntoHtml(htmlContent, row);
@@ -857,7 +872,9 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       try {
         const rawHtml = await fs.promises.readFile(filePath, 'utf8');
         const baseDir = path.dirname(filePath);
-        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const httpUrlBase = getApiBaseUrl(req) + '/';
+        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
 
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
 
@@ -892,7 +909,9 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         const rawHtml = await fs.promises.readFile(filePath, 'utf8');
         const baseDir = path.dirname(filePath);
-        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const httpUrlBase = getApiBaseUrl(req) + '/';
+        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
         return res.end(htmlContent);
       }
@@ -957,7 +976,9 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
       try {
         const rawHtml = await fs.promises.readFile(filePath, 'utf8');
         const baseDir = path.dirname(filePath);
-        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const httpUrlBase = getApiBaseUrl(req) + '/';
+        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
 
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
 
@@ -991,7 +1012,9 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         const rawHtml = await fs.promises.readFile(filePath, 'utf8');
         const baseDir = path.dirname(filePath);
-        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const httpUrlBase = getApiBaseUrl(req) + '/';
+        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
         return res.end(htmlContent);
       }
