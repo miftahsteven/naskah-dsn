@@ -731,36 +731,33 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
   const nameRegex = new RegExp(namePattern, 'gi');
 
   const match = nameRegex.exec(htmlContent);
-  if (match) {
-    const matchIndex = match.index;
-    const prefix = htmlContent.substring(0, matchIndex);
+  if (!match) return { html: htmlContent, injected: false };
 
-    // Look for immediate wrapper tags right before signer name (e.g. <u>, <b>, <strong>, <span>, <p>)
-    const wrapperMatch = prefix.match(/(?:<[bu]|<strong|<span|<p[^>]*>)[^<]*$/i);
-    let targetIndex = matchIndex;
-    if (wrapperMatch && typeof wrapperMatch.index === 'number') {
-      targetIndex = wrapperMatch.index;
-    }
+  const matchIndex = match.index;
+  const prefix = htmlContent.substring(0, matchIndex);
 
-    const realPrefix = htmlContent.substring(0, targetIndex);
-    const suffix = htmlContent.substring(targetIndex);
-
-    const qrImageHtml = `<div style="display:block; text-align:center; margin:6px auto 4px auto;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:70px; height:70px; object-fit:contain; display:inline-block;" /></div>`;
-
-    const last150 = realPrefix.slice(-150);
-
-    if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(last150)) {
-      const updatedLast = last150.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
-      return { html: realPrefix.slice(0, -150) + updatedLast + suffix, injected: true };
-    } else if (/(?:<br\s*\/?>\s*){2,}/i.test(last150)) {
-      const updatedLast = last150.replace(/(?:<br\s*\/?>\s*){2,}/gi, '<br/>' + qrImageHtml);
-      return { html: realPrefix.slice(0, -150) + updatedLast + suffix, injected: true };
-    } else {
-      return { html: realPrefix + qrImageHtml + suffix, injected: true };
-    }
+  const wrapperMatch = prefix.match(/(?:<[bu]|<strong|<span|<p[^>]*>)[^<]*$/i);
+  let targetIndex = matchIndex;
+  if (wrapperMatch && typeof wrapperMatch.index === 'number') {
+    targetIndex = wrapperMatch.index;
   }
 
-  return { html: htmlContent, injected: false };
+  const realPrefix = htmlContent.substring(0, targetIndex);
+  const suffix = htmlContent.substring(targetIndex);
+
+  const qrImageHtml = `<div style="text-align:center; margin:2px auto; line-height:0; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:65px; height:65px; object-fit:contain; display:inline-block;" /></div>`;
+
+  const last200 = realPrefix.slice(-200);
+
+  if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(last200)) {
+    const updatedLast = last200.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+    return { html: realPrefix.slice(0, -200) + updatedLast + suffix, injected: true };
+  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(last200)) {
+    const updatedLast = last200.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
+    return { html: realPrefix.slice(0, -200) + updatedLast + suffix, injected: true };
+  } else {
+    return { html: realPrefix + qrImageHtml + suffix, injected: true };
+  }
 }
 
 async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
