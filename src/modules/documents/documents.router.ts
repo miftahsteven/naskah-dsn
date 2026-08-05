@@ -12,8 +12,12 @@ import type { AuthRequest } from '../../middleware/auth.js';
 import { PushService } from '../../lib/push.js';
 import { sendNotification } from '../notifications/notifications.router.js';
 import { triggerQueueUpdate } from '../../lib/firebase.js';
+import qrcode from 'qrcode';
+import puppeteer from 'puppeteer';
 
 const router = Router();
+
+const HTML_PDF_PRIMARY_COLOR = '#2563eb';
 
 function getApiBaseUrl(req: Request) {
   const rawProtoHeader = req.get('x-forwarded-proto') || req.get('x-forwarded-protocol');
@@ -26,6 +30,139 @@ function getApiBaseUrl(req: Request) {
   }
 
   return `${resolvedProtocol}://${req.get('host')}/api`;
+}
+
+function escapeHtml(text: string) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function buildSignaturePageHtml(signatures: any[], primaryColor: string) {
+  if (!signatures?.length) return '';
+
+  const rows = signatures.map((signature) => {
+    const fullName = signature.user?.fullName || 'Penandatangan';
+    const jobTitle = signature.user?.jobTitle || 'Pejabat';
+    const signedAt = signature.signedAt
+      ? new Date(signature.signedAt).toLocaleString('id-ID', {
+          timeZone: 'Asia/Jakarta',
+          dateStyle: 'long',
+          timeStyle: 'short',
+        })
+      : 'Belum ditandatangani';
+
+    return {
+      fullName: escapeHtml(fullName),
+      jobTitle: escapeHtml(jobTitle),
+      signedAt: escapeHtml(signedAt),
+      payload: JSON.stringify({
+        signatureId: signature.id,
+        documentId: signature.documentId,
+        userId: signature.userId,
+        signedAt: signature.signedAt,
+        fullName,
+      }),
+    };
+  });
+
+  const itemsHtml = rows
+    .map(
+      (row, index) => `
+      <div style="display:flex; gap:16px; align-items:center; margin-bottom:32px;">
+        <div style="width:120px; height:120px; border:2px solid ${primaryColor}; border-radius:16px; padding:8px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; background:#fff;">
+          <img id="qr-signature-${index}" alt="QR Code" style="width:100%; height:100%; object-fit:contain;" />
+        </div>
+        <div style="min-width:0;">
+          <div style="font-size:16px; font-weight:700; color:#111;">${row.fullName}</div>
+          <div style="margin-top:4px; font-size:13px; color:#475569;">${row.jobTitle}</div>
+          <div style="margin-top:10px; font-size:12px; color:#64748b;">Signed at: ${row.signedAt}</div>
+        </div>
+      </div>`
+    )
+    .join('');
+
+  const injectedScript = `
+    <script>
+      (function() {
+        const renderQRCodes = async () => {
+          const signatures = ${JSON.stringify(rows)};
+          for (let i = 0; i < signatures.length; i += 1) {
+            const img = document.getElementById('qr-signature-' + i);
+            if (!img) continue;
+            try {
+              const dataUrl = await window.generateQR(signatures[i].payload);
+              img.setAttribute('src', dataUrl);
+            } catch (error) {
+              console.error(error);
+            }
+          }
+        };
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', renderQRCodes);
+        } else {
+          renderQRCodes();
+        }
+      })();
+    </script>`;
+
+  return `
+    <div style="page-break-before:always; padding:24px; font-family:Arial,Helvetica,sans-serif; color:#111;">
+      <h1 style="font-size:20px; margin-bottom:18px; color:${primaryColor};">Digital Signing Info</h1>
+      <p style="margin-bottom:24px; color:#475569; max-width:720px;">QR code di bawah ini merepresentasikan penandatangan dokumen dan muncul langsung di hasil PDF.</p>
+      ${itemsHtml}
+    </div>
+    ${injectedScript}
+  `;
+}
+
+async function generatePdfFromHtml(filePath: string, signatures: any[]) {
+  const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+  const baseDir = path.dirname(filePath);
+  const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+  const signaturePageHtml = buildSignaturePageHtml(signatures, HTML_PDF_PRIMARY_COLOR);
+
+  let htmlContent = rawHtml;
+  if (!/<!doctype html>/i.test(htmlContent)) {
+    htmlContent = `<!doctype html>\n${htmlContent}`;
+  }
+
+  if (!/<base[^>]*href=["'][^"']+["'][^>]*>/i.test(htmlContent)) {
+    htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
+  }
+
+  if (signaturePageHtml) {
+    if (/<\/body>/i.test(htmlContent)) {
+      htmlContent = htmlContent.replace(/<\/body>/i, `${signaturePageHtml}</body>`);
+    } else {
+      htmlContent += signaturePageHtml;
+    }
+  }
+
+  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const page = await browser.newPage();
+
+  await page.exposeFunction('generateQR', async (payload: string) => {
+    return await qrcode.toDataURL(payload, {
+      margin: 1,
+      width: 240,
+      color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' },
+    });
+  });
+
+  await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+  const pdfBuffer = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' },
+  });
+  await browser.close();
+
+  return pdfBuffer;
 }
 
 // ── STORAGE CONFIG ──
@@ -642,7 +779,10 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
 
     const document = await prisma.document.findUnique({
       where: { id: String(id) },
-      include: { versions: { orderBy: { versionNum: 'desc' } } }
+      include: {
+        versions: { orderBy: { versionNum: 'desc' } },
+        signatures: true,
+      }
     });
 
     if (!document) {
@@ -659,6 +799,18 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
     const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ status: 'error', message: 'File not found on server' });
+    }
+
+    const fileExtension = path.extname(filePath).toLowerCase();
+    const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+
+    if (isHtml) {
+      const pdfBuffer = await generatePdfFromHtml(filePath, document.signatures || []);
+      const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${pdfFileName}"`);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.end(pdfBuffer);
     }
 
     // Send file with proper headers
@@ -684,7 +836,10 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
 
     const document = await prisma.document.findUnique({
       where: { id: String(id) },
-      include: { versions: { orderBy: { versionNum: 'desc' } } }
+      include: {
+        versions: { orderBy: { versionNum: 'desc' } },
+        signatures: true,
+      }
     });
 
     if (!document) {
@@ -701,6 +856,18 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
     const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ status: 'error', message: 'File not found on server' });
+    }
+
+    const fileExtension = path.extname(filePath).toLowerCase();
+    const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+
+    if (isHtml) {
+      const pdfBuffer = await generatePdfFromHtml(filePath, document.signatures || []);
+      const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${pdfFileName}"`);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.end(pdfBuffer);
     }
 
     // Send file with proper headers
