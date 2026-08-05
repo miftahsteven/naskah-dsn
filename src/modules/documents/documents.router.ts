@@ -14,6 +14,8 @@ import { sendNotification } from '../notifications/notifications.router.js';
 import { triggerQueueUpdate } from '../../lib/firebase.js';
 
 const router = Router();
+import qrcode from 'qrcode';
+import puppeteer from 'puppeteer';
 
 function getApiBaseUrl(req: Request) {
   const rawProtoHeader = req.get('x-forwarded-proto') || req.get('x-forwarded-protocol');
@@ -27,6 +29,17 @@ function getApiBaseUrl(req: Request) {
 
   return `${resolvedProtocol}://${req.get('host')}/api`;
 }
+
+function escapeHtml(text: string) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+const HTML_PDF_PRIMARY_COLOR = '#2563eb';
 
 // ── STORAGE CONFIG ──
 const uploadDir = process.env.UPLOAD_DIR || 'uploads';
@@ -667,11 +680,90 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
     const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
 
     if (isHtml) {
-      res.setHeader('Content-Type', version.mimeType || 'text/html');
-      res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      const fileStream = fs.createReadStream(filePath);
-      return fileStream.pipe(res);
+      // Try to convert HTML to PDF with embedded QR codes for signed signatures
+      try {
+        const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+        const baseDir = path.dirname(filePath);
+        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+
+        // Build signature injection HTML
+        const sigs = document.signatures || [];
+        const signatureRows = sigs
+          .filter(s => s.signedAt)
+          .map((s: any, idx: number) => ({
+            fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
+            jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
+            signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'long', timeStyle: 'short' })),
+            payload: JSON.stringify({ signatureId: s.id, documentId: s.documentId, userId: s.userId, signedAt: s.signedAt, fullName: s.user?.fullName })
+          }));
+
+        let htmlContent = rawHtml;
+        if (!/<!doctype html>/i.test(htmlContent)) htmlContent = `<!doctype html>\n${htmlContent}`;
+        if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
+          htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
+        }
+
+        if (signatureRows.length) {
+          const itemsHtml = signatureRows.map((row: any, i: number) => `
+            <div style="display:flex; gap:16px; align-items:center; margin-bottom:24px;">
+              <div style="width:100px; height:100px; border:2px solid ${HTML_PDF_PRIMARY_COLOR}; border-radius:12px; padding:8px; display:flex; align-items:center; justify-content:center; background:#fff;">
+                <img id="qr-sign-${i}" alt="QR" style="width:100%; height:100%; object-fit:contain;" />
+              </div>
+              <div>
+                <div style="font-weight:700;">${row.fullName}</div>
+                <div style="font-size:12px; color:#475569;">${row.jobTitle}</div>
+                <div style="font-size:11px; color:#64748b; margin-top:6px;">Signed at: ${row.signedAt}</div>
+              </div>
+            </div>`).join('');
+
+          // Append signature HTML before </body>
+          const signatureBlock = `<div style="page-break-before:always; padding:20px; font-family:Arial,Helvetica,sans-serif;">\n<h2 style=\"color:${HTML_PDF_PRIMARY_COLOR};\">Digital Signing Info</h2>\n${itemsHtml}\n</div>`;
+          if (/<\/body>/i.test(htmlContent)) htmlContent = htmlContent.replace(/<\/body>/i, `${signatureBlock}</body>`);
+          else htmlContent += signatureBlock;
+        }
+
+        const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+        // Provide QR generation helper via node side (qrcode lib)
+        await page.exposeFunction('nodeGenerateQR', async (payload: string) => {
+          return await qrcode.toDataURL(payload, { margin: 1, width: 240, color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' } });
+        });
+
+        // Replace placeholder images by calling the nodeGenerateQR from the page
+        await page.evaluate(`(async (rows) => {
+          const imgs = Array.from(document.querySelectorAll('img[id^="qr-sign-"]'));
+          for (let i = 0; i < imgs.length; i++) {
+            const img = imgs[i];
+            const payload = rows[i] && rows[i].payload ? rows[i].payload : null;
+            if (!payload) continue;
+            try {
+              const dataUrl = await (window as any).nodeGenerateQR(payload);
+              img.setAttribute('src', dataUrl);
+            } catch (err) {
+              // ignore
+            }
+          }
+        })(${JSON.stringify(signatureRows)})`);
+
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' } });
+        await browser.close();
+
+        const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        return res.end(pdfBuffer);
+      } catch (convErr) {
+        console.error('[HTML->PDF] conversion failed:', convErr);
+        // fallback to streaming raw HTML
+        res.setHeader('Content-Type', version.mimeType || 'text/html');
+        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        const fileStream = fs.createReadStream(filePath);
+        return fileStream.pipe(res);
+      }
     }
 
     // Send file with proper headers
@@ -722,11 +814,62 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
     const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
 
     if (isHtml) {
-      res.setHeader('Content-Type', version.mimeType || 'text/html');
-      res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      const fileStream = fs.createReadStream(filePath);
-      return fileStream.pipe(res);
+      // Convert HTML to PDF (embed QR for signed signatures) with fallback to raw HTML
+      try {
+        const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+        const baseDir = path.dirname(filePath);
+        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+
+        const sigs = document.signatures || [];
+        const signatureRows = sigs
+          .filter(s => s.signedAt)
+          .map((s: any) => ({
+            fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
+            jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
+            signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'long', timeStyle: 'short' })),
+            payload: JSON.stringify({ signatureId: s.id, documentId: s.documentId, userId: s.userId, signedAt: s.signedAt, fullName: s.user?.fullName })
+          }));
+
+        let htmlContent = rawHtml;
+        if (!/<!doctype html>/i.test(htmlContent)) htmlContent = `<!doctype html>\n${htmlContent}`;
+        if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
+          htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
+        }
+
+        if (signatureRows.length) {
+          const itemsHtml = signatureRows.map((row: any, i: number) => `\n            <div style="display:flex; gap:16px; align-items:center; margin-bottom:24px;">\n              <div style="width:100px; height:100px; border:2px solid ${HTML_PDF_PRIMARY_COLOR}; border-radius:12px; padding:8px; display:flex; align-items:center; justify-content:center; background:#fff;">\n                <img id="qr-sign-${i}" alt="QR" style="width:100%; height:100%; object-fit:contain;" />\n              </div>\n              <div>\n                <div style="font-weight:700;">${row.fullName}</div>\n                <div style="font-size:12px; color:#475569;">${row.jobTitle}</div>\n                <div style="font-size:11px; color:#64748b; margin-top:6px;">Signed at: ${row.signedAt}</div>\n              </div>\n            </div>`).join('');
+
+          const signatureBlock = `<div style="page-break-before:always; padding:20px; font-family:Arial,Helvetica,sans-serif;">\n<h2 style=\"color:${HTML_PDF_PRIMARY_COLOR};\">Digital Signing Info</h2>\n${itemsHtml}\n</div>`;
+          if (/<\/body>/i.test(htmlContent)) htmlContent = htmlContent.replace(/<\/body>/i, `${signatureBlock}</body>`);
+          else htmlContent += signatureBlock;
+        }
+
+        const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+        await page.exposeFunction('nodeGenerateQR', async (payload: string) => {
+          return await qrcode.toDataURL(payload, { margin: 1, width: 240, color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' } });
+        });
+
+        await page.evaluate(`(async (rows) => {\n          const imgs = Array.from(document.querySelectorAll('img[id^="qr-sign-"]'));\n          for (let i = 0; i < imgs.length; i++) {\n            const img = imgs[i];\n            const payload = rows[i] && rows[i].payload ? rows[i].payload : null;\n            if (!payload) continue;\n            try {\n              const dataUrl = await (window as any).nodeGenerateQR(payload);\n              img.setAttribute('src', dataUrl);\n            } catch (err) { }\n          }\n        })(${JSON.stringify(signatureRows)})`);
+
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' } });
+        await browser.close();
+
+        const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        return res.end(pdfBuffer);
+      } catch (convErr) {
+        console.error('[HTML->PDF] conversion failed (version):', convErr);
+        res.setHeader('Content-Type', version.mimeType || 'text/html');
+        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        const fileStream = fs.createReadStream(filePath);
+        return fileStream.pipe(res);
+      }
     }
 
     // Send file with proper headers
