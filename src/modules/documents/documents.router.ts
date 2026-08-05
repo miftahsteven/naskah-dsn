@@ -750,17 +750,19 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
 
   const qrImageHtml = `<div style="text-align:center; margin:2px auto; line-height:0; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:65px; height:65px; object-fit:contain; display:inline-block;" /></div>`;
 
-  const last300 = realPrefix.slice(-300);
+  const sliceLen = Math.min(300, realPrefix.length);
+  const prefixBase = realPrefix.slice(0, realPrefix.length - sliceLen);
+  const lastSlice = realPrefix.slice(realPrefix.length - sliceLen);
 
-  if (/margin-bottom:\s*\d+px/i.test(last300)) {
-    const updatedLast = last300.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
-    return { html: realPrefix.slice(0, -300) + updatedLast + qrImageHtml + suffix, injected: true };
-  } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(last300)) {
-    const updatedLast = last300.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
-    return { html: realPrefix.slice(0, -300) + updatedLast + suffix, injected: true };
-  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(last300)) {
-    const updatedLast = last300.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
-    return { html: realPrefix.slice(0, -300) + updatedLast + suffix, injected: true };
+  if (/margin-bottom:\s*\d+px/i.test(lastSlice)) {
+    const updatedSlice = lastSlice.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
+    return { html: prefixBase + updatedSlice + qrImageHtml + suffix, injected: true };
+  } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
+    const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+    return { html: prefixBase + updatedSlice + suffix, injected: true };
+  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(lastSlice)) {
+    const updatedSlice = lastSlice.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
+    return { html: prefixBase + updatedSlice + suffix, injected: true };
   } else {
     return { html: realPrefix + qrImageHtml + suffix, injected: true };
   }
