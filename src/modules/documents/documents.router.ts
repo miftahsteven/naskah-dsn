@@ -648,6 +648,96 @@ router.delete('/:id/versions/:versionId', authenticate, checkPermission('DOC_DEL
   }
 });
 
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
+  const signedSigs = (signatures || []).filter((s: any) => s.signedAt);
+  const signatureRows = await Promise.all(signedSigs.map(async (s: any) => {
+    const payload = JSON.stringify({
+      signatureId: s.id,
+      documentId: s.documentId,
+      userId: s.userId,
+      signedAt: s.signedAt,
+      fullName: s.user?.fullName,
+    });
+    const qrDataUrl = await qrcode.toDataURL(payload, {
+      margin: 1,
+      width: 240,
+      color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' }
+    });
+    return {
+      fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
+      jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
+      signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        dateStyle: 'long',
+        timeStyle: 'short'
+      })),
+      rawName: s.user?.fullName || '',
+      qrDataUrl,
+    };
+  }));
+
+  let htmlContent = rawHtml;
+  if (!/<!doctype html>/i.test(htmlContent)) htmlContent = `<!doctype html>\n${htmlContent}`;
+  if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
+    htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
+  }
+
+  if (signatureRows.length > 0) {
+    // 1. Inject QR code into matching signature boxes in letter HTML
+    signatureRows.forEach(row => {
+      if (row.rawName && htmlContent.includes(row.rawName)) {
+        const escapedName = escapeRegExp(row.rawName);
+        const regex = new RegExp(`(<div[^>]*style="[^"]*margin-bottom:\\s*\\d+px;?[^"]*"[^>]*>.*?<\\/div>\\s*)(<div[^>]*>\\s*` + escapedName + `)`, 'gi');
+        if (regex.test(htmlContent)) {
+          htmlContent = htmlContent.replace(regex, (match, p1, p2) => {
+            const newP1 = p1.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
+            const qrImg = `<div style="text-align:center; margin:4px 0;"><img src="${row.qrDataUrl}" alt="QR Code" style="width:70px; height:70px; object-fit:contain; display:inline-block;" /></div>`;
+            return newP1 + qrImg + p2;
+          });
+        }
+      }
+    });
+
+    // 2. Append Digital Signature Info block at bottom of body (without page-break-before: always)
+    if (!htmlContent.includes('digital-signatures-section')) {
+      const itemsHtml = signatureRows.map((row: any) => `
+        <div style="display:flex; gap:12px; align-items:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; min-width:240px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+          <div style="width:70px; height:70px; border:1px solid ${HTML_PDF_PRIMARY_COLOR}; border-radius:8px; padding:4px; display:flex; align-items:center; justify-content:center; background:#fff; flex-shrink:0;">
+            <img src="${row.qrDataUrl}" alt="QR Code" style="width:100%; height:100%; object-fit:contain;" />
+          </div>
+          <div>
+            <div style="font-weight:700; font-size:12px; color:#0f172a;">${row.fullName}</div>
+            <div style="font-size:11px; color:#475569;">${row.jobTitle}</div>
+            <div style="font-size:10px; color:#16a34a; font-weight:600; margin-top:3px;">✓ Signed & Verified</div>
+            <div style="font-size:9.5px; color:#64748b; margin-top:2px;">${row.signedAt}</div>
+          </div>
+        </div>`).join('');
+
+      const signatureBlock = `
+      <div class="digital-signatures-section" style="margin-top:24px; padding:16px; border-top:2px dashed ${HTML_PDF_PRIMARY_COLOR}; background:#f8fafc; border-radius:12px; page-break-inside:avoid; font-family:Arial,Helvetica,sans-serif;">
+        <div style="font-size:12px; font-weight:700; color:${HTML_PDF_PRIMARY_COLOR}; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">
+          Informasi Verifikasi Tanda Tangan Digital (DSN-MUI Amanah)
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:14px;">
+          ${itemsHtml}
+        </div>
+      </div>`;
+
+      if (/<\/body>/i.test(htmlContent)) {
+        htmlContent = htmlContent.replace(/<\/body>/i, `${signatureBlock}</body>`);
+      } else {
+        htmlContent += signatureBlock;
+      }
+    }
+  }
+
+  return htmlContent;
+}
+
 // ── DOWNLOAD DOCUMENT FILE (Latest Version) ──
 router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (req: AuthRequest, res: Response) => {
   try {
@@ -657,7 +747,11 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       where: { id: String(id) },
       include: {
         versions: { orderBy: { versionNum: 'desc' } },
-        signatures: true,
+    signatures: {
+          include: {
+            user: { select: { fullName: true, email: true, jobTitle: true } }
+          }
+        },
       }
     });
 
@@ -687,35 +781,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         const baseDir = path.dirname(filePath);
         const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
 
-        // Build signature injection HTML with embedded QR data URLs
-        const sigs = document.signatures || [];
-        const signatureRows = await Promise.all(sigs
-          .filter(s => s.signedAt)
-          .map(async (s: any) => {
-            const payload = JSON.stringify({ signatureId: s.id, documentId: s.documentId, userId: s.userId, signedAt: s.signedAt, fullName: s.user?.fullName });
-            const qrDataUrl = await qrcode.toDataURL(payload, { margin: 1, width: 240, color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' } });
-            return {
-              fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
-              jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
-              signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'long', timeStyle: 'short' })),
-              qrDataUrl,
-            };
-          }));
-
-        let htmlContent = rawHtml;
-        if (!/<!doctype html>/i.test(htmlContent)) htmlContent = `<!doctype html>\n${htmlContent}`;
-        if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
-          htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
-        }
-
-        if (signatureRows.length) {
-          const itemsHtml = signatureRows.map((row: any) => `\n            <div style="display:flex; gap:16px; align-items:center; margin-bottom:24px;">\n              <div style="width:100px; height:100px; border:2px solid ${HTML_PDF_PRIMARY_COLOR}; border-radius:12px; padding:8px; display:flex; align-items:center; justify-content:center; background:#fff;">\n                <img src="${row.qrDataUrl}" alt="QR" style="width:100%; height:100%; object-fit:contain;" />\n              </div>\n              <div>\n                <div style="font-weight:700;">${row.fullName}</div>\n                <div style="font-size:12px; color:#475569;">${row.jobTitle}</div>\n                <div style="font-size:11px; color:#64748b; margin-top:6px;">Signed at: ${row.signedAt}</div>\n              </div>\n            </div>`).join('');
-
-          // Append signature HTML before </body>
-          const signatureBlock = `<div style="page-break-before:always; padding:20px; font-family:Arial,Helvetica,sans-serif;">\n<h2 style=\"color:${HTML_PDF_PRIMARY_COLOR};\">Digital Signing Info</h2>\n${itemsHtml}\n</div>`;
-          if (/<\/body>/i.test(htmlContent)) htmlContent = htmlContent.replace(/<\/body>/i, `${signatureBlock}</body>`);
-          else htmlContent += signatureBlock;
-        }
+        const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
 
         if (previewMode) {
           res.setHeader('Content-Type', 'text/html');
@@ -729,9 +795,9 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
         await page.emulateMediaType('screen');
 
-        await page.setContent(htmlContent, { waitUntil: ['load', 'networkidle0'], timeout: 60000 });
+        await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' } });
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
         await browser.close();
 
         const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
@@ -774,7 +840,11 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
       where: { id: String(id) },
       include: {
         versions: { orderBy: { versionNum: 'desc' } },
-        signatures: true,
+        signatures: {
+          include: {
+            user: { select: { fullName: true, email: true, jobTitle: true } }
+          }
+        },
       }
     });
 
@@ -804,33 +874,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         const baseDir = path.dirname(filePath);
         const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
 
-        const sigs = document.signatures || [];
-        const signatureRows = await Promise.all(sigs
-          .filter(s => s.signedAt)
-          .map(async (s: any) => {
-            const payload = JSON.stringify({ signatureId: s.id, documentId: s.documentId, userId: s.userId, signedAt: s.signedAt, fullName: s.user?.fullName });
-            const qrDataUrl = await qrcode.toDataURL(payload, { margin: 1, width: 240, color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' } });
-            return {
-              fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
-              jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
-              signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'long', timeStyle: 'short' })),
-              qrDataUrl,
-            };
-          }));
-
-        let htmlContent = rawHtml;
-        if (!/<!doctype html>/i.test(htmlContent)) htmlContent = `<!doctype html>\n${htmlContent}`;
-        if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
-          htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
-        }
-
-        if (signatureRows.length) {
-          const itemsHtml = signatureRows.map((row: any) => `\n            <div style="display:flex; gap:16px; align-items:center; margin-bottom:24px;">\n              <div style="width:100px; height:100px; border:2px solid ${HTML_PDF_PRIMARY_COLOR}; border-radius:12px; padding:8px; display:flex; align-items:center; justify-content:center; background:#fff;">\n                <img src="${row.qrDataUrl}" alt="QR" style="width:100%; height:100%; object-fit:contain;" />\n              </div>\n              <div>\n                <div style="font-weight:700;">${row.fullName}</div>\n                <div style="font-size:12px; color:#475569;">${row.jobTitle}</div>\n                <div style="font-size:11px; color:#64748b; margin-top:6px;">Signed at: ${row.signedAt}</div>\n              </div>\n            </div>`).join('');
-
-          const signatureBlock = `<div style="page-break-before:always; padding:20px; font-family:Arial,Helvetica,sans-serif;">\n<h2 style=\"color:${HTML_PDF_PRIMARY_COLOR};\">Digital Signing Info</h2>\n${itemsHtml}\n</div>`;
-          if (/<\/body>/i.test(htmlContent)) htmlContent = htmlContent.replace(/<\/body>/i, `${signatureBlock}</body>`);
-          else htmlContent += signatureBlock;
-        }
+        const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
 
         if (previewMode) {
           res.setHeader('Content-Type', 'text/html');
@@ -844,9 +888,9 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
         await page.emulateMediaType('screen');
 
-        await page.setContent(htmlContent, { waitUntil: ['load', 'networkidle0'], timeout: 60000 });
+        await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' } });
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
         await browser.close();
 
         const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
