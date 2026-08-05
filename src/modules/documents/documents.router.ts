@@ -652,6 +652,46 @@ function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: string; injected: boolean } {
+  const rawName = row.rawName || '';
+  if (!rawName) return { html: htmlContent, injected: false };
+
+  const tokens = rawName
+    .split(/[\s,.]+/)
+    .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir)$/i.test(t));
+
+  if (tokens.length === 0) return { html: htmlContent, injected: false };
+
+  const tokenRegexStr = tokens.map((t: string) => escapeRegExp(t)).join('.*?');
+  const elementRegex = new RegExp(`(<(div|p|td|span)[^>]*>(?:(?!<\\/(div|p|td|span)>).)*?` + tokenRegexStr + `(?:(?!<\\/(div|p|td|span)>).)*?<\\/(div|p|td|span)>)`, 'gi');
+
+  const match = elementRegex.exec(htmlContent);
+  if (match) {
+    const matchedElement = match[0];
+    const matchIndex = match.index;
+    const prefix = htmlContent.substring(0, matchIndex);
+    const suffix = htmlContent.substring(matchIndex + matchedElement.length);
+
+    const qrImageHtml = `<div style="display:flex; justify-content:center; align-items:center; margin:4px auto; text-align:center;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:75px; height:75px; object-fit:contain; display:block;" /></div>`;
+    const last300 = prefix.slice(-300);
+
+    if (/margin-bottom:\s*\d+px/i.test(last300)) {
+      const updatedLast300 = last300.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
+      return { html: prefix.slice(0, -300) + updatedLast300 + qrImageHtml + matchedElement + suffix, injected: true };
+    } else if (/(<div[^>]*style="[^"]*(?:width|height|border)[^"]*"[^>]*>\s*<\/div>)/gi.test(last300)) {
+      const updatedLast300 = last300.replace(/(<div[^>]*style="[^"]*(?:width|height|border)[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+      return { html: prefix.slice(0, -300) + updatedLast300 + matchedElement + suffix, injected: true };
+    } else if (/(?:<br\s*\/?>\s*){2,}/i.test(last300)) {
+      const updatedLast300 = last300.replace(/(?:<br\s*\/?>\s*){2,}/gi, '<br/>');
+      return { html: prefix.slice(0, -300) + updatedLast300 + qrImageHtml + matchedElement + suffix, injected: true };
+    } else {
+      return { html: prefix + qrImageHtml + matchedElement + suffix, injected: true };
+    }
+  }
+
+  return { html: htmlContent, injected: false };
+}
+
 async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
   const signedSigs = (signatures || []).filter((s: any) => s.signedAt);
   const signatureRows = await Promise.all(signedSigs.map(async (s: any) => {
@@ -687,22 +727,13 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   }
 
   if (signatureRows.length > 0) {
-    // 1. Inject QR code into matching signature boxes in letter HTML
     signatureRows.forEach(row => {
-      if (row.rawName && htmlContent.includes(row.rawName)) {
-        const escapedName = escapeRegExp(row.rawName);
-        const regex = new RegExp(`(<div[^>]*style="[^"]*margin-bottom:\\s*\\d+px;?[^"]*"[^>]*>.*?<\\/div>\\s*)(<div[^>]*>\\s*` + escapedName + `)`, 'gi');
-        if (regex.test(htmlContent)) {
-          htmlContent = htmlContent.replace(regex, (match, p1, p2) => {
-            const newP1 = p1.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
-            const qrImg = `<div style="text-align:center; margin:4px 0;"><img src="${row.qrDataUrl}" alt="QR Code" style="width:70px; height:70px; object-fit:contain; display:inline-block;" /></div>`;
-            return newP1 + qrImg + p2;
-          });
-        }
+      const res = injectSignatureQrIntoHtml(htmlContent, row);
+      if (res.injected) {
+        htmlContent = res.html;
       }
     });
 
-    // 2. Append Digital Signature Info block at bottom of body (without page-break-before: always)
     if (!htmlContent.includes('digital-signatures-section')) {
       const itemsHtml = signatureRows.map((row: any) => `
         <div style="display:flex; gap:12px; align-items:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; min-width:240px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
@@ -747,7 +778,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       where: { id: String(id) },
       include: {
         versions: { orderBy: { versionNum: 'desc' } },
-    signatures: {
+        signatures: {
           include: {
             user: { select: { fullName: true, email: true, jobTitle: true } }
           }
@@ -765,9 +796,16 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       return res.status(404).json({ status: 'error', message: 'No version found' });
     }
 
-    const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
+    let filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ status: 'error', message: 'File not found on server' });
+      const fallbackPath = path.resolve(process.cwd(), uploadDir, path.basename(version.fileUrl));
+      if (fs.existsSync(fallbackPath)) {
+        filePath = fallbackPath;
+      } else {
+        console.error(`❌ Download failed: file missing at ${filePath} or ${fallbackPath}`);
+        res.status(404).setHeader('Content-Type', 'application/json');
+        return res.json({ status: 'error', message: 'Berkas tidak ditemukan di server. Silakan unggah ulang dokumen.' });
+      }
     }
 
     const fileExtension = path.extname(filePath).toLowerCase();
@@ -802,8 +840,10 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
 
         const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
         res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', String(pdfBuffer.length));
         res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        return res.end(pdfBuffer);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.end(Buffer.from(pdfBuffer));
       } catch (convErr) {
         console.error('[HTML->PDF] conversion failed:', convErr);
         // fallback to streaming raw HTML
@@ -858,9 +898,16 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
       return res.status(404).json({ status: 'error', message: 'Version not found' });
     }
 
-    const filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
+    let filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ status: 'error', message: 'File not found on server' });
+      const fallbackPath = path.resolve(process.cwd(), uploadDir, path.basename(version.fileUrl));
+      if (fs.existsSync(fallbackPath)) {
+        filePath = fallbackPath;
+      } else {
+        console.error(`❌ Download version failed: file missing at ${filePath} or ${fallbackPath}`);
+        res.status(404).setHeader('Content-Type', 'application/json');
+        return res.json({ status: 'error', message: 'Berkas tidak ditemukan di server. Silakan unggah ulang dokumen.' });
+      }
     }
 
     const fileExtension = path.extname(filePath).toLowerCase();
@@ -895,8 +942,10 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
 
         const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
         res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', String(pdfBuffer.length));
         res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        return res.end(pdfBuffer);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.end(Buffer.from(pdfBuffer));
       } catch (convErr) {
         console.error('[HTML->PDF] conversion failed (version):', convErr);
         res.setHeader('Content-Type', version.mimeType || 'text/html');
