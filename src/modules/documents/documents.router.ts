@@ -3,15 +3,19 @@ import { calculateAttendees } from '../meeting/meeting.router.js';
 
 import { Router } from 'express';
 import type { Response, Request } from 'express';
-import multer from 'multer';
+import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
+import multer from 'multer';
 import { prisma } from '../../lib/prisma.js';
 import { authenticate, checkPermission } from '../../middleware/auth.js';
 import type { AuthRequest } from '../../middleware/auth.js';
 import { PushService } from '../../lib/push.js';
 import { sendNotification } from '../notifications/notifications.router.js';
 import { triggerQueueUpdate } from '../../lib/firebase.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = Router();
 import qrcode from 'qrcode';
