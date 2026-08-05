@@ -674,7 +674,8 @@ async function launchPuppeteerBrowser() {
       '/usr/bin/chromium-browser',
       '/usr/bin/chromium',
       '/usr/bin/google-chrome-stable',
-      '/usr/bin/google-chrome'
+      '/usr/bin/google-chrome',
+      '/usr/bin/headless-shell'
     ];
     for (const p of commonPaths) {
       if (fs.existsSync(p)) {
@@ -685,6 +686,31 @@ async function launchPuppeteerBrowser() {
   }
 
   return await puppeteer.launch(launchOptions);
+}
+
+function resolveExistingFilePath(fileUrl: string): string | null {
+  if (!fileUrl) return null;
+
+  const filename = path.basename(fileUrl);
+  const candidates = [
+    path.isAbsolute(fileUrl) ? fileUrl : null,
+    path.resolve(process.cwd(), fileUrl),
+    path.resolve(process.cwd(), 'backend', fileUrl),
+    path.resolve(process.cwd(), uploadDir, filename),
+    path.resolve(process.cwd(), 'backend', uploadDir, filename),
+    path.resolve(process.cwd(), 'uploads', filename),
+    path.resolve(process.cwd(), 'backend/uploads', filename),
+    path.resolve(__dirname, '../../uploads', filename),
+    path.resolve(__dirname, '../../../uploads', filename),
+    path.resolve(__dirname, '../../../../uploads', filename),
+  ].filter(Boolean) as string[];
+
+  for (const cand of candidates) {
+    if (fs.existsSync(cand)) {
+      return cand;
+    }
+  }
+  return null;
 }
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: string; injected: boolean } {
@@ -846,16 +872,11 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       return res.status(404).json({ status: 'error', message: 'No version found' });
     }
 
-    let filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
-    if (!fs.existsSync(filePath)) {
-      const fallbackPath = path.resolve(process.cwd(), uploadDir, path.basename(version.fileUrl));
-      if (fs.existsSync(fallbackPath)) {
-        filePath = fallbackPath;
-      } else {
-        console.error(`❌ Download failed: file missing at ${filePath} or ${fallbackPath}`);
-        res.status(404).setHeader('Content-Type', 'application/json');
-        return res.json({ status: 'error', message: 'Berkas tidak ditemukan di server. Silakan unggah ulang dokumen.' });
-      }
+    const filePath = resolveExistingFilePath(version.fileUrl);
+    if (!filePath) {
+      console.error(`❌ Download failed: file missing for fileUrl ${version.fileUrl}`);
+      res.status(404).setHeader('Content-Type', 'application/json');
+      return res.json({ status: 'error', message: 'Berkas tidak ditemukan di server. Silakan unggah ulang dokumen.' });
     }
 
     const fileExtension = path.extname(filePath).toLowerCase();
@@ -872,7 +893,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
 
         if (previewMode) {
-          res.setHeader('Content-Type', 'text/html');
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           return res.end(htmlContent);
@@ -896,8 +917,15 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         return res.end(Buffer.from(pdfBuffer));
       } catch (convErr: any) {
         console.error('[HTML->PDF] conversion failed:', convErr);
-        res.status(500).setHeader('Content-Type', 'application/json');
-        return res.json({ status: 'error', message: 'Gagal mengonversi dokumen ke PDF di server: ' + (convErr?.message || String(convErr)) });
+        // Fallback: If Puppeteer HTML->PDF conversion fails on server, serve HTML directly
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+        const baseDir = path.dirname(filePath);
+        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
+        return res.end(htmlContent);
       }
     }
 
@@ -944,16 +972,11 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
       return res.status(404).json({ status: 'error', message: 'Version not found' });
     }
 
-    let filePath = path.isAbsolute(version.fileUrl) ? version.fileUrl : path.resolve(process.cwd(), version.fileUrl);
-    if (!fs.existsSync(filePath)) {
-      const fallbackPath = path.resolve(process.cwd(), uploadDir, path.basename(version.fileUrl));
-      if (fs.existsSync(fallbackPath)) {
-        filePath = fallbackPath;
-      } else {
-        console.error(`❌ Download version failed: file missing at ${filePath} or ${fallbackPath}`);
-        res.status(404).setHeader('Content-Type', 'application/json');
-        return res.json({ status: 'error', message: 'Berkas tidak ditemukan di server. Silakan unggah ulang dokumen.' });
-      }
+    const filePath = resolveExistingFilePath(version.fileUrl);
+    if (!filePath) {
+      console.error(`❌ Download version failed: file missing for fileUrl ${version.fileUrl}`);
+      res.status(404).setHeader('Content-Type', 'application/json');
+      return res.json({ status: 'error', message: 'Berkas tidak ditemukan di server. Silakan unggah ulang dokumen.' });
     }
 
     const fileExtension = path.extname(filePath).toLowerCase();
@@ -970,7 +993,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
 
         if (previewMode) {
-          res.setHeader('Content-Type', 'text/html');
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           return res.end(htmlContent);
@@ -994,8 +1017,14 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         return res.end(Buffer.from(pdfBuffer));
       } catch (convErr: any) {
         console.error('[HTML->PDF] conversion failed (version):', convErr);
-        res.status(500).setHeader('Content-Type', 'application/json');
-        return res.json({ status: 'error', message: 'Gagal mengonversi dokumen ke PDF di server: ' + (convErr?.message || String(convErr)) });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+        const baseDir = path.dirname(filePath);
+        const baseUrl = new URL(`file://${path.resolve(baseDir)}/`).href;
+        const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
+        return res.end(htmlContent);
       }
     }
 
