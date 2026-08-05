@@ -736,10 +736,13 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
   const matchIndex = match.index;
   const prefix = htmlContent.substring(0, matchIndex);
 
-  const wrapperMatch = prefix.match(/(?:<[bu]|<strong|<span|<p[^>]*>)[^<]*$/i);
+  const lastOpenTagIndex = prefix.lastIndexOf('<');
   let targetIndex = matchIndex;
-  if (wrapperMatch && typeof wrapperMatch.index === 'number') {
-    targetIndex = wrapperMatch.index;
+  if (lastOpenTagIndex !== -1) {
+    const tagSub = prefix.substring(lastOpenTagIndex);
+    if (/^<(div|p|u|b|strong|span)[^>]*>/i.test(tagSub)) {
+      targetIndex = lastOpenTagIndex;
+    }
   }
 
   const realPrefix = htmlContent.substring(0, targetIndex);
@@ -747,14 +750,17 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
 
   const qrImageHtml = `<div style="text-align:center; margin:2px auto; line-height:0; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:65px; height:65px; object-fit:contain; display:inline-block;" /></div>`;
 
-  const last200 = realPrefix.slice(-200);
+  const last300 = realPrefix.slice(-300);
 
-  if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(last200)) {
-    const updatedLast = last200.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
-    return { html: realPrefix.slice(0, -200) + updatedLast + suffix, injected: true };
-  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(last200)) {
-    const updatedLast = last200.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
-    return { html: realPrefix.slice(0, -200) + updatedLast + suffix, injected: true };
+  if (/margin-bottom:\s*\d+px/i.test(last300)) {
+    const updatedLast = last300.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
+    return { html: realPrefix.slice(0, -300) + updatedLast + qrImageHtml + suffix, injected: true };
+  } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(last300)) {
+    const updatedLast = last300.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+    return { html: realPrefix.slice(0, -300) + updatedLast + suffix, injected: true };
+  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(last300)) {
+    const updatedLast = last300.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
+    return { html: realPrefix.slice(0, -300) + updatedLast + suffix, injected: true };
   } else {
     return { html: realPrefix + qrImageHtml + suffix, injected: true };
   }
