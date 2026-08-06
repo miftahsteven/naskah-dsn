@@ -820,7 +820,10 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   }
 
   // ── SAFE FALLBACK: Target specific role titles in signature block ("Ketua" or "Sekretaris") ──
-  const isKetua = row.signerIndex === 0 || /ketua/i.test(row.roleName || '');
+  const roleStr = (row.roleName || '').toLowerCase();
+  const isKetua = /ketua|ketum/i.test(roleStr) || 
+                  (/cholil|nafis|hasan/i.test(row.candidates.join(' '))) ||
+                  (row.signerIndex === 0 && !/sekretaris/i.test(roleStr) && !/amirsyah|tambunan/i.test(row.candidates.join(' ')));
   const targetRole = isKetua ? '(?:Ketua|Menyetujui|Ketum)' : '(?:Sekretaris|Mengetahui|Sekjen)';
   
   // Search for role (optional comma) followed by line breaks
@@ -919,39 +922,42 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
         candidates.push(cleanName);
       }
     }
-    if (templateVariables) {
-      if (signerIndex === 0) {
-        if (templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
-        if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
-      } else if (signerIndex === 1) {
-        if (templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
-      }
-      if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
-      if (templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
-      if (templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
-    }
-    // DSN-MUI official name fallbacks
+    
     const userLower = (s.user?.fullName || '').toLowerCase();
-    if (signerIndex === 0 || userLower.includes('cholil') || userLower.includes('nafis') || userLower.includes('hasan') || userLower.includes('admin') || userLower.includes('ketua')) {
+    const isUserKetua = userLower.includes('cholil') || userLower.includes('nafis') || userLower.includes('hasanuddin');
+    const isUserSekretaris = userLower.includes('amirsyah') || userLower.includes('tambunan') || userLower.includes('anwar');
+
+    if (templateVariables) {
+      if (isUserKetua && templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
+      if (isUserSekretaris && templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
+      if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
+    }
+    
+    // Fallbacks for known signers if they use weird accounts
+    if (isUserKetua || /ketua/i.test(s.user?.jobTitle || '')) {
       candidates.push("CHOLIL NAFIS");
       candidates.push("HASANUDDIN");
-    }
-    if (signerIndex === 1 || userLower.includes('amirsyah') || userLower.includes('tambunan') || userLower.includes('anwar') || userLower.includes('sekretaris')) {
+    } else if (isUserSekretaris || /sekretaris/i.test(s.user?.jobTitle || '')) {
       candidates.push("AMIRSYAH TAMBUNAN");
       candidates.push("ANWAR ABBAS");
+    } else {
+      // If we really don't know, we can push template variables just in case
+      if (templateVariables.namaKetua && signerIndex === 0) candidates.push(templateVariables.namaKetua);
+      if (templateVariables.namaSekretaris && signerIndex === 1) candidates.push(templateVariables.namaSekretaris);
     }
-    candidates.push("CHOLIL NAFIS");
-    candidates.push("AMIRSYAH TAMBUNAN");
-    candidates.push("HASANUDDIN");
-    candidates.push("ANWAR ABBAS");
-    candidates.push("SHOLAHUDDIN");
-    candidates.push("ADIWARMAN");
+
+    let resolvedRole = s.user?.jobTitle;
+    if (!resolvedRole) {
+      if (isUserKetua) resolvedRole = 'Ketua';
+      else if (isUserSekretaris) resolvedRole = 'Sekretaris';
+      else resolvedRole = signerIndex === 0 ? 'Ketua' : 'Sekretaris';
+    }
 
     return {
       signerIndex,
       fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
       jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
-      roleName: s.user?.jobTitle || (signerIndex === 0 ? 'Ketua' : 'Sekretaris'),
+      roleName: resolvedRole,
       signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', {
         timeZone: 'Asia/Jakarta',
         dateStyle: 'long',
