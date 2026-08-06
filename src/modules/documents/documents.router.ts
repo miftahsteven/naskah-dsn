@@ -719,16 +719,13 @@ function resolveExistingFilePath(fileUrl: string): string | null {
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: string; injected: boolean } {
   const candidates = row.candidates || [];
-  if (candidates.length === 0) return { html: htmlContent, injected: false };
-
   let match: RegExpExecArray | null = null;
   let matchedCandidate = "";
 
-  // Search for the first candidate that exists in htmlContent
   for (const cand of candidates) {
     const tokens = cand
       .split(/[\s,.]+/)
-      .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir)$/i.test(t));
+      .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir|se|ag)$/i.test(t));
     if (tokens.length === 0) continue;
 
     const namePattern = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
@@ -740,41 +737,56 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
     }
   }
 
-  if (!match) return { html: htmlContent, injected: false };
+  const qrImageHtml = `<div style="text-align:center; margin:2px auto; line-height:0; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:65px; height:65px; object-fit:contain; display:inline-block;" /></div>`;
 
-  const matchIndex = match.index;
-  const prefix = htmlContent.substring(0, matchIndex);
+  if (match) {
+    const matchIndex = match.index;
+    const prefix = htmlContent.substring(0, matchIndex);
 
-  const lastOpenTagIndex = prefix.lastIndexOf('<');
-  let targetIndex = matchIndex;
-  if (lastOpenTagIndex !== -1) {
-    const tagSub = prefix.substring(lastOpenTagIndex);
-    if (/^<(div|p|u|b|strong|span)[^>]*>/i.test(tagSub)) {
-      targetIndex = lastOpenTagIndex;
+    const lastOpenTagIndex = prefix.lastIndexOf('<');
+    let targetIndex = matchIndex;
+    if (lastOpenTagIndex !== -1) {
+      const tagSub = prefix.substring(lastOpenTagIndex);
+      if (/^<(div|p|u|b|strong|span)[^>]*>/i.test(tagSub)) {
+        targetIndex = lastOpenTagIndex;
+      }
+    }
+
+    const realPrefix = htmlContent.substring(0, targetIndex);
+    let suffix = htmlContent.substring(targetIndex);
+    suffix = suffix.replace(/^([^>]+style="[^"]*)(?:margin-top|padding-top):\s*\d+px;?/i, "$1margin-top: 2px;");
+
+    const sliceLen = Math.min(300, realPrefix.length);
+    const prefixBase = realPrefix.slice(0, realPrefix.length - sliceLen);
+    const lastSlice = realPrefix.slice(realPrefix.length - sliceLen);
+
+    if (/margin-bottom:\s*\d+px/i.test(lastSlice)) {
+      const updatedSlice = lastSlice.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
+      return { html: prefixBase + updatedSlice + qrImageHtml + suffix, injected: true };
+    } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
+      const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+      return { html: prefixBase + updatedSlice + suffix, injected: true };
+    } else if (/(?:<br\s*\/?>\s*){2,}/i.test(lastSlice)) {
+      const updatedSlice = lastSlice.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
+      return { html: prefixBase + updatedSlice + suffix, injected: true };
+    } else {
+      return { html: realPrefix + qrImageHtml + suffix, injected: true };
     }
   }
 
-  const realPrefix = htmlContent.substring(0, targetIndex);
-  const suffix = htmlContent.substring(targetIndex);
-
-  const qrImageHtml = `<div style="text-align:center; margin:2px auto; line-height:0; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:65px; height:65px; object-fit:contain; display:inline-block;" /></div>`;
-
-  const sliceLen = Math.min(300, realPrefix.length);
-  const prefixBase = realPrefix.slice(0, realPrefix.length - sliceLen);
-  const lastSlice = realPrefix.slice(realPrefix.length - sliceLen);
-
-  if (/margin-bottom:\s*\d+px/i.test(lastSlice)) {
-    const updatedSlice = lastSlice.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
-    return { html: prefixBase + updatedSlice + qrImageHtml + suffix, injected: true };
-  } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
-    const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
-    return { html: prefixBase + updatedSlice + suffix, injected: true };
-  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(lastSlice)) {
-    const updatedSlice = lastSlice.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
-    return { html: prefixBase + updatedSlice + suffix, injected: true };
-  } else {
-    return { html: realPrefix + qrImageHtml + suffix, injected: true };
+  // Fallback if no candidate name matched in HTML: inject into signature space/box
+  if (/margin-bottom:\s*\d+px/i.test(htmlContent)) {
+    const updated = htmlContent.replace(/margin-bottom:\s*\d+px/i, (m) => "margin-bottom: 4px;" + qrImageHtml);
+    return { html: updated, injected: true };
+  } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/i.test(htmlContent)) {
+    const updated = htmlContent.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/i, qrImageHtml);
+    return { html: updated, injected: true };
+  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(htmlContent)) {
+    const updated = htmlContent.replace(/(?:<br\s*\/?>\s*){2,}/i, qrImageHtml);
+    return { html: updated, injected: true };
   }
+
+  return { html: htmlContent, injected: false };
 }
 
 async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
@@ -810,28 +822,45 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
 
     const signerIndex = penandatanganSteps.findIndex((st: any) => st.userId === s.userId);
 
-    // Build candidates for matching
+    // Build comprehensive candidates list for name matching
     const candidates: string[] = [];
     if (s.user?.fullName) {
       candidates.push(s.user.fullName);
+      const cleanName = s.user.fullName
+        .replace(/\b(Dr|K\.?H|Prof|Drs|H|Lc|Ph\.?D|M\.?A|S\.?H|M\.?Si|Ir|M\.?Ag|S\.?Ag|S\.?E)\b\.?/gi, '')
+        .replace(/[\s,.]+/g, ' ')
+        .trim();
+      if (cleanName && cleanName.length >= 3) {
+        candidates.push(cleanName);
+      }
     }
-    if (signerIndex !== -1 && templateVariables) {
+    if (templateVariables) {
       if (signerIndex === 0) {
         if (templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
         if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
       } else if (signerIndex === 1) {
         if (templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
       }
+      if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
+      if (templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
+      if (templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
     }
-    // Default fallback names
-    if (signerIndex === 0 || (signerIndex === -1 && s.user?.fullName?.toLowerCase().includes('admin'))) {
+    // DSN-MUI official name fallbacks
+    const userLower = (s.user?.fullName || '').toLowerCase();
+    if (signerIndex === 0 || userLower.includes('cholil') || userLower.includes('nafis') || userLower.includes('hasan') || userLower.includes('admin') || userLower.includes('ketua')) {
       candidates.push("CHOLIL NAFIS");
       candidates.push("HASANUDDIN");
     }
-    if (signerIndex === 1) {
+    if (signerIndex === 1 || userLower.includes('amirsyah') || userLower.includes('tambunan') || userLower.includes('anwar') || userLower.includes('sekretaris')) {
       candidates.push("AMIRSYAH TAMBUNAN");
       candidates.push("ANWAR ABBAS");
     }
+    candidates.push("CHOLIL NAFIS");
+    candidates.push("AMIRSYAH TAMBUNAN");
+    candidates.push("HASANUDDIN");
+    candidates.push("ANWAR ABBAS");
+    candidates.push("SHOLAHUDDIN");
+    candidates.push("ADIWARMAN");
 
     return {
       fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
