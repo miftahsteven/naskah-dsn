@@ -756,7 +756,10 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
         if (/<div[^>]*style="[^"]*height:\s*\d{2,}px/i.test(closeSlice)) score += 10;
         
         // 3. Negative indicators
+        // If it's a list item (like in Lampiran: "Sekretaris : Dr..."), penalize heavily!
         if (/:\s*(<[^>]+>\s*)*$/.test(closeSlice) || /:\s*$/.test(prefix.trim())) score -= 30; // "Name:" or "Name : "
+        if (/:\s*[a-zA-Z.\s<>]*$/.test(closeSlice)) score -= 50; // "Role : Dr. H. "
+        if (/Lampiran/i.test(lastSlice)) score -= 30; // If it's physically near the word Lampiran
         if (/<li/i.test(closeSlice) && !/<\/li>/i.test(closeSlice)) score -= 20; // Inside a list item
         
         if (!bestMatch || score > bestMatch.score || (score === bestMatch.score && m.index > bestMatch.index)) {
@@ -839,8 +842,13 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   const genericRoleRegex = new RegExp(`(${targetRole})\\s*,?\\s*(?:<[^>]+>|\\s)*?`, 'gi');
   const genericRoleMatches = [...htmlContent.matchAll(genericRoleRegex)];
   if (genericRoleMatches.length > 0) {
-    // We only consider it if it's in the bottom half of the document
-    const validMatches = genericRoleMatches.filter(m => typeof m.index === 'number' && m.index > htmlContent.length * 0.5);
+    // We only consider it if it's in the bottom half of the document, and NOT inside a Lampiran
+    const validMatches = genericRoleMatches.filter(m => {
+      if (typeof m.index !== 'number' || m.index <= htmlContent.length * 0.4) return false;
+      const surrounding = htmlContent.substring(Math.max(0, m.index - 500), m.index + 100);
+      if (/Lampiran/i.test(surrounding)) return false; // Ignore roles inside attachments
+      return true;
+    });
     const lastMatch = validMatches.length > 0 ? validMatches[validMatches.length - 1] : genericRoleMatches[genericRoleMatches.length - 1];
     
     if (lastMatch && typeof lastMatch.index === 'number') {
