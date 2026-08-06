@@ -717,7 +717,7 @@ function resolveExistingFilePath(fileUrl: string): string | null {
   return null;
 }
 
-function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: string; injected: boolean } {
+function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: string): { html: string; injected: boolean } {
   const candidates = row.candidates || [];
   let match: RegExpExecArray | null = null;
   let matchedCandidate = "";
@@ -737,7 +737,7 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
     }
   }
 
-  const qrImageHtml = `<div style="text-align:center; margin:4px auto; line-height:1; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:70px !important; height:70px !important; min-width:70px !important; min-height:70px !important; object-fit:contain !important; display:inline-block !important;" /></div>`;
+  const qrImageHtml = `<div style="text-align:center; margin:4px auto; line-height:1; display:block; position:relative; width:70px; height:70px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:70px !important; height:70px !important; min-width:70px !important; min-height:70px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" /><img src="${baseUrl}/images/logo-dsn.png" alt="Logo" style="width:20px !important; height:20px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" /></div>`;
 
   if (match) {
     const matchIndex = match.index;
@@ -806,18 +806,30 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     }
   }
 
+  let documentNumber = '';
+  if (signedSigs.length > 0 && signedSigs[0].documentId) {
+    try {
+      // Lazy load prisma or it might be in scope (documents.router.ts has prisma imported at the top)
+      const { prisma } = await import('../../lib/prisma.js');
+      const docInfo = await prisma.document.findUnique({
+        where: { id: signedSigs[0].documentId },
+        select: { documentNumber: true }
+      });
+      documentNumber = docInfo?.documentNumber || '';
+    } catch(e) {
+      console.warn("Failed to fetch documentNumber for QR:", e);
+    }
+  }
+
   const signatureRows = await Promise.all(signedSigs.map(async (s: any) => {
-    const payload = JSON.stringify({
-      signatureId: s.id,
-      documentId: s.documentId,
-      userId: s.userId,
-      signedAt: s.signedAt,
-      fullName: s.user?.fullName,
-    });
+    // Generate QR from documentNumber
+    const payload = documentNumber || s.documentId;
+    
     const qrDataUrl = await qrcode.toDataURL(payload, {
       margin: 1,
       width: 240,
-      color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' }
+      color: { dark: '#1F3F23', light: '#FFFFFF' },
+      errorCorrectionLevel: 'H' // High error correction to allow logo overlay
     });
 
     const signerIndex = penandatanganSteps.findIndex((st: any) => st.userId === s.userId);
@@ -908,7 +920,8 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
 
   if (signatureRows.length > 0) {
     signatureRows.forEach(row => {
-      const res = injectSignatureQrIntoHtml(htmlContent, row);
+      // Pass baseUrl to injectSignatureQrIntoHtml
+      const res = injectSignatureQrIntoHtml(htmlContent, row, baseUrl);
       if (res.injected) {
         htmlContent = res.html;
       }
