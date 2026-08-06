@@ -790,27 +790,34 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
     } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
       const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
       return { html: prefixBase + updatedSlice + suffix, injected: true };
-    } else if (/(?:<br\s*\/?>\s*){2,}/i.test(lastSlice)) {
-      const updatedSlice = lastSlice.replace(/(?:<br\s*\/?>\s*){2,}/gi, qrImageHtml);
-      return { html: prefixBase + updatedSlice + suffix, injected: true };
     } else {
+      const lastBrMatches = [...lastSlice.matchAll(/(?:<br\s*\/?>\s*){2,}/gi)];
+      if (lastBrMatches.length > 0) {
+        const lastBrMatch = lastBrMatches[lastBrMatches.length - 1];
+        if (lastBrMatch && typeof lastBrMatch.index === 'number') {
+          const bPrefix = lastSlice.substring(0, lastBrMatch.index);
+          const bSuffix = lastSlice.substring(lastBrMatch.index + lastBrMatch[0].length);
+          const updatedSlice = bPrefix + qrImageHtml + bSuffix;
+          return { html: prefixBase + updatedSlice + suffix, injected: true };
+        }
+      }
       return { html: realPrefix + qrImageHtml + suffix, injected: true };
     }
   }
 
-  // ── SAFE FALLBACK: Target specific role titles in signature block ("Ketua," or "Sekretaris,") ──
+  // ── SAFE FALLBACK: Target specific role titles in signature block ("Ketua" or "Sekretaris") ──
   const isKetua = row.signerIndex === 0 || /ketua/i.test(row.roleName || '');
   const targetRole = isKetua ? 'Ketua' : 'Sekretaris';
   
-  // Search for "Ketua," or "Sekretaris," followed by line breaks
-  const roleRegex = new RegExp(`(${targetRole}\\s*,\\s*(?:<[^>]+>|\\s)*?)(?:<br\\s*\\/?>\\s*){2,}`, 'i');
+  // Search for "Ketua" or "Sekretaris" (optional comma) followed by line breaks
+  const roleRegex = new RegExp(`(${targetRole}\\s*,?\\s*(?:<[^>]+>|\\s)*?)(?:<br\\s*\\/?>\\s*){2,}`, 'i');
   if (roleRegex.test(htmlContent)) {
     const updated = htmlContent.replace(roleRegex, `$1${qrImageHtml}`);
     return { html: updated, injected: true };
   }
 
   // Fallback 2: Any role header (Ketua/Sekretaris) followed by <p> or <div> spaces
-  const genericRoleRegex = /(?:Ketua|Sekretaris)\s*,\s*(?:<[^>]+>|\s)*?/i;
+  const genericRoleRegex = /(?:Ketua|Sekretaris)\s*,?\s*(?:<[^>]+>|\s)*?/i;
   const roleMatch = genericRoleRegex.exec(htmlContent);
   if (roleMatch) {
     const idx = roleMatch.index + roleMatch[0].length;
