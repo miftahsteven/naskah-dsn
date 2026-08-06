@@ -723,17 +723,22 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   let matchedCandidate = "";
 
   for (const cand of candidates) {
-    const tokens = cand
-      .split(/[\s,.]+/)
-      .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir|se|ag)$/i.test(t));
-    if (tokens.length === 0) continue;
-
-    const namePattern = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
-    const nameRegex = new RegExp(namePattern, 'gi');
-    match = nameRegex.exec(htmlContent);
-    if (match) {
-      matchedCandidate = cand;
-      break;
+    const tokens = cand.split(/\s+/).filter((t: string) => t.length > 2);
+    if (tokens.length > 0) {
+      let patternStr = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
+      const nameRegex = new RegExp(patternStr, 'gi'); 
+      let lastMatch: RegExpExecArray | null = null;
+      let m: RegExpExecArray | null;
+      
+      while ((m = nameRegex.exec(htmlContent)) !== null) {
+        lastMatch = m;
+      }
+      
+      if (lastMatch) {
+        match = lastMatch;
+        matchedCandidate = cand;
+        break;
+      }
     }
   }
 
@@ -1105,7 +1110,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         const baseDir = path.dirname(filePath);
         const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
         const httpUrlBase = getApiBaseUrl(req) + '/';
-        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
+        const baseUrl = httpUrlBase;
 
         // Combine document.signatures with approved workflow steps as fallback
         const allSignatures: any[] = [...(document.signatures || [])];
@@ -1163,7 +1168,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         const baseDir = path.dirname(filePath);
         const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
         const httpUrlBase = getApiBaseUrl(req) + '/';
-        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
+        const baseUrl = httpUrlBase;
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
         return res.end(htmlContent);
       }
@@ -1230,7 +1235,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         const baseDir = path.dirname(filePath);
         const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
         const httpUrlBase = getApiBaseUrl(req) + '/';
-        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
+        const baseUrl = httpUrlBase;
 
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
 
@@ -1266,7 +1271,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         const baseDir = path.dirname(filePath);
         const fileUrlBase = new URL(`file://${path.resolve(baseDir)}/`).href;
         const httpUrlBase = getApiBaseUrl(req) + '/';
-        const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
+        const baseUrl = httpUrlBase;
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
         return res.end(htmlContent);
       }
