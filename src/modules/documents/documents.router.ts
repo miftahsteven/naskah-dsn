@@ -898,8 +898,17 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   }
 
   const signatureRows = await Promise.all(signedSigs.map(async (s: any) => {
-    // Generate QR from documentNumber
-    const payload = documentNumber || s.documentId;
+    // Build frontend base URL from ALLOWED_ORIGINS env
+    const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
+    let frontendUrl = 'https://amanah.dsnmui.or.id';
+    if (allowedOriginsEnv) {
+      const origins = allowedOriginsEnv.split(',');
+      const firstOrigin = origins[0];
+      if (firstOrigin) {
+        frontendUrl = firstOrigin.trim();
+      }
+    }
+    const payload = `${frontendUrl}/verify/document/${s.documentId}`;
     
     const qrDataUrl = await qrcode.toDataURL(payload, {
       margin: 1,
