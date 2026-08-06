@@ -722,24 +722,39 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   let match: RegExpExecArray | null = null;
   let matchedCandidate = "";
 
+  let bestMatch: { m: RegExpExecArray, cand: string, score: number, index: number } | null = null;
+
   for (const cand of candidates) {
     const tokens = cand.split(/\s+/).filter((t: string) => t.length > 2);
     if (tokens.length > 0) {
       let patternStr = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
       const nameRegex = new RegExp(patternStr, 'gi'); 
-      let lastMatch: RegExpExecArray | null = null;
       let m: RegExpExecArray | null;
       
       while ((m = nameRegex.exec(htmlContent)) !== null) {
-        lastMatch = m;
-      }
-      
-      if (lastMatch) {
-        match = lastMatch;
-        matchedCandidate = cand;
-        break;
+        const prefix = htmlContent.substring(0, m.index);
+        const lastSlice = prefix.slice(Math.max(0, prefix.length - 300));
+        
+        let score = 0;
+        // Signature blocks usually have "Ketua", "Sekretaris", or "Direktur" closely before the name
+        if (/(Ketua|Sekretaris|Direktur|Pimpinan|Kepala)/i.test(lastSlice)) score += 10;
+        // Signature blocks usually have large gaps before the name
+        if (/(?:<br\s*\/?>\s*){2,}/i.test(lastSlice)) score += 5;
+        if (/margin-bottom:\s*\d+px/i.test(lastSlice)) score += 5;
+        if (/<div[^>]*style="[^"]*height/i.test(lastSlice)) score += 5;
+        // If it's a list (like in Lampiran), it often has a colon or number right before it
+        if (/:\s*(<[^>]+>\s*)*$/.test(lastSlice)) score -= 15;
+        
+        if (!bestMatch || score > bestMatch.score || (score === bestMatch.score && m.index > bestMatch.index)) {
+          bestMatch = { m, cand, score, index: m.index };
+        }
       }
     }
+  }
+
+  if (bestMatch) {
+    match = bestMatch.m;
+    matchedCandidate = bestMatch.cand;
   }
 
   const qrImageHtml = `<div style="text-align:center; margin:4px auto; line-height:1; display:block; position:relative; width:70px; height:70px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:70px !important; height:70px !important; min-width:70px !important; min-height:70px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" /><img src="${baseUrl}/images/logo-dsn.png" alt="Logo" style="width:20px !important; height:20px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" /></div>`;

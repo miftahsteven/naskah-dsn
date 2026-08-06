@@ -170,6 +170,7 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
 uploadsRouter.use(express.static('uploads'));
 
 app.use('/uploads', uploadsRouter);
+app.use(express.static('public'));
 
 
 
