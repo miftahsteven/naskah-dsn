@@ -756,7 +756,7 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
     let suffix = htmlContent.substring(targetIndex);
     suffix = suffix.replace(/^([^>]+style="[^"]*)(?:margin-top|padding-top):\s*\d+px;?/i, "$1margin-top: 2px;");
 
-    const sliceLen = Math.min(300, realPrefix.length);
+    const sliceLen = Math.min(1000, realPrefix.length);
     const prefixBase = realPrefix.slice(0, realPrefix.length - sliceLen);
     const lastSlice = realPrefix.slice(realPrefix.length - sliceLen);
 
@@ -884,7 +884,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   // Inject CSS rules to scale down large logo images in the letterhead and guarantee QR code display
   const imageStyle = `
     <style id="amanah-kop-styles">
-      .kop-surat img {
+      .kop-surat img, td img:not(.qr-signature-img) {
         max-width: 75px !important;
         max-height: 90px !important;
         height: auto !important;
