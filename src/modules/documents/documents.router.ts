@@ -737,7 +737,7 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
     }
   }
 
-  const qrImageHtml = `<div style="text-align:center; margin:2px auto; line-height:0; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" style="width:65px; height:65px; object-fit:contain; display:inline-block;" /></div>`;
+  const qrImageHtml = `<div style="text-align:center; margin:4px auto; line-height:1; display:block;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:70px !important; height:70px !important; min-width:70px !important; min-height:70px !important; object-fit:contain !important; display:inline-block !important;" /></div>`;
 
   if (match) {
     const matchIndex = match.index;
@@ -881,16 +881,26 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
   }
 
-  // Inject CSS rules to scale down large logo images in the letterhead
+  // Inject CSS rules to scale down large logo images in the letterhead and guarantee QR code display
   const imageStyle = `
     <style id="amanah-kop-styles">
-      .kop-surat img, td img, img[src^="data:image"] {
+      .kop-surat img {
         max-width: 75px !important;
         max-height: 90px !important;
         height: auto !important;
         width: auto !important;
         display: inline-block !important;
         vertical-align: middle !important;
+      }
+      img.qr-signature-img {
+        width: 70px !important;
+        height: 70px !important;
+        max-width: 70px !important;
+        max-height: 70px !important;
+        min-width: 70px !important;
+        min-height: 70px !important;
+        display: inline-block !important;
+        object-fit: contain !important;
       }
     </style>
   `;
