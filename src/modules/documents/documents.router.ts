@@ -879,6 +879,62 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   return htmlContent;
 }
 
+// ── RENDER DOCUMENT HTML (with QR codes, for client-side PDF conversion) ──
+// This endpoint always returns the processed HTML (with signatures injected).
+// The frontend uses html2pdf.js to convert to PDF client-side so we never depend on Puppeteer.
+router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        versions: { orderBy: { versionNum: 'desc' } },
+        signatures: {
+          include: {
+            user: { select: { fullName: true, email: true, jobTitle: true } }
+          }
+        },
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Document not found' });
+    }
+
+    const version = document.versions[0];
+    if (!version) {
+      return res.status(404).json({ status: 'error', message: 'No version found' });
+    }
+
+    const filePath = resolveExistingFilePath(version.fileUrl);
+    if (!filePath) {
+      return res.status(404).json({ status: 'error', message: 'Berkas tidak ditemukan di server.' });
+    }
+
+    const fileExtension = path.extname(filePath).toLowerCase();
+    const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+
+    if (!isHtml) {
+      return res.status(400).json({ status: 'error', message: 'Document is not an HTML template.' });
+    }
+
+    const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+    // Use HTTP base URL so all images (like logos) load correctly in html2pdf
+    const httpUrlBase = getApiBaseUrl(req) + '/';
+    const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], httpUrlBase);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.end(htmlContent);
+  } catch (error: any) {
+    console.error('[Document Render] Error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // ── DOWNLOAD DOCUMENT FILE (Latest Version) ──
 router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (req: AuthRequest, res: Response) => {
   try {
