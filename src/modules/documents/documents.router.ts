@@ -725,25 +725,29 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   let bestMatch: { m: RegExpExecArray, cand: string, score: number, index: number } | null = null;
 
   for (const cand of candidates) {
-    const tokens = cand.split(/\s+/).filter((t: string) => t.length > 2);
+    const tokens = cand
+      .split(/[\s,.]+/)
+      .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir|se|ag)$/i.test(t));
+    
     if (tokens.length > 0) {
-      let patternStr = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
+      // Allow up to 80 chars of any tags/text between tokens (e.g. middle names, titles, HTML tags)
+      const patternStr = tokens.map((t: string) => escapeRegExp(t)).join('[\\s\\S]{0,80}?');
       const nameRegex = new RegExp(patternStr, 'gi'); 
       let m: RegExpExecArray | null;
       
       while ((m = nameRegex.exec(htmlContent)) !== null) {
         const prefix = htmlContent.substring(0, m.index);
-        const lastSlice = prefix.slice(Math.max(0, prefix.length - 300));
+        const lastSlice = prefix.slice(Math.max(0, prefix.length - 350));
         
         let score = 0;
         // Signature blocks usually have "Ketua", "Sekretaris", or "Direktur" closely before the name
-        if (/(Ketua|Sekretaris|Direktur|Pimpinan|Kepala)/i.test(lastSlice)) score += 10;
+        if (/(Ketua|Sekretaris|Direktur|Pimpinan|Kepala)/i.test(lastSlice)) score += 15;
         // Signature blocks usually have large gaps before the name
         if (/(?:<br\s*\/?>\s*){2,}/i.test(lastSlice)) score += 5;
         if (/margin-bottom:\s*\d+px/i.test(lastSlice)) score += 5;
         if (/<div[^>]*style="[^"]*height/i.test(lastSlice)) score += 5;
-        // If it's a list (like in Lampiran), it often has a colon or number right before it
-        if (/:\s*(<[^>]+>\s*)*$/.test(lastSlice)) score -= 15;
+        // If it's a list item (like in Lampiran: "Sekretaris : Dr..."), penalize heavily!
+        if (/:\s*(<[^>]+>\s*)*$/.test(lastSlice) || /:\s*$/.test(prefix.trim())) score -= 25;
         
         if (!bestMatch || score > bestMatch.score || (score === bestMatch.score && m.index > bestMatch.index)) {
           bestMatch = { m, cand, score, index: m.index };
@@ -752,7 +756,7 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
     }
   }
 
-  if (bestMatch) {
+  if (bestMatch && bestMatch.score > -10) {
     match = bestMatch.m;
     matchedCandidate = bestMatch.cand;
   }
@@ -794,16 +798,25 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
     }
   }
 
-  // Fallback if no candidate name matched in HTML: inject into signature space/box
-  if (/margin-bottom:\s*\d+px/i.test(htmlContent)) {
-    const updated = htmlContent.replace(/margin-bottom:\s*\d+px/i, (m) => "margin-bottom: 4px;" + qrImageHtml);
+  // ── SAFE FALLBACK: Target specific role titles in signature block ("Ketua," or "Sekretaris,") ──
+  const isKetua = row.signerIndex === 0 || /ketua/i.test(row.roleName || '');
+  const targetRole = isKetua ? 'Ketua' : 'Sekretaris';
+  
+  // Search for "Ketua," or "Sekretaris," followed by line breaks
+  const roleRegex = new RegExp(`(${targetRole}\\s*,\\s*(?:<[^>]+>|\\s)*?)(?:<br\\s*\\/?>\\s*){2,}`, 'i');
+  if (roleRegex.test(htmlContent)) {
+    const updated = htmlContent.replace(roleRegex, `$1${qrImageHtml}`);
     return { html: updated, injected: true };
-  } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/i.test(htmlContent)) {
-    const updated = htmlContent.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/i, qrImageHtml);
-    return { html: updated, injected: true };
-  } else if (/(?:<br\s*\/?>\s*){2,}/i.test(htmlContent)) {
-    const updated = htmlContent.replace(/(?:<br\s*\/?>\s*){2,}/i, qrImageHtml);
-    return { html: updated, injected: true };
+  }
+
+  // Fallback 2: Any role header (Ketua/Sekretaris) followed by <p> or <div> spaces
+  const genericRoleRegex = /(?:Ketua|Sekretaris)\s*,\s*(?:<[^>]+>|\s)*?/i;
+  const roleMatch = genericRoleRegex.exec(htmlContent);
+  if (roleMatch) {
+    const idx = roleMatch.index + roleMatch[0].length;
+    const prefix = htmlContent.substring(0, idx);
+    const suffix = htmlContent.substring(idx);
+    return { html: prefix + qrImageHtml + suffix, injected: true };
   }
 
   return { html: htmlContent, injected: false };
@@ -895,8 +908,10 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     candidates.push("ADIWARMAN");
 
     return {
+      signerIndex,
       fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
       jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
+      roleName: s.user?.jobTitle || (signerIndex === 0 ? 'Ketua' : 'Sekretaris'),
       signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', {
         timeZone: 'Asia/Jakarta',
         dateStyle: 'long',
