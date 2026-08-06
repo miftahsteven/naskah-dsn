@@ -915,7 +915,7 @@ router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req:
   try {
     const { id } = req.params;
 
-    const document = await prisma.document.findUnique({
+    let document = await prisma.document.findUnique({
       where: { id: String(id) },
       include: {
         versions: { orderBy: { versionNum: 'desc' } },
@@ -936,6 +936,38 @@ router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req:
         }
       }
     });
+
+    if (!document) {
+      const cleanId = String(id).replace(/^.*[/\\]/, '').replace(/\.(html?|pdf)$/i, '');
+      document = await prisma.document.findFirst({
+        where: {
+          OR: [
+            { id: String(id) },
+            { documentNumber: String(id) },
+            { documentNumber: cleanId },
+            { versions: { some: { fileUrl: { contains: cleanId } } } }
+          ]
+        },
+        include: {
+          versions: { orderBy: { versionNum: 'desc' } },
+          signatures: {
+            include: {
+              user: { select: { fullName: true, email: true, jobTitle: true } }
+            }
+          },
+          workflowInstances: {
+            include: {
+              steps: {
+                where: { status: 'APPROVED' },
+                include: {
+                  user: { select: { fullName: true, email: true, jobTitle: true } }
+                }
+              }
+            }
+          }
+        }
+      });
+    }
 
     if (!document) {
       return res.status(404).json({ status: 'error', message: 'Document not found' });
