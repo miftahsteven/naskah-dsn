@@ -924,6 +924,16 @@ router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req:
             user: { select: { fullName: true, email: true, jobTitle: true } }
           }
         },
+        workflowInstances: {
+          include: {
+            steps: {
+              where: { status: 'APPROVED' },
+              include: {
+                user: { select: { fullName: true, email: true, jobTitle: true } }
+              }
+            }
+          }
+        }
       }
     });
 
@@ -948,10 +958,31 @@ router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req:
       return res.status(400).json({ status: 'error', message: 'Document is not an HTML template.' });
     }
 
+    // Combine document.signatures with approved workflow steps as fallback for older documents
+    const allSignatures: any[] = [...(document.signatures || [])];
+    if (document.workflowInstances) {
+      document.workflowInstances.forEach((wf: any) => {
+        (wf.steps || []).forEach((st: any) => {
+          if (st.status === 'APPROVED' && st.userId) {
+            const exists = allSignatures.some((sig: any) => sig.userId === st.userId);
+            if (!exists) {
+              allSignatures.push({
+                id: st.id,
+                documentId: document.id,
+                userId: st.userId,
+                signedAt: st.actionedAt || st.updatedAt || new Date(),
+                user: st.user
+              });
+            }
+          }
+        });
+      });
+    }
+
     const rawHtml = await fs.promises.readFile(filePath, 'utf8');
     // Use HTTP base URL so all images (like logos) load correctly in html2pdf
     const httpUrlBase = getApiBaseUrl(req) + '/';
-    const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], httpUrlBase);
+    const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, httpUrlBase);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
@@ -978,6 +1009,16 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
             user: { select: { fullName: true, email: true, jobTitle: true } }
           }
         },
+        workflowInstances: {
+          include: {
+            steps: {
+              where: { status: 'APPROVED' },
+              include: {
+                user: { select: { fullName: true, email: true, jobTitle: true } }
+              }
+            }
+          }
+        }
       }
     });
 
@@ -1011,7 +1052,28 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         const httpUrlBase = getApiBaseUrl(req) + '/';
         const baseUrl = previewMode ? httpUrlBase : fileUrlBase;
 
-        const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
+        // Combine document.signatures with approved workflow steps as fallback
+        const allSignatures: any[] = [...(document.signatures || [])];
+        if (document.workflowInstances) {
+          document.workflowInstances.forEach((wf: any) => {
+            (wf.steps || []).forEach((st: any) => {
+              if (st.status === 'APPROVED' && st.userId) {
+                const exists = allSignatures.some((sig: any) => sig.userId === st.userId);
+                if (!exists) {
+                  allSignatures.push({
+                    id: st.id,
+                    documentId: document.id,
+                    userId: st.userId,
+                    signedAt: st.actionedAt || st.updatedAt || new Date(),
+                    user: st.user
+                  });
+                }
+              }
+            });
+          });
+        }
+
+        const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
 
         if (previewMode) {
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
