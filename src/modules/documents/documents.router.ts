@@ -740,14 +740,24 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
         const lastSlice = prefix.slice(Math.max(0, prefix.length - 350));
         
         let score = 0;
-        // Signature blocks usually have "Ketua", "Sekretaris", or "Direktur" closely before the name
-        if (/(Ketua|Sekretaris|Direktur|Pimpinan|Kepala)/i.test(lastSlice)) score += 15;
-        // Signature blocks usually have large gaps before the name
-        if (/(?:<br\s*\/?>\s*){2,}/i.test(lastSlice)) score += 5;
-        if (/margin-bottom:\s*\d+px/i.test(lastSlice)) score += 5;
-        if (/<div[^>]*style="[^"]*height/i.test(lastSlice)) score += 5;
-        // If it's a list item (like in Lampiran: "Sekretaris : Dr..."), penalize heavily!
-        if (/:\s*(<[^>]+>\s*)*$/.test(lastSlice) || /:\s*$/.test(prefix.trim())) score -= 25;
+        
+        // 1. Proximity to end of document (huge boost for the last 20% of the document)
+        const documentPositionRatio = m.index / htmlContent.length;
+        if (documentPositionRatio > 0.8) score += 20;
+        else if (documentPositionRatio > 0.5) score += 5;
+        else score -= 10; // Penalize matches in the top half
+        
+        // 2. Visually distinct signature block markers in the immediate vicinity
+        const closeSlice = prefix.slice(Math.max(0, prefix.length - 150));
+        if (/(Ketua|Sekretaris|Direktur|Pimpinan|Kepala|Mengetahui|Menyetujui|Ketum|Sekjen)/i.test(closeSlice)) score += 10;
+        
+        if (/(?:<br\s*\/?>\s*){2,}/i.test(closeSlice)) score += 10;
+        if (/margin-bottom:\s*\d{2,}px/i.test(closeSlice)) score += 10;
+        if (/<div[^>]*style="[^"]*height:\s*\d{2,}px/i.test(closeSlice)) score += 10;
+        
+        // 3. Negative indicators
+        if (/:\s*(<[^>]+>\s*)*$/.test(closeSlice) || /:\s*$/.test(prefix.trim())) score -= 30; // "Name:" or "Name : "
+        if (/<li/i.test(closeSlice) && !/<\/li>/i.test(closeSlice)) score -= 20; // Inside a list item
         
         if (!bestMatch || score > bestMatch.score || (score === bestMatch.score && m.index > bestMatch.index)) {
           bestMatch = { m, cand, score, index: m.index };
@@ -807,23 +817,37 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
 
   // ── SAFE FALLBACK: Target specific role titles in signature block ("Ketua" or "Sekretaris") ──
   const isKetua = row.signerIndex === 0 || /ketua/i.test(row.roleName || '');
-  const targetRole = isKetua ? 'Ketua' : 'Sekretaris';
+  const targetRole = isKetua ? '(?:Ketua|Menyetujui|Ketum)' : '(?:Sekretaris|Mengetahui|Sekjen)';
   
-  // Search for "Ketua" or "Sekretaris" (optional comma) followed by line breaks
-  const roleRegex = new RegExp(`(${targetRole}\\s*,?\\s*(?:<[^>]+>|\\s)*?)(?:<br\\s*\\/?>\\s*){2,}`, 'i');
-  if (roleRegex.test(htmlContent)) {
-    const updated = htmlContent.replace(roleRegex, `$1${qrImageHtml}`);
-    return { html: updated, injected: true };
+  // Search for role (optional comma) followed by line breaks
+  const roleRegex = new RegExp(`(${targetRole}\\s*,?\\s*(?:<[^>]+>|\\s)*?)(?:<br\\s*\\/?>\\s*){2,}`, 'gi');
+  const roleMatches = [...htmlContent.matchAll(roleRegex)];
+  
+  if (roleMatches.length > 0) {
+    // Pick the LAST match to avoid hitting random headers at the top of the document
+    const lastMatch = roleMatches[roleMatches.length - 1];
+    if (lastMatch && typeof lastMatch.index === 'number') {
+      const p = htmlContent.substring(0, lastMatch.index);
+      const s = htmlContent.substring(lastMatch.index + lastMatch[0].length);
+      const updated = p + lastMatch[1] + qrImageHtml + s;
+      return { html: updated, injected: true };
+    }
   }
 
-  // Fallback 2: Any role header (Ketua/Sekretaris) followed by <p> or <div> spaces
-  const genericRoleRegex = /(?:Ketua|Sekretaris)\s*,?\s*(?:<[^>]+>|\s)*?/i;
-  const roleMatch = genericRoleRegex.exec(htmlContent);
-  if (roleMatch) {
-    const idx = roleMatch.index + roleMatch[0].length;
-    const prefix = htmlContent.substring(0, idx);
-    const suffix = htmlContent.substring(idx);
-    return { html: prefix + qrImageHtml + suffix, injected: true };
+  // Fallback 2: Any role header followed by <p> or <div> spaces (pick the last one)
+  const genericRoleRegex = new RegExp(`(${targetRole})\\s*,?\\s*(?:<[^>]+>|\\s)*?`, 'gi');
+  const genericRoleMatches = [...htmlContent.matchAll(genericRoleRegex)];
+  if (genericRoleMatches.length > 0) {
+    // We only consider it if it's in the bottom half of the document
+    const validMatches = genericRoleMatches.filter(m => typeof m.index === 'number' && m.index > htmlContent.length * 0.5);
+    const lastMatch = validMatches.length > 0 ? validMatches[validMatches.length - 1] : genericRoleMatches[genericRoleMatches.length - 1];
+    
+    if (lastMatch && typeof lastMatch.index === 'number') {
+      const idx = lastMatch.index + lastMatch[0].length;
+      const p = htmlContent.substring(0, idx);
+      const s = htmlContent.substring(idx);
+      return { html: p + qrImageHtml + s, injected: true };
+    }
   }
 
   return { html: htmlContent, injected: false };
