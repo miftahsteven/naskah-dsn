@@ -718,19 +718,28 @@ function resolveExistingFilePath(fileUrl: string): string | null {
 }
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: string; injected: boolean } {
-  const rawName = row.rawName || '';
-  if (!rawName) return { html: htmlContent, injected: false };
+  const candidates = row.candidates || [];
+  if (candidates.length === 0) return { html: htmlContent, injected: false };
 
-  const tokens = rawName
-    .split(/[\s,.]+/)
-    .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir)$/i.test(t));
+  let match: RegExpExecArray | null = null;
+  let matchedCandidate = "";
 
-  if (tokens.length === 0) return { html: htmlContent, injected: false };
+  // Search for the first candidate that exists in htmlContent
+  for (const cand of candidates) {
+    const tokens = cand
+      .split(/[\s,.]+/)
+      .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir)$/i.test(t));
+    if (tokens.length === 0) continue;
 
-  const namePattern = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
-  const nameRegex = new RegExp(namePattern, 'gi');
+    const namePattern = tokens.map((t: string) => escapeRegExp(t)).join('(?:<[^>]+>|\\s|&nbsp;|&#160;)+');
+    const nameRegex = new RegExp(namePattern, 'gi');
+    match = nameRegex.exec(htmlContent);
+    if (match) {
+      matchedCandidate = cand;
+      break;
+    }
+  }
 
-  const match = nameRegex.exec(htmlContent);
   if (!match) return { html: htmlContent, injected: false };
 
   const matchIndex = match.index;
@@ -770,6 +779,21 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any): { html: strin
 
 async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
   const signedSigs = (signatures || []).filter((s: any) => s.signedAt);
+
+  // Parse metadata from HTML
+  let templateVariables: any = {};
+  let penandatanganSteps: any[] = [];
+  const metaMatch = rawHtml.match(/<script id="template-metadata" type="application\/json">\s*([\s\S]*?)\s*<\/script>/);
+  if (metaMatch) {
+    try {
+      const meta = JSON.parse(metaMatch[1] || '{}');
+      templateVariables = meta.templateVariables || {};
+      penandatanganSteps = (meta.steps || []).filter((st: any) => st.role === 'PENANDATANGAN');
+    } catch (e) {
+      console.warn("Failed to parse template metadata in injectSignaturesToHtml:", e);
+    }
+  }
+
   const signatureRows = await Promise.all(signedSigs.map(async (s: any) => {
     const payload = JSON.stringify({
       signatureId: s.id,
@@ -783,6 +807,32 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
       width: 240,
       color: { dark: HTML_PDF_PRIMARY_COLOR, light: '#FFFFFF' }
     });
+
+    const signerIndex = penandatanganSteps.findIndex((st: any) => st.userId === s.userId);
+
+    // Build candidates for matching
+    const candidates: string[] = [];
+    if (s.user?.fullName) {
+      candidates.push(s.user.fullName);
+    }
+    if (signerIndex !== -1 && templateVariables) {
+      if (signerIndex === 0) {
+        if (templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
+        if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
+      } else if (signerIndex === 1) {
+        if (templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
+      }
+    }
+    // Default fallback names
+    if (signerIndex === 0 || (signerIndex === -1 && s.user?.fullName?.toLowerCase().includes('admin'))) {
+      candidates.push("CHOLIL NAFIS");
+      candidates.push("HASANUDDIN");
+    }
+    if (signerIndex === 1) {
+      candidates.push("AMIRSYAH TAMBUNAN");
+      candidates.push("ANWAR ABBAS");
+    }
+
     return {
       fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
       jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
@@ -791,7 +841,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
         dateStyle: 'long',
         timeStyle: 'short'
       })),
-      rawName: s.user?.fullName || '',
+      candidates,
       qrDataUrl,
     };
   }));
