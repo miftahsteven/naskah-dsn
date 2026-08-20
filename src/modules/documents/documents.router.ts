@@ -45,6 +45,58 @@ function escapeHtml(text: string) {
 
 const HTML_PDF_PRIMARY_COLOR = '#2563eb';
 
+let cachedKopSuratBase64: string | null = null;
+let cachedBismillahBase64: string | null = null;
+let cachedLogoDsnBase64: string | null = null;
+let cachedWqaUkasBase64: string | null = null;
+
+export function getStaticImageBase64(filename: string, mimeType: string): string {
+  try {
+    const candidates = [
+      path.join(process.cwd(), 'public/images', filename),
+      path.join(process.cwd(), 'public', filename),
+      path.join(process.cwd(), '../frontend/public/images', filename),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const data = fs.readFileSync(p);
+        return `data:${mimeType};base64,${data.toString('base64')}`;
+      }
+    }
+  } catch (e) {
+    console.warn(`[getStaticImageBase64] Failed to load ${filename}:`, e);
+  }
+  return `/images/${filename}`;
+}
+
+export function getKopSuratBase64(): string {
+  if (!cachedKopSuratBase64) {
+    cachedKopSuratBase64 = getStaticImageBase64('kop-surat.png', 'image/png');
+  }
+  return cachedKopSuratBase64;
+}
+
+export function getBismillahBase64(): string {
+  if (!cachedBismillahBase64) {
+    cachedBismillahBase64 = getStaticImageBase64('bismillah.svg', 'image/svg+xml');
+  }
+  return cachedBismillahBase64;
+}
+
+export function getLogoDsnBase64(): string {
+  if (!cachedLogoDsnBase64) {
+    cachedLogoDsnBase64 = getStaticImageBase64('logo-dsn.png', 'image/png');
+  }
+  return cachedLogoDsnBase64;
+}
+
+export function getWqaUkasBase64(): string {
+  if (!cachedWqaUkasBase64) {
+    cachedWqaUkasBase64 = getStaticImageBase64('wqa-ukas.png', 'image/png');
+  }
+  return cachedWqaUkasBase64;
+}
+
 // ── STORAGE CONFIG ──
 const uploadDir = process.env.UPLOAD_DIR || 'uploads';
 if (!fs.existsSync(uploadDir)) {
@@ -91,27 +143,13 @@ router.get('/generate-number', authenticate, async (req: AuthRequest, res: Respo
       },
     });
 
-    // Next number is count + 1, formatted as 3-digit zero-padded
-    const nextNumber = (docCount + 1).toString().padStart(3, '0');
-
     // Roman numeral month for standard Indonesian government format
     const romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
     const monthRoman = romanMonths[currentMonth - 1];
 
-    // Template code mapping for standard letter types
-    const codeMap: Record<string, string> = {
-      rutin: 'SR',
-      pengantar: 'SP',
-      keputusan: 'SK',
-      mandat: 'SM',
-      tugas: 'ST',
-      informasi: 'SI',
-    };
-
-    const code = codeMap[String(templateCode || '')] || String(templateCode || 'SR').toUpperCase();
-
-    // Standard format: 001/SK/DSN-MUI/VI/2026
-    const documentNumber = `${nextNumber}/${code}/DSN-MUI/${monthRoman}/${currentYear}`;
+    const nextNumber = (docCount + 1).toString().padStart(4, '0');
+    const documentNumber = `U-${nextNumber}/DSN-MUI/${monthRoman}/${currentYear}`;
+    const code = 'U';
 
     res.json({
       status: 'success',
@@ -272,7 +310,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 // ── UPLOAD DOCUMENT ──
   router.post('/', authenticate, checkPermission('DOC_UPLOAD'), upload.single('file'), async (req: AuthRequest, res: Response) => {
     try {
-      const { title, categoryId, classificationId, documentNumber, documentType, approvalFlowType, status, documentDate, receivedDate } = req.body;
+      const { title, categoryId, subCategory, classificationId, documentNumber, documentType, approvalFlowType, status, documentDate, receivedDate } = req.body;
       const file = req.file;
   
       if (!file) {
@@ -282,6 +320,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       if (!title || !categoryId || !classificationId) {
         return res.status(400).json({ status: 'error', message: 'Missing metadata' });
       }
+
+      // Check if document number is already taken to prevent database constraints crashes
+      if (documentNumber && String(documentNumber).trim()) {
+        const existingDocNum = await prisma.document.findUnique({
+          where: { documentNumber: String(documentNumber).trim() }
+        });
+        if (existingDocNum) {
+          return res.status(400).json({
+            status: 'error',
+            message: 'Nomor surat sudah terdaftar di sistem. Harap gunakan nomor surat yang berbeda.'
+          });
+        }
+      }
   
       // Create Document & Version in a transaction
       const document = await prisma.document.create({
@@ -290,6 +341,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
           documentNumber: documentNumber ? String(documentNumber).trim() || null : null,
           organizationId: req.user!.organizationId,
           categoryId,
+          subCategory: subCategory || null,
           classificationId,
           documentType: documentType || 'OUTGOING',
           approvalFlowType: approvalFlowType || 'SEQUENTIAL',
@@ -434,7 +486,7 @@ router.patch('/:id/restore', authenticate, checkPermission('DOC_EDIT'), async (r
 router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, categoryId, classificationId, documentNumber, status, documentDate, receivedDate } = req.body;
+    const { title, categoryId, subCategory, classificationId, documentNumber, status, documentDate, receivedDate } = req.body;
     const file = req.file;
 
     const existingDoc = await prisma.document.findUnique({
@@ -443,6 +495,19 @@ router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('fil
     });
 
     if (!existingDoc) return res.status(404).json({ status: 'error', message: 'Document not found' });
+
+    // Check if document number is being changed to an already existing one
+    if (documentNumber && String(documentNumber).trim() && String(documentNumber).trim() !== existingDoc.documentNumber) {
+      const duplicateDoc = await prisma.document.findUnique({
+        where: { documentNumber: String(documentNumber).trim() }
+      });
+      if (duplicateDoc) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Nomor surat sudah terdaftar di sistem. Harap gunakan nomor surat yang berbeda.'
+        });
+      }
+    }
 
     let usersToNotify: any[] = [];
 
@@ -468,6 +533,7 @@ router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('fil
       const updateData: any = {};
       if (title) updateData.title = title;
       if (categoryId) updateData.categoryId = categoryId;
+      if (subCategory !== undefined) updateData.subCategory = subCategory || null;
       if (classificationId) updateData.classificationId = classificationId;
       if (documentNumber !== undefined) updateData.documentNumber = documentNumber || null;
       if (status) updateData.status = status;
@@ -774,8 +840,8 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
     matchedCandidate = bestMatch.cand;
   }
 
-  const cleanBaseUrl = baseUrl.replace(/\/api\/?$/, '');
-  const qrImageHtml = `<div style="text-align:center; margin:4px auto; line-height:1; display:block; position:relative; width:70px; height:70px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:70px !important; height:70px !important; min-width:70px !important; min-height:70px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" /><img src="${cleanBaseUrl}/images/logo-dsn.png" alt="Logo" style="width:20px !important; height:20px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" /></div>`;
+  const logoBase64 = getLogoDsnBase64();
+  const qrImageHtml = `<div style="text-align:left; margin:-12px 0 4px 0; line-height:1; display:block; position:relative; width:60px; height:60px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:60px !important; height:60px !important; min-width:60px !important; min-height:60px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" /><img src="${logoBase64}" alt="Logo" style="width:16px !important; height:16px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" /></div>`;
 
   if (match) {
     const matchIndex = match.index;
@@ -882,6 +948,14 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     }
   }
 
+  // Only inject QR codes for PENANDATANGAN (final signers), not for PEMPARAF or APPROVER.
+  // If the document has metadata with penandatanganSteps, restrict to those user IDs.
+  // Fall back to all signed sigs for legacy documents without metadata.
+  const penandatanganUserIds = penandatanganSteps.map((st: any) => st.userId).filter(Boolean);
+  const signerSigs = penandatanganUserIds.length > 0
+    ? signedSigs.filter((s: any) => penandatanganUserIds.includes(s.userId))
+    : signedSigs;
+
   let documentNumber = '';
   if (signedSigs.length > 0 && signedSigs[0].documentId) {
     try {
@@ -897,7 +971,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     }
   }
 
-  const signatureRows = await Promise.all(signedSigs.map(async (s: any) => {
+  const signatureRows = await Promise.all(signerSigs.map(async (s: any) => {
     // Build frontend base URL from ALLOWED_ORIGINS env
     const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
     let frontendUrl = 'https://amanah.dsnmui.or.id';
@@ -911,7 +985,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     const payload = `${frontendUrl}/verify/document/${s.documentId}`;
     
     const qrDataUrl = await qrcode.toDataURL(payload, {
-      margin: 1,
+      margin: 0,
       width: 240,
       color: { dark: '#1F3F23', light: '#FFFFFF' },
       errorCorrectionLevel: 'H' // High error correction to allow logo overlay
@@ -978,6 +1052,32 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   }));
 
   let htmlContent = rawHtml;
+
+  const kopBase64 = getKopSuratBase64();
+  const bismillahBase64 = getBismillahBase64();
+  const logoBase64 = getLogoDsnBase64();
+  const wqaBase64 = getWqaUkasBase64();
+
+  // Retroactively resolve un-interpolated HEADER_HTML strings in static document HTML files
+  const kopPlaceholderRegex = /(\\?\${HEADER_HTML}|\${HEADER_HTML})/g;
+  if (kopPlaceholderRegex.test(htmlContent)) {
+    const headerReplacement = `<div style="text-align: center; margin-bottom: 8px; margin-left: -40px; margin-right: -40px; padding-top: 10px;">
+    <img src="${kopBase64}" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 750px; height: auto; display: block; margin: 0 auto;" />
+  </div>
+
+  <!-- Bismillah Calligraphy -->
+  <div style="text-align: center; margin-top: 6px; margin-bottom: 12px;">
+    <img src="${bismillahBase64}" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
+  </div>`;
+    htmlContent = htmlContent.replace(kopPlaceholderRegex, headerReplacement);
+  }
+
+  // Replace any relative or absolute image references with self-contained Base64 Data URLs
+  htmlContent = htmlContent.replace(/src=["'][^"']*kop-surat\.png["']/gi, `src="${kopBase64}" class="kop-surat-img"`);
+  htmlContent = htmlContent.replace(/src=["'][^"']*bismillah\.svg["']/gi, `src="${bismillahBase64}"`);
+  htmlContent = htmlContent.replace(/src=["'][^"']*logo-dsn\.png["']/gi, `src="${logoBase64}"`);
+  htmlContent = htmlContent.replace(/src=["'][^"']*wqa-ukas\.png["']/gi, `src="${wqaBase64}"`);
+
   if (!/<!doctype html>/i.test(htmlContent)) htmlContent = `<!doctype html>\n${htmlContent}`;
   if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
     htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
@@ -986,7 +1086,83 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   // Inject CSS rules to scale down large logo images in the letterhead and guarantee QR code display
   const imageStyle = `
     <style id="amanah-kop-styles">
-      .kop-surat img, td img:not(.qr-signature-img) {
+      @page {
+        size: A4;
+        margin: 15mm 15mm 8mm 15mm !important;
+      }
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1.35 !important;
+      }
+      /* Outer container padding top override */
+      div[style*="padding: 25px 40px 10px 40px"], 
+      div[style*="padding: 25px 40px 10px 40px;"] {
+        padding-top: 0px !important;
+        line-height: 1.35 !important;
+      }
+      /* General line height override */
+      div, p, span, td {
+        line-height: 1.35 !important;
+      }
+      /* Space-saving overrides for paragraphs and margins */
+      p {
+        margin-top: 0px !important;
+        margin-bottom: 4px !important;
+      }
+      /* Margins of meta/date blocks */
+      div[style*="margin-bottom: 10px"] {
+        margin-bottom: 4px !important;
+      }
+      table[style*="margin-bottom: 12px"], 
+      div[style*="margin-bottom: 12px"] {
+        margin-bottom: 4px !important;
+      }
+      /* Jadwal table spacing and padding override */
+      table[style*="margin: 8px auto"] {
+        margin: 2px auto !important;
+      }
+      table[style*="margin: 8px auto"] td {
+        padding: 2px 0 !important;
+      }
+      /* Bismillah size and margins override */
+      img[src*="bismillah"], img[alt*="Bismillah"] {
+        height: 35px !important;
+        max-height: 40px !important;
+        display: block !important;
+        margin: 0 auto !important;
+      }
+      div[style*="margin-top: 6px"][style*="margin-bottom: 12px"] {
+        margin-top: 2px !important;
+        margin-bottom: 4px !important;
+      }
+      /* Signature table spacing override */
+      table[style*="margin-top: 15px"], 
+      table[style*="margin-top: 30px"] {
+        margin-top: 6px !important;
+      }
+      /* Signature container width & headerTtd font size override */
+      div[style*="width: 280px"] {
+        width: 310px !important;
+      }
+      div[style*="font-size: 10pt"][style*="margin-bottom: 10px"],
+      div[style*="font-size: 10pt"][style*="margin-bottom: 6px"] {
+        font-size: 9pt !important;
+        margin-bottom: 4px !important;
+        line-height: 1.2 !important;
+      }
+      /* Signature spacer height override */
+      div[style*="height: 70px"] {
+        height: 55px !important;
+      }
+      /* Logo inside signature */
+      div[style*="width: 60px"] img[src*="logo-dsn"],
+      div[style*="width: 70px"] img[src*="logo-dsn"] {
+        width: 16px !important;
+        height: 16px !important;
+      }
+      .kop-surat img:not(.kop-surat-img):not([alt*="Kop Surat"]), 
+      td img:not(.qr-signature-img):not(.kop-surat-img):not([alt*="Kop Surat"]) {
         max-width: 75px !important;
         max-height: 90px !important;
         height: auto !important;
@@ -994,15 +1170,29 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
         display: inline-block !important;
         vertical-align: middle !important;
       }
+      .kop-surat-img, img[alt*="Kop Surat"] {
+        width: 100% !important;
+        max-width: 750px !important;
+        height: auto !important;
+        display: block !important;
+        margin: 0 auto !important;
+      }
       img.qr-signature-img {
-        width: 70px !important;
-        height: 70px !important;
-        max-width: 70px !important;
-        max-height: 70px !important;
-        min-width: 70px !important;
-        min-height: 70px !important;
+        width: 60px !important;
+        height: 60px !important;
+        max-width: 60px !important;
+        max-height: 60px !important;
+        min-width: 60px !important;
+        min-height: 60px !important;
         display: inline-block !important;
         object-fit: contain !important;
+      }
+      /* Force negative margin to pull QR Code up into jabatan */
+      div[style*="width: 60px"][style*="height: 60px"],
+      div[style*="width: 70px"][style*="height: 70px"] {
+        margin: -12px 0 4px 0 !important;
+        width: 60px !important;
+        height: 60px !important;
       }
     </style>
   `;
@@ -1017,6 +1207,10 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
       }
     });
   }
+
+  // Merge the line break for any existing documents' headerTtd to keep it exactly 2 lines
+  htmlContent = htmlContent.replace(/DEWAN SYARIAH NASIONAL-MAJELIS\s*<br\s*\/?>\s*ULAMA INDONESIA/gi, 'DEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA');
+  htmlContent = htmlContent.replace(/DEWAN SYARIAH NASIONAL-MAJELIS\s*\n\s*ULAMA INDONESIA/gi, 'DEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA');
 
   return htmlContent;
 }

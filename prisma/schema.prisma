@@ -152,6 +152,7 @@ model Document {
   unit              OrganizationUnit?        @relation(fields: [unitId], references: [id])
   categoryId        String
   category          DocumentCategory         @relation(fields: [categoryId], references: [id])
+  subCategory       String?
   classificationId  String
   classification    DocumentClassification   @relation(fields: [classificationId], references: [id])
   creatorId         String

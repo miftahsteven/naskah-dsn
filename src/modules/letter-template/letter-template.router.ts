@@ -3,10 +3,20 @@ import type { Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { authenticate } from '../../middleware/auth.js';
 import type { AuthRequest } from '../../middleware/auth.js';
+import { getKopSuratBase64, getBismillahBase64, getLogoDsnBase64, getWqaUkasBase64 } from '../documents/documents.router.js';
 
 const router = Router();
 
 // ── DEFAULT TEMPLATES (seeded on demand) ─────────────────────────────────────
+
+const HEADER_HTML = `<div style="text-align: center; margin-bottom: 8px; margin-left: -40px; margin-right: -40px; padding-top: 10px;">
+    <img src="/images/kop-surat.png" alt="Kop Surat DSN-MUI" style="width: 100%; max-width: 750px; height: auto; display: block; margin: 0 auto;" />
+  </div>
+
+  <!-- Bismillah Calligraphy -->
+  <div style="text-align: center; margin-top: 6px; margin-bottom: 12px;">
+    <img src="/images/bismillah.svg" alt="Bismillah" style="height: 45px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
+  </div>`;
 
 const DEFAULT_TEMPLATES = [
   {
@@ -345,22 +355,33 @@ const DEFAULT_TEMPLATES = [
   <p style="margin-bottom: 20px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
 
   <!-- TANDA TANGAN SECTION -->
-  <div style="margin-top: 30px; page-break-inside: avoid;">
-    <div style="text-align: right; margin-bottom: 10px; font-weight: bold; font-size: 10pt; text-transform: uppercase;">
-      BADAN PENGURUS<br />
-      DEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA
-    </div>
-    <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-      <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">Ketua,</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">K.H. M. CHOLIL NAFIS, Lc., Ph.D.</div>
-      </div>
-      <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">Sekretaris,</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">Dr. H. AMIRSYAH TAMBUNAN, M.A.</div>
-      </div>
-    </div>
-  </div>
+  <table style="width: 100%; border-collapse: collapse; margin-top: 30px; page-break-inside: avoid;">
+    <tr>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <!-- Hidden spacer matching header height so Ketua aligns with Secretary -->
+          <div style="visibility: hidden; font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.3; margin-bottom: 6px;">
+            BADAN PENGURUS<br />
+            DEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA
+          </div>
+          <div style="font-weight: bold;">Ketua,</div>
+          <div style="height: 70px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">K.H. M. CHOLIL NAFIS, Lc., Ph.D.</span>
+        </div>
+      </td>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; margin-left: auto; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <div style="font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.3; margin-bottom: 6px;">
+            BADAN PENGURUS<br />
+            DEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA
+          </div>
+          <div style="font-weight: bold;">Sekretaris,</div>
+          <div style="height: 70px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">Dr. H. AMIRSYAH TAMBUNAN, M.A.</span>
+        </div>
+      </td>
+    </tr>
+  </table>
 </div>`,
     variables: [
       { key: 'nomor_surat', label: 'Nomor Surat Resmi', type: 'text', required: true, placeholder: 'U-0000/DSN-MUI/VII/2026' },
@@ -388,70 +409,36 @@ const DEFAULT_TEMPLATES = [
     category: 'Undangan',
     description:
       'Template resmi Undangan Rapat Pimpinan Badan Pengurus DSN-MUI.',
-    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
-  <!-- KOP SURAT DSN-MUI -->
-  <table style="width: 100%; border-collapse: collapse; border-bottom: 3px double #000000; padding-bottom: 8px; margin-bottom: 12px;">
-    <tr>
-      <td style="width: 65px; vertical-align: middle; padding: 0 8px 0 0;">
-        <img src="/images/logo-dsn.png" alt="Logo DSN-MUI" style="width: 55px; height: 55px; object-fit: contain;" />
-      </td>
-      <td style="text-align: left; vertical-align: middle; padding: 0;">
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #111827; letter-spacing: -0.2px; margin-bottom: 1px; line-height: 1.2; white-space: nowrap;">
-          DEWAN SYARIAH NASIONAL - MAJELIS ULAMA INDONESIA
-        </div>
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; font-weight: bold; color: #111827; margin-bottom: 3px; line-height: 1.2; white-space: nowrap;">
-          National Sharia Board - Indonesian Council of Ulama
-        </div>
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 7.5px; color: #374151; margin-bottom: 1px; line-height: 1.2; white-space: nowrap;">
-          SEKRETARIAT : Jl. Dempo No.19 Pegangsaan - Jakarta Pusat 10320
-        </div>
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 7.5px; color: #374151; line-height: 1.2; white-space: nowrap;">
-          Telp. (021) 3904146 &nbsp; Email: sekretariat@dsnmui.or.id &nbsp; Web: www.dsnmui.or.id
-        </div>
-      </td>
-      <td style="width: 70px; vertical-align: middle; text-align: right; padding: 0 0 0 8px;">
-        <div style="border: 1px solid #000000; padding: 3px; font-family: Arial, Helvetica, sans-serif; font-size: 6px; text-align: center; line-height: 1.1; font-weight: bold; color: #111827;">
-          <div style="border-bottom: 1px solid #000000; padding-bottom: 1px; margin-bottom: 1.5px; font-size: 5px;">REGISTERED</div>
-          <div style="font-weight: 800; font-size: 8px; letter-spacing: 0.5px; margin-bottom: 0.5px;">WQA</div>
-          <div style="font-size: 5px; margin: 1px 0;">ISO 9001:2015</div>
-          <div style="border-top: 1px dashed #000000; padding-top: 1px; margin-top: 1.5px; font-size: 4.5px;">UKAS 134</div>
-        </div>
-      </td>
-    </tr>
-  </table>
-
-  <!-- BASMALAH -->
-  <div style="text-align: center; font-size: 20px; font-family: 'Times New Roman', serif; margin-top: 12px; margin-bottom: 18px; color: #111827;">
-    بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ
-  </div>
+    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+  ${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
-  <div style="text-align: right; font-size: 11pt; margin-bottom: 15px; line-height: 1.3;">
+  <div style="text-align: right; font-size: 11pt; margin-bottom: 6px; line-height: 1.3;">
     Jakarta, {{tanggalHijriah}}<br />
     {{tanggalMasehi}}
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11pt;">
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 11pt;">
     <tr>
-      <td style="width: 80px; vertical-align: top;">Nomor</td>
-      <td style="width: 15px; vertical-align: top;">:</td>
-      <td>{{nomorSurat}}</td>
+      <td style="width: 55px; vertical-align: top; padding: 2px 0;">Nomor</td>
+      <td style="width: 10px; vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;">{{nomorSurat}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top;">Lamp.</td>
-      <td style="vertical-align: top;">:</td>
-      <td>{{lampiran}}</td>
+      <td style="vertical-align: top; padding: 2px 0;">Lamp.</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;">{{lampiran}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Hal</td>
-      <td style="vertical-align: top; font-weight: bold;">:</td>
-      <td style="font-weight: bold;">{{perihal}}</td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Hal</td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{perihal}}</td>
     </tr>
   </table>
 
   <!-- KEPADA YTH -->
-  <div style="margin-bottom: 20px; font-size: 11pt; line-height: 1.4;">
+  <div style="margin-bottom: 6px; font-size: 11pt; line-height: 1.3;">
     <strong>Kepada Yth.:</strong><br />
     <div style="white-space: pre-line; font-weight: bold; margin-bottom: 4px;">{{daftarPenerima}}</div>
     di -<br />
@@ -459,68 +446,72 @@ const DEFAULT_TEMPLATES = [
   </div>
 
   <!-- SALAM PEMBUKA -->
-  <p style="margin-bottom: 12px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+  <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
   <!-- PARAGRAF ISI -->
-  <p style="text-align: justify; margin-bottom: 12px; text-indent: 30px;">
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 4px; text-indent: 30px;">
     Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
   </p>
 
   <!-- JADWAL TABLE -->
-  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 11pt;">
+  <table style="width: 90%; border-collapse: collapse; margin: 4px auto; font-size: 11pt;">
     <tr>
-      <td style="width: 140px; vertical-align: top; font-weight: bold;">Hari, tanggal</td>
-      <td style="width: 15px; vertical-align: top;">:</td>
-      <td style="font-weight: bold;">{{hariTanggalRapat}}</td>
+      <td style="width: 140px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
+      <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{hariTanggalRapat}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Waktu</td>
-      <td style="vertical-align: top;">:</td>
-      <td style="font-weight: bold;">{{waktuRapat}}</td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Waktu</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{waktuRapat}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Tempat</td>
-      <td style="vertical-align: top;">:</td>
-      <td style="white-space: pre-line;"><strong>{{tempatRapat}}</strong></td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Tempat</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="white-space: pre-line; padding: 2px 0;"><strong>{{tempatRapat}}</strong></td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Agenda</td>
-      <td style="vertical-align: top;">:</td>
-      <td><strong>{{agendaRapat}}</strong></td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Agenda</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;"><strong>{{agendaRapat}}</strong></td>
     </tr>
   </table>
 
   <!-- PARAGRAF PENUTUP -->
-  <p style="text-align: justify; margin-bottom: 12px;">
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 4px;">
     Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
   </p>
 
   <!-- SALAM PENUTUP -->
-  <p style="margin-bottom: 20px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
+  <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
 
   <!-- TANDA TANGAN SECTION -->
-  <div style="margin-top: 30px; page-break-inside: avoid;">
-    <div style="text-align: right; margin-bottom: 10px; font-weight: bold; font-size: 10pt; text-transform: uppercase; white-space: pre-line;">
-      {{headerTtd}}
-    </div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-      <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
-      </div>
-      
-      <!-- QR_CODE_TTE_PLACEHOLDER -->
-      
-      <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>
-      </div>
-    </div>
-  </div>
+  <table style="width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: avoid;">
+    <tr>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
+          <div style="visibility: hidden; font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.2; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+          <div style="font-weight: bold;">{{jabatanKiri}},</div>
+          <div style="height: 60px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">{{namaKetua}}</span>
+        </div>
+      </td>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; margin-left: auto; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <div style="font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.2; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+          <div style="font-weight: bold;">{{jabatanKanan}},</div>
+          <!-- QR_CODE_TTE_PLACEHOLDER -->
+          <div style="height: 60px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">{{namaSekretaris}}</span>
+        </div>
+      </td>
+    </tr>
+  </table>
 
   <!-- PAGE BREAK FOR LAMPIRAN 1 -->
   <div style="page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
-    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan Rapat Pimpinan Badan Pengurus DSN-MUI</p>
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan {{namaRapat}}</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
     <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
@@ -530,7 +521,7 @@ const DEFAULT_TEMPLATES = [
 
   <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
   <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
-    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat Pimpinan Badan Pengurus DSN-MUI</p>
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat {{namaRapat}}</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
     <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
@@ -566,70 +557,36 @@ const DEFAULT_TEMPLATES = [
     code: 'U-0643-UNDANGAN-KESEKRETARISAN',
     category: 'Undangan',
     description: 'Template resmi Undangan Rapat Kesekretarisan Badan Pengurus DSN-MUI.',
-    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
-  <!-- KOP SURAT DSN-MUI -->
-  <table style="width: 100%; border-collapse: collapse; border-bottom: 3px double #000000; padding-bottom: 8px; margin-bottom: 12px;">
-    <tr>
-      <td style="width: 65px; vertical-align: middle; padding: 0 8px 0 0;">
-        <img src="/images/logo-dsn.png" alt="Logo DSN-MUI" style="width: 55px; height: 55px; object-fit: contain;" />
-      </td>
-      <td style="text-align: left; vertical-align: middle; padding: 0;">
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #111827; letter-spacing: -0.2px; margin-bottom: 1px; line-height: 1.2; white-space: nowrap;">
-          DEWAN SYARIAH NASIONAL - MAJELIS ULAMA INDONESIA
-        </div>
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; font-weight: bold; color: #111827; margin-bottom: 3px; line-height: 1.2; white-space: nowrap;">
-          National Sharia Board - Indonesian Council of Ulama
-        </div>
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 7.5px; color: #374151; margin-bottom: 1px; line-height: 1.2; white-space: nowrap;">
-          SEKRETARIAT : Jl. Dempo No.19 Pegangsaan - Jakarta Pusat 10320
-        </div>
-        <div style="font-family: Arial, Helvetica, sans-serif; font-size: 7.5px; color: #374151; line-height: 1.2; white-space: nowrap;">
-          Telp. (021) 3904146 &nbsp; Email: sekretariat@dsnmui.or.id &nbsp; Web: www.dsnmui.or.id
-        </div>
-      </td>
-      <td style="width: 70px; vertical-align: middle; text-align: right; padding: 0 0 0 8px;">
-        <div style="border: 1px solid #000000; padding: 3px; font-family: Arial, Helvetica, sans-serif; font-size: 6px; text-align: center; line-height: 1.1; font-weight: bold; color: #111827;">
-          <div style="border-bottom: 1px solid #000000; padding-bottom: 1px; margin-bottom: 1.5px; font-size: 5px;">REGISTERED</div>
-          <div style="font-weight: 800; font-size: 8px; letter-spacing: 0.5px; margin-bottom: 0.5px;">WQA</div>
-          <div style="font-size: 5px; margin: 1px 0;">ISO 9001:2015</div>
-          <div style="border-top: 1px dashed #000000; padding-top: 1px; margin-top: 1.5px; font-size: 4.5px;">UKAS 134</div>
-        </div>
-      </td>
-    </tr>
-  </table>
-
-  <!-- BASMALAH -->
-  <div style="text-align: center; font-size: 20px; font-family: 'Times New Roman', serif; margin-top: 12px; margin-bottom: 18px; color: #111827;">
-    بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ
-  </div>
+    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+  ${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
-  <div style="text-align: right; font-size: 11pt; margin-bottom: 15px; line-height: 1.3;">
+  <div style="text-align: right; font-size: 11pt; margin-bottom: 6px; line-height: 1.3;">
     Jakarta, {{tanggalHijriah}}<br />
     {{tanggalMasehi}}
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11pt;">
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 11pt;">
     <tr>
-      <td style="width: 80px; vertical-align: top;">Nomor</td>
-      <td style="width: 15px; vertical-align: top;">:</td>
-      <td>{{nomorSurat}}</td>
+      <td style="width: 55px; vertical-align: top; padding: 2px 0;">Nomor</td>
+      <td style="width: 10px; vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;">{{nomorSurat}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top;">Lamp.</td>
-      <td style="vertical-align: top;">:</td>
-      <td>{{lampiran}}</td>
+      <td style="vertical-align: top; padding: 2px 0;">Lamp.</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;">{{lampiran}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Hal</td>
-      <td style="vertical-align: top; font-weight: bold;">:</td>
-      <td style="font-weight: bold;">{{perihal}}</td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Hal</td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{perihal}}</td>
     </tr>
   </table>
 
   <!-- KEPADA YTH -->
-  <div style="margin-bottom: 20px; font-size: 11pt; line-height: 1.4;">
+  <div style="margin-bottom: 6px; font-size: 11pt; line-height: 1.3;">
     <strong>Kepada Yth.:</strong><br />
     <div style="white-space: pre-line; font-weight: bold; margin-bottom: 4px;">{{daftarPenerima}}</div>
     di -<br />
@@ -637,68 +594,72 @@ const DEFAULT_TEMPLATES = [
   </div>
 
   <!-- SALAM PEMBUKA -->
-  <p style="margin-bottom: 12px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+  <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
   <!-- PARAGRAF ISI -->
-  <p style="text-align: justify; margin-bottom: 12px; text-indent: 30px;">
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 4px; text-indent: 30px;">
     Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
   </p>
 
   <!-- JADWAL TABLE -->
-  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 11pt;">
+  <table style="width: 90%; border-collapse: collapse; margin: 4px auto; font-size: 11pt;">
     <tr>
-      <td style="width: 140px; vertical-align: top; font-weight: bold;">Hari, tanggal</td>
-      <td style="width: 15px; vertical-align: top;">:</td>
-      <td style="font-weight: bold;">{{hariTanggalRapat}}</td>
+      <td style="width: 140px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
+      <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{hariTanggalRapat}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Waktu</td>
-      <td style="vertical-align: top;">:</td>
-      <td style="font-weight: bold;">{{waktuRapat}}</td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Waktu</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{waktuRapat}}</td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Media</td>
-      <td style="vertical-align: top;">:</td>
-      <td style="white-space: pre-line;"><strong>{{mediaRapat}}</strong></td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Media</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="white-space: pre-line; padding: 2px 0;"><strong>{{mediaRapat}}</strong></td>
     </tr>
     <tr>
-      <td style="vertical-align: top; font-weight: bold;">Agenda</td>
-      <td style="vertical-align: top;">:</td>
-      <td><strong>{{agendaRapat}}</strong></td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Agenda</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;"><strong>{{agendaRapat}}</strong></td>
     </tr>
   </table>
 
   <!-- PARAGRAF PENUTUP -->
-  <p style="text-align: justify; margin-bottom: 12px;">
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 4px;">
     Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
   </p>
 
   <!-- SALAM PENUTUP -->
-  <p style="margin-bottom: 20px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
+  <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
 
   <!-- TANDA TANGAN SECTION -->
-  <div style="margin-top: 30px; page-break-inside: avoid;">
-    <div style="text-align: right; margin-bottom: 10px; font-weight: bold; font-size: 10pt; text-transform: uppercase; white-space: pre-line;">
-      {{headerTtd}}
-    </div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-      <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
-      </div>
-      
-      <!-- QR_CODE_TTE_PLACEHOLDER -->
-      
-      <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>
-      </div>
-    </div>
-  </div>
+  <table style="width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: avoid;">
+    <tr>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
+          <div style="visibility: hidden; font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.2; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+          <div style="font-weight: bold;">{{jabatanKiri}},</div>
+          <div style="height: 60px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">{{namaKetua}}</span>
+        </div>
+      </td>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; margin-left: auto; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <div style="font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.2; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+          <div style="font-weight: bold;">{{jabatanKanan}},</div>
+          <!-- QR_CODE_TTE_PLACEHOLDER -->
+          <div style="height: 60px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">{{namaSekretaris}}</span>
+        </div>
+      </td>
+    </tr>
+  </table>
 
   <!-- PAGE BREAK FOR LAMPIRAN 1 -->
   <div style="page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
-    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan Rapat Kesekretarisan Badan Pengurus DSN-MUI</p>
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan {{namaRapat}}</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
     <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
@@ -708,7 +669,7 @@ const DEFAULT_TEMPLATES = [
 
   <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
   <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
-    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat Kesekretarisan Badan Pengurus DSN-MUI</p>
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat {{namaRapat}}</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
     <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
@@ -734,8 +695,155 @@ const DEFAULT_TEMPLATES = [
       { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
       { key: 'jabatanKanan', label: 'Jabatan Kanan (e.g. Sekretaris)', type: 'text', required: true, placeholder: 'Sekretaris' },
       { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
-      { key: 'daftarUndangan', label: 'Daftar Undangan Detail (Lampiran 1)', type: 'textarea', required: true, placeholder: 'Sekretaris : Dr. H. Amirsyah Tambunan, M.A\nWakil Sekretaris : Dr. K.H. Moch. Bukhori Muslim, Lc., M.A.\nWakil Sekretaris : Kanny Hidaya, S.E., M.A.\nWakil Sekretaris : Dr. Asrori S. Karni, S.Ag., M.H.\nWakil Sekretaris : Drs. H. Muhammad Ziyad, M.A.' },
       { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: '1. Tindak Lanjut Keputusan Rapat Pimpinan.\n2. Pembahasan surat-surat Masuk\n3. Dan lain-lain.' },
+      { key: 'showAgendaDetail', label: 'Show Agenda Detail', type: 'text', required: false, placeholder: 'block' }
+    ]
+  },
+  {
+    code: 'U-0667-UNDANGAN-LAYANAN',
+    name: 'Undangan Rapat Bidang Layanan, Literasi, Relasi Industri, dan Regulasi (U-0667)',
+    category: 'Undangan',
+    description: 'Template resmi Undangan Rapat Bidang Layanan, Literasi, Relasi Industri, dan Regulasi DSN-MUI.',
+    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+  ${HEADER_HTML}
+
+  <!-- TANGGAL SURAT -->
+  <div style="text-align: right; font-size: 11pt; margin-bottom: 6px; line-height: 1.3;">
+    Jakarta, {{tanggalHijriah}}<br />
+    {{tanggalMasehi}}
+  </div>
+
+  <!-- META SECTION (Nomor, Lampiran, Hal) -->
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 11pt;">
+    <tr>
+      <td style="width: 55px; vertical-align: top; padding: 2px 0;">Nomor</td>
+      <td style="width: 10px; vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;">{{nomorSurat}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 2px 0;">Lamp.</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;">{{lampiran}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Hal</td>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{perihal}}</td>
+    </tr>
+  </table>
+
+  <!-- KEPADA YTH -->
+  <div style="margin-bottom: 6px; font-size: 11pt; line-height: 1.3;">
+    <strong>Kepada Yth.:</strong><br />
+    <div style="white-space: pre-line; font-weight: bold; margin-bottom: 4px;">{{daftarPenerima}}</div>
+    di -<br />
+    &nbsp;&nbsp;&nbsp;&nbsp;<strong>{{tempatPenerima}}</strong>
+  </div>
+
+  <!-- SALAM PEMBUKA -->
+  <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+
+  <!-- PARAGRAF ISI -->
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 4px; text-indent: 30px;">
+    Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
+  </p>
+
+  <!-- JADWAL TABLE -->
+  <table style="width: 90%; border-collapse: collapse; margin: 4px auto; font-size: 11pt;">
+    <tr>
+      <td style="width: 140px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
+      <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{hariTanggalRapat}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Waktu</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="font-weight: bold; padding: 2px 0;">{{waktuRapat}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Tempat</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="white-space: pre-line; padding: 2px 0;"><strong>{{tempatRapat}}</strong></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Agenda</td>
+      <td style="vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0;"><strong>{{agendaRapat}}</strong></td>
+    </tr>
+  </table>
+
+  <!-- PARAGRAF PENUTUP -->
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 4px;">
+    Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
+  </p>
+
+  <!-- SALAM PENUTUP -->
+  <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
+
+  <!-- TANDA TANGAN SECTION -->
+  <table style="width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: avoid;">
+    <tr>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
+          <div style="visibility: hidden; font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.2; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+          <div style="font-weight: bold;">{{jabatanKiri}},</div>
+          <div style="height: 60px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">{{namaKetua}}</span>
+        </div>
+      </td>
+      <td style="width: 50%; vertical-align: top; padding: 0;">
+        <div style="width: 310px; margin-left: auto; text-align: left; font-family: Arial, sans-serif; font-size: 11pt;">
+          <div style="font-size: 9pt; font-weight: bold; text-transform: uppercase; line-height: 1.2; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+          <div style="font-weight: bold;">{{jabatanKanan}},</div>
+          <!-- QR_CODE_TTE_PLACEHOLDER -->
+          <div style="height: 60px;"></div>
+          <span style="font-weight: bold; text-decoration: underline; white-space: nowrap;">{{namaSekretaris}}</span>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- PAGE BREAK FOR LAMPIRAN 1 -->
+  <div style="page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan {{namaRapat}}</p>
+    <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
+    
+    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+      {{daftarUndangan}}
+    </div>
+  </div>
+
+  <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
+  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+    <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat {{namaRapat}}</p>
+    <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
+    
+    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+      {{agendaDetail}}
+    </div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'nomorSurat', label: 'Nomor Surat Resmi', type: 'text', required: true, placeholder: 'U-0667/DSN-MUI/VIII/2026' },
+      { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '10 Agustus 2026 M' },
+      { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '26 Shafar 1448 H' },
+      { key: 'lampiran', label: 'Lampiran', type: 'text', required: false, placeholder: '1 (satu) berkas' },
+      { key: 'perihal', label: 'Perihal / Hal', type: 'text', required: true, placeholder: 'Undangan Rapat Bidang Layanan, Literasi, Relasi Industri, dan Regulasi DSN-MUI' },
+      { key: 'daftarPenerima', label: 'Daftar Penerima (Satu per baris)', type: 'textarea', required: true, placeholder: '1. Pimpinan DSN-MUI Bidang Layanan dan Literasi\n2. Pimpinan DSN-MUI Bidang Relasi Industri dan Regulasi\n3. Bidang Layanan, Literasi, Relasi Industri, dan Regulasi\nDewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI)\n(Nama-nama terlampir)' },
+      { key: 'tempatPenerima', label: 'Tempat / Kota Penerima', type: 'text', required: true, placeholder: 'TEMPAT' },
+      { key: 'namaRapat', label: 'Nama Rapat', type: 'text', required: true, placeholder: 'Rapat Bidang Layanan, Literasi, Relasi Industri, dan Regulasi DSN-MUI' },
+      { key: 'hariTanggalRapat', label: 'Hari & Tanggal Rapat', type: 'text', required: true, placeholder: 'Selasa, 11 Agustus 2026' },
+      { key: 'waktuRapat', label: 'Waktu Rapat', type: 'text', required: true, placeholder: '13.00 – 15.00 WIB' },
+      { key: 'tempatRapat', label: 'Tempat Rapat', type: 'textarea', required: true, placeholder: 'Kantor DSN-MUI\nJl. Dempo No. 19, Pegangsaan, Jakarta Pusat 10320' },
+      { key: 'agendaRapat', label: 'Agenda Rapat', type: 'text', required: true, placeholder: 'Terlampir' },
+      { key: 'headerTtd', label: 'Header Tanda Tangan', type: 'textarea', required: true, placeholder: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA' },
+      { key: 'jabatanKiri', label: 'Jabatan Kiri (e.g. Ketua)', type: 'text', required: true, placeholder: 'Ketua' },
+      { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
+      { key: 'jabatanKanan', label: 'Jabatan Kanan (e.g. Sekretaris)', type: 'text', required: true, placeholder: 'Sekretaris' },
+      { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
+      { key: 'daftarUndangan', label: 'Daftar Undangan Detail (Lampiran 1)', type: 'textarea', required: true, placeholder: '1. Unsur Pimpinan:\n   Wakil Ketua : K.H. Sholahudin Al Aiyub\n   Wakil Ketua : Ir. H. Adiwarman A. Karim, S.E., M.B.A., M.A.E.P.\n   Wakil Sekretaris : Kanny Hidaya, S.E., M.A.\n   Wakil Sekretaris : Dr. Asrori S. Karni, S.Ag., M.H.\n\n2. Koordinator Bidang Fatwa:\n   Dr. Asep Supyadillah, M.Ag.\n\n3. Anggota Bidang Fatwa:\n   1. Ah. Azharuddin Latif, M.Ag., M.H.\n   2. Dr. Yuke Rahmawati, M.A.' },
+      { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: '1. Tindak Lanjut atas Rapat Kesekretarisan DSN-MUI tanggal 6 Agustus 2026:\n   a. Pemohonan Izin Penelitian Skripsi dari Velisa Universitas Darussalam\n   b. Permohonan Surat Rekomendasi Dewan Pengawas Syariah dari PT LKM Artha Kerta Raharja (Perseroda)\n   ...' },
       { key: 'showAgendaDetail', label: 'Show Agenda Detail', type: 'text', required: false, placeholder: 'block' }
     ]
   }
@@ -764,6 +872,33 @@ router.post('/seed', authenticate, async (_req: AuthRequest, res: Response) => {
   }
 });
 
+function sanitizeTemplateHtml(html: string): string {
+  if (!html) return html;
+  const kopBase64 = getKopSuratBase64();
+  const bismillahBase64 = getBismillahBase64();
+  const logoBase64 = getLogoDsnBase64();
+  const wqaBase64 = getWqaUkasBase64();
+
+  let out = html;
+  const kopPlaceholderRegex = /(\\?\${HEADER_HTML}|\${HEADER_HTML})/g;
+  if (kopPlaceholderRegex.test(out)) {
+    const headerReplacement = `<div style="text-align: center; margin-bottom: 8px; margin-left: -40px; margin-right: -40px; padding-top: 10px;">
+    <img src="${kopBase64}" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 750px; height: auto; display: block; margin: 0 auto;" />
+  </div>
+
+  <!-- Bismillah Calligraphy -->
+  <div style="text-align: center; margin-top: 6px; margin-bottom: 12px;">
+    <img src="${bismillahBase64}" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
+  </div>`;
+    out = out.replace(kopPlaceholderRegex, headerReplacement);
+  }
+  out = out.replace(/src=["'][^"']*kop-surat\.png["']/gi, `src="${kopBase64}" class="kop-surat-img"`);
+  out = out.replace(/src=["'][^"']*bismillah\.svg["']/gi, `src="${bismillahBase64}"`);
+  out = out.replace(/src=["'][^"']*logo-dsn\.png["']/gi, `src="${logoBase64}"`);
+  out = out.replace(/src=["'][^"']*wqa-ukas\.png["']/gi, `src="${wqaBase64}"`);
+  return out;
+}
+
 // ── GET ALL TEMPLATES ──────────────────────────────────────────────────────────
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -784,7 +919,12 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       orderBy: { updatedAt: 'desc' },
     });
 
-    res.json({ status: 'success', data: templates });
+    const sanitized = templates.map(t => ({
+      ...t,
+      htmlContent: sanitizeTemplateHtml(t.htmlContent)
+    }));
+
+    res.json({ status: 'success', data: sanitized });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
@@ -795,7 +935,13 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const template = await prisma.letterTemplate.findUnique({ where: { id: String(req.params.id) } });
     if (!template) return res.status(404).json({ status: 'error', message: 'Template tidak ditemukan' });
-    res.json({ status: 'success', data: template });
+    res.json({
+      status: 'success',
+      data: {
+        ...template,
+        htmlContent: sanitizeTemplateHtml(template.htmlContent)
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
