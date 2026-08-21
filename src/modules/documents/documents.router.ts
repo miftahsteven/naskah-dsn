@@ -783,6 +783,55 @@ function resolveExistingFilePath(fileUrl: string): string | null {
   return null;
 }
 
+async function ensureExistingFilePath(fileUrl: string, docId?: string, authHeader?: string): Promise<string | null> {
+  const local = resolveExistingFilePath(fileUrl);
+  if (local) return local;
+
+  const filename = path.basename(fileUrl);
+  const targetPath = path.resolve(process.cwd(), 'uploads', filename);
+  try {
+    const headers: Record<string, string> = {};
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+
+    // Try 1: If docId is provided, fetch rendered HTML from production
+    if (docId) {
+      const prodRenderUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/render`;
+      const res = await fetch(prodRenderUrl, { headers });
+      if (res.ok) {
+        const text = await res.text();
+        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.promises.writeFile(targetPath, text, 'utf8');
+        return targetPath;
+      }
+
+      // Try download endpoint as fallback
+      const prodDownloadUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/download`;
+      const dlRes = await fetch(prodDownloadUrl, { headers });
+      if (dlRes.ok) {
+        const buffer = Buffer.from(await dlRes.arrayBuffer());
+        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.promises.writeFile(targetPath, buffer);
+        return targetPath;
+      }
+    }
+
+    // Try 2: Direct upload URL
+    const prodUploadUrl = `https://amanah.dsnmui.or.id/uploads/${filename}`;
+    const directRes = await fetch(prodUploadUrl, { headers });
+    if (directRes.ok) {
+      const buffer = Buffer.from(await directRes.arrayBuffer());
+      await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.promises.writeFile(targetPath, buffer);
+      return targetPath;
+    }
+  } catch (err) {
+    console.warn(`[Sync] Failed to fetch missing file ${filename} from production:`, err);
+  }
+  return null;
+}
+
 function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: string): { html: string; injected: boolean } {
   const candidates = row.candidates || [];
   let match: RegExpExecArray | null = null;
@@ -972,16 +1021,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   }
 
   const signatureRows = await Promise.all(signerSigs.map(async (s: any) => {
-    // Build frontend base URL from ALLOWED_ORIGINS env
-    const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
-    let frontendUrl = 'https://amanah.dsnmui.or.id';
-    if (allowedOriginsEnv) {
-      const origins = allowedOriginsEnv.split(',');
-      const firstOrigin = origins[0];
-      if (firstOrigin) {
-        frontendUrl = firstOrigin.trim();
-      }
-    }
+    const frontendUrl = process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id';
     const payload = `${frontendUrl}/verify/document/${s.documentId}`;
     
     const qrDataUrl = await qrcode.toDataURL(payload, {
@@ -1285,7 +1325,7 @@ router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req:
       return res.status(404).json({ status: 'error', message: 'No version found' });
     }
 
-    const filePath = resolveExistingFilePath(version.fileUrl);
+    const filePath = await ensureExistingFilePath(version.fileUrl, document.id, req.headers.authorization);
     if (!filePath) {
       return res.status(404).json({ status: 'error', message: 'Berkas tidak ditemukan di server.' });
     }
@@ -1371,7 +1411,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       return res.status(404).json({ status: 'error', message: 'No version found' });
     }
 
-    const filePath = resolveExistingFilePath(version.fileUrl);
+    const filePath = await ensureExistingFilePath(version.fileUrl, document.id, req.headers.authorization);
     if (!filePath) {
       console.error(`❌ Download failed: file missing for fileUrl ${version.fileUrl}`);
       res.status(404).setHeader('Content-Type', 'application/json');
@@ -1496,7 +1536,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
       return res.status(404).json({ status: 'error', message: 'Version not found' });
     }
 
-    const filePath = resolveExistingFilePath(version.fileUrl);
+    const filePath = await ensureExistingFilePath(version.fileUrl, document.id, req.headers.authorization);
     if (!filePath) {
       console.error(`❌ Download version failed: file missing for fileUrl ${version.fileUrl}`);
       res.status(404).setHeader('Content-Type', 'application/json');

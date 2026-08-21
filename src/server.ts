@@ -26,6 +26,7 @@ import fatwaRouter from './modules/fatwa/fatwa.router.js';
 import meetingRouter from './modules/meeting/meeting.router.js';
 import notulaRouter from './modules/notula/notula.router.js';
 import letterTemplateRouter from './modules/letter-template/letter-template.router.js';
+import publicRouter from './modules/public-portal/public.router.js';
 
 
 const app = express();
@@ -35,7 +36,9 @@ const PORT = process.env.PORT || 4002;
 // ── SECURITY HEADERS (helmet) ────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // needed for file serving
+  crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: false, // handled at frontend level
+  frameguard: false, // allow iframe embedding of documents/PDFs across ports
 }));
 
 // ── CORS — strict origin whitelist, NO wildcards ─────────────────────────────
@@ -49,7 +52,12 @@ app.use(cors({
     if (!origin && process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
-    if (!origin || allowedOrigins.includes(origin)) {
+    const isLocalhost = origin && (
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:') ||
+      origin.startsWith('exp://')
+    );
+    if (!origin || allowedOrigins.includes(origin) || (process.env.NODE_ENV !== 'production' && isLocalhost)) {
       callback(null, true);
     } else {
       callback(new Error(`CORS: Origin ${origin} not allowed`));
@@ -91,6 +99,13 @@ const apiLimiter = rateLimit({
 // are SIGNED documents, dynamically injects the TTE QR code badge.
 const uploadsRouter = express.Router();
 
+uploadsRouter.use((_req: Request, res: Response, next: NextFunction) => {
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Only handle GET and HEAD requests — pass OPTIONS preflight through to CORS middleware
@@ -106,34 +121,36 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
       return next();
     }
 
-    const relativePath = `uploads/${subPath}`;
-    const filePath = path.resolve(relativePath);
-
-    if (!fs.existsSync(filePath)) {
-      return next();
+    const filePath = path.resolve('uploads', subPath);
+    let html = '';
+    if (fs.existsSync(filePath)) {
+      html = fs.readFileSync(filePath, 'utf8');
+    } else {
+      // Fetch from production if not found on local disk
+      try {
+        const prodRes = await fetch(`https://amanah.dsnmui.or.id/uploads/${subPath}`);
+        if (prodRes.ok) {
+          html = await prodRes.text();
+          // Cache locally
+          await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+          await fs.promises.writeFile(filePath, html, 'utf8');
+        } else {
+          return next();
+        }
+      } catch {
+        return next();
+      }
     }
 
     // Look up this version in DB to check if SIGNED
     const version = await prisma.documentVersion.findFirst({
-      where: { fileUrl: relativePath },
+      where: { fileUrl: { contains: subPath } },
       include: { document: true }
     });
 
-    let html = fs.readFileSync(filePath, 'utf8');
-
     const doc = version?.document;
     if (doc && doc.status === 'SIGNED' && html.includes('<!-- QR_CODE_TTE_PLACEHOLDER -->')) {
-      // Build frontend base URL from ALLOWED_ORIGINS env
-      const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
-      let frontendUrl = 'http://localhost:3000';
-      if (allowedOriginsEnv) {
-        const origins = allowedOriginsEnv.split(',');
-        const firstOrigin = origins[0];
-        if (firstOrigin) {
-          frontendUrl = firstOrigin.trim();
-        }
-      }
-
+      const frontendUrl = process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id';
       const verifyUrl = `${frontendUrl}/verify/document/${doc.id}`;
 
       // Generate QR Code as Base64 Data URL (dark color #006633 MUI green)
@@ -166,8 +183,29 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// Fallback static file server for non-HTML files (images, etc.)
+// Fallback static file server for non-HTML files (images, PDFs, etc.)
 uploadsRouter.use(express.static('uploads'));
+
+// Proxy fallback for non-HTML files not present locally
+uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
+  const subPath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
+  const targetPath = path.resolve('uploads', subPath);
+  try {
+    const prodRes = await fetch(`https://amanah.dsnmui.or.id/uploads/${subPath}`);
+    if (prodRes.ok) {
+      const buffer = Buffer.from(await prodRes.arrayBuffer());
+      await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.promises.writeFile(targetPath, buffer);
+      return res.sendFile(targetPath);
+    }
+  } catch (e) {
+    console.warn(`[Uploads Proxy] Failed to proxy ${subPath} from production:`, e);
+  }
+  next();
+});
 
 app.use('/uploads', uploadsRouter);
 app.use('/images', express.static(path.join(process.cwd(), 'public/images')));
@@ -201,6 +239,7 @@ app.use('/api/fatwa', fatwaRouter);
 app.use('/api/meeting', meetingRouter);
 app.use('/api/notula', notulaRouter);
 app.use('/api/letter-templates', letterTemplateRouter);
+app.use('/api/public', publicRouter);
 
 
 // ── 404 HANDLER ───────────────────────────────────────────────────────────────

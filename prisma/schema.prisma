@@ -176,6 +176,7 @@ model Document {
   evidenceFiles     EvidenceFile[]
   meetings          Meeting[]
   discussedInMeetings Meeting[] @relation("MeetingDiscussedDocs")
+  publicSubmissions PublicSubmission[]
 }
 
 model DocumentVersion {
@@ -452,5 +453,203 @@ model EvidenceFile {
   uploader   User?           @relation(fields: [uploaderId], references: [id])
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
+}
+
+// ── PUBLIC PORTAL MODELS ───────────────────────────────────────────────────
+
+model Company {
+  id              String             @id @default(uuid())
+  name            String
+  legalType       String?            // PT, CV, Yayasan, Koperasi, BUMN, dll
+  legalityNumber  String?            // NIB / Nomor Akta
+  npwp            String?
+  address         String?
+  province        String?
+  city            String?
+  postalCode      String?
+  phone           String?
+  email           String?
+  website         String?
+  logoUrl         String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  users           CompanyUser[]
+  submissions     PublicSubmission[]
+  certificates    ShariaCertificate[]
+  notifications   PublicNotification[]
+}
+
+model CompanyUser {
+  id          String             @id @default(uuid())
+  companyId   String
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email       String
+  fullName    String
+  phone       String?
+  position    String?            // Jabatan PIC
+  role        String             @default("ADMIN") // ADMIN, PIC, USER
+  isActive    Boolean            @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  submissions PublicSubmission[]
+}
+
+model PublicOtp {
+  id        String   @id @default(uuid())
+  email     String
+  otpHash   String
+  type      String   @default("LOGIN") // LOGIN, REGISTER, VERIFY
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SubmissionTypeMaster {
+  id           String                        @id @default(uuid())
+  code         String                        @unique
+  name         String
+  description  String?
+  icon         String?
+  sortOrder    Int                           @default(0)
+  isActive     Boolean                       @default(true)
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+  requirements SubmissionRequirementMaster[]
+  submissions  PublicSubmission[]
+}
+
+model SubmissionRequirementMaster {
+  id               String               @id @default(uuid())
+  submissionTypeId String
+  submissionType   SubmissionTypeMaster @relation(fields: [submissionTypeId], references: [id], onDelete: Cascade)
+  code             String
+  name             String
+  description      String?
+  isMandatory      Boolean              @default(true)
+  allowedFileTypes String               @default("PDF,DOCX,JPG,PNG")
+  maxFileSizeMb    Int                  @default(20)
+  sortOrder        Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+model PublicSubmission {
+  id                    String                     @id @default(uuid())
+  submissionNumber      String                     @unique // AMN-2026-000001
+  companyId             String
+  company               Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applicantUserId       String
+  applicantUser         CompanyUser                @relation(fields: [applicantUserId], references: [id])
+  submissionTypeId      String?
+  submissionType        SubmissionTypeMaster?      @relation(fields: [submissionTypeId], references: [id])
+  submissionTypeName    String
+  title                 String
+  productOrServiceName  String?
+  description           String?
+  companyLetterNumber   String?
+  companyLetterDate     DateTime?
+  officialLetterUrl     String?
+  officialLetterName    String?
+  officialLetterSize    Int?
+  status                String                     @default("DRAFT") // DRAFT, SUBMITTED, VERIFIKASI_ADMINISTRASI, PERLU_PERBAIKAN, SEDANG_DIPROSES, DALAM_PEMBAHASAN, PROSES_KEPUTUSAN, DISETUJUI, SERTIFIKAT_DITERBITKAN, SELESAI, DITOLAK
+  stepCompleted         Int                        @default(1)
+  submittedAt           DateTime?
+  erpDocumentId         String?
+  erpDocument           Document?                  @relation(fields: [erpDocumentId], references: [id])
+  documents             PublicSubmissionDocument[]
+  timeline              PublicSubmissionActivity[]
+  revisions             PublicSubmissionRevision[]
+  certificate           ShariaCertificate?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+}
+
+model PublicSubmissionDocument {
+  id                  String           @id @default(uuid())
+  submissionId        String
+  submission          PublicSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  requirementMasterId String?
+  requirementName     String
+  fileName            String
+  fileUrl             String
+  fileSize            Int
+  mimeType            String
+  isMandatory         Boolean          @default(false)
+  status              String           @default("VALID") // VALID, REVISION_REQUIRED, REPLACED
+  notes               String?
+  uploadedAt          DateTime         @default(now())
+}
+
+model PublicSubmissionActivity {
+  id              String           @id @default(uuid())
+  submissionId    String
+  submission      PublicSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  publicStatus    String
+  visibility      String           @default("PUBLIC") // PUBLIC, INTERNAL
+  performedByName String?
+  createdAt       DateTime         @default(now())
+}
+
+model PublicSubmissionRevision {
+  id                 String           @id @default(uuid())
+  submissionId       String
+  submission         PublicSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  requestNotes       String
+  requestedDocuments Json?
+  deadline           DateTime?
+  status             String           @default("PENDING") // PENDING, RESPONDED, RESOLVED
+  responseNotes      String?
+  requestedAt        DateTime         @default(now())
+  respondedAt        DateTime?
+}
+
+model ShariaCertificate {
+  id                   String           @id @default(uuid())
+  submissionId         String           @unique
+  submission           PublicSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  companyId            String
+  company              Company          @relation(fields: [companyId], references: [id])
+  certificateNumber    String           @unique // e.g. "DSN-MUI/KS/2026/0018"
+  title                String
+  issueDate            DateTime
+  validUntil           DateTime
+  fileUrl              String
+  fileName             String
+  fileSize             Int
+  qrCode               String?
+  digitalSignatureInfo Json?
+  downloadCount        Int              @default(0)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+model PublicNotification {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String?
+  title     String
+  message   String
+  type      String   @default("INFO") // INFO, SUCCESS, WARNING, ACTION_REQUIRED
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model PublicAuditLog {
+  id         String   @id @default(uuid())
+  companyId  String?
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
 }
 
