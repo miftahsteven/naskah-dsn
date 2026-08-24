@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11pt; padding: 40px; background: #f8fafc; }
+    .box { background: white; padding: 30px; margin-bottom: 20px; width: 400px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    h3 { margin-top: 0; font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+
+<div class="box">
+  <h3>Option 1: line-height 1.05 with border-bottom on td (border-collapse separate)</h3>
+  <table style="display: inline-table; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt; line-height: 1.05;">
+    <tr>
+      <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
+      <td style="padding: 0 0 1px 0; border-bottom: 1px solid #000; text-align: center; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">21 Shafar 1448 H</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td style="padding: 3px 0 0 0; text-align: center; white-space: nowrap; line-height: 1.15;">5 Agustus 2026 M</td>
+    </tr>
+  </table>
+</div>
+
+<div class="box">
+  <h3>Option 2: line-height 0.95 with border-bottom on td</h3>
+  <table style="display: inline-table; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt; line-height: 1;">
+    <tr>
+      <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1;">Jakarta,&nbsp;</td>
+      <td style="padding: 0 0 0px 0; border-bottom: 1px solid #111; text-align: center; white-space: nowrap; vertical-align: bottom; line-height: 1;">21 Shafar 1448 H</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td style="padding: 3px 0 0 0; text-align: center; white-space: nowrap; line-height: 1.15;">5 Agustus 2026 M</td>
+    </tr>
+  </table>
+</div>
+
+<div class="box">
+  <h3>Option 3: border-bottom with display inline-block / span with exact height</h3>
+  <table style="display: inline-table; border-collapse: collapse; text-align: left; font-size: 11pt;">
+    <tr>
+      <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.1;">Jakarta,&nbsp;</td>
+      <td style="padding: 0; text-align: center; white-space: nowrap; vertical-align: bottom; line-height: 1.1;">
+        <span style="border-bottom: 1px solid #000; display: inline-block; padding-bottom: 0px; line-height: 1.1;">21 Shafar 1448 H</span>
+      </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td style="padding: 3px 0 0 0; text-align: center; white-space: nowrap; line-height: 1.15;">5 Agustus 2026 M</td>
+    </tr>
+  </table>
+</div>
+
+<div class="box">
+  <h3>Option 4: border-bottom: 0.75pt solid #000; line-height: 1.1;</h3>
+  <table style="display: inline-table; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt; line-height: 1.1;">
+    <tr>
+      <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.1;">Jakarta,&nbsp;</td>
+      <td style="padding: 0 0 0px 0; border-bottom: 0.75pt solid #000; text-align: center; white-space: nowrap; vertical-align: bottom; line-height: 1.1;">21 Shafar 1448 H</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td style="padding: 2px 0 0 0; text-align: center; white-space: nowrap; line-height: 1.15;">5 Agustus 2026 M</td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

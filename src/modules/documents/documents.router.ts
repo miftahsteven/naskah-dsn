@@ -1101,12 +1101,12 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   // Retroactively resolve un-interpolated HEADER_HTML strings in static document HTML files
   const kopPlaceholderRegex = /(\\?\${HEADER_HTML}|\${HEADER_HTML})/g;
   if (kopPlaceholderRegex.test(htmlContent)) {
-    const headerReplacement = `<div style="text-align: center; margin-bottom: 8px; margin-left: -40px; margin-right: -40px; padding-top: 10px;">
+    const headerReplacement = `<div style="text-align: center; margin-bottom: 4px; margin-left: -30px; margin-right: -30px; padding-top: 10px;">
     <img src="${kopBase64}" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 750px; height: auto; display: block; margin: 0 auto;" />
   </div>
 
   <!-- Bismillah Calligraphy -->
-  <div style="text-align: center; margin-top: 6px; margin-bottom: 12px;">
+  <div style="text-align: center; margin-top: 2px; margin-bottom: 6px;">
     <img src="${bismillahBase64}" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
   </div>`;
     htmlContent = htmlContent.replace(kopPlaceholderRegex, headerReplacement);
