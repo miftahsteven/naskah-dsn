@@ -1020,6 +1020,134 @@ export const FULL_VARS_U0000 = [
   { key: 'namaSekretaris', label: 'Nama Sekretaris', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' }
 ];
 
+export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+  \${HEADER_HTML}
+
+  <!-- JUDUL SURAT & NOMOR -->
+  <div style="text-align: center; margin-top: 6px; margin-bottom: 12px;">
+    <div style="font-weight: bold; font-size: 11pt; text-decoration: underline; letter-spacing: 4px; text-transform: uppercase; display: inline-block;">S U R A T &nbsp; T U G A S</div>
+    <div style="font-size: 10.5pt; margin-top: 2px;">No: {{nomorSurat}}</div>
+  </div>
+
+  <!-- KONSIDERANS PEMBUKA -->
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    Menunjuk surat dari {{namaLembagaPengundang}} No. {{nomorSuratPengundang}} tertanggal {{tanggalSuratPengundang}}, dan berdasarkan keputusan Rapat {{namaRapatPengambilKeputusan}} Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) tanggal {{tanggalRapat}}, DSN-MUI dengan ini <strong>menugaskan</strong> kepada:
+  </p>
+
+  <!-- TABEL RINCIAN PENUGASAN -->
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.35;">
+    <tr>
+      <td style="width: 100px; vertical-align: top; padding: 2px 0;">Nama</td>
+      <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
+      <td style="padding: 2px 0; white-space: pre-line;">{{daftarNamaPenugasan}}</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 4px 0 2px 0;">Keperluan</td>
+      <td style="vertical-align: top; padding: 4px 0 2px 0;">:</td>
+      <td style="padding: 4px 0 2px 0; text-align: justify;">
+        {{keperluan}}
+        <table style="width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 10.5pt; line-height: 1.35;">
+          <tr>
+            <td style="width: 100px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
+            <td style="width: 15px; vertical-align: top; font-weight: bold; padding: 2px 0;">:</td>
+            <td style="font-weight: bold; padding: 2px 0;">{{hariTanggalKegiatan}}</td>
+          </tr>
+          <tr>
+            <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Waktu</td>
+            <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">:</td>
+            <td style="font-weight: bold; padding: 2px 0;">{{waktuKegiatan}}</td>
+          </tr>
+          <tr>
+            <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">Tempat</td>
+            <td style="vertical-align: top; font-weight: bold; padding: 2px 0;">:</td>
+            <td style="font-weight: bold; white-space: pre-line; padding: 2px 0;">{{tempatKegiatan}}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 4px 0 2px 0;">Keterangan</td>
+      <td style="vertical-align: top; padding: 4px 0 2px 0;">:</td>
+      <td style="padding: 4px 0 2px 0;">
+        <div style="font-weight: normal; margin-bottom: 2px;">Narahubung</div>
+        <div style="white-space: pre-line; line-height: 1.35;">{{keteranganNarahubung}}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- PARAGRAF PENUTUP -->
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    Demikian Surat Tugas ini diberikan kepada yang bersangkutan untuk dilaksanakan sebagaimana mestinya dan melaporkan hasilnya kepada Pimpinan DSN-MUI.
+  </p>
+
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    Apabila dalam penugasan ini terdapat kekeliruan, atau ada kebutuhan organisasi, akan diperbaiki sebagaimana mestinya.
+  </p>
+
+  <!-- TANDA TANGAN SECTION -->
+  <table style="width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: avoid;">
+    <tr>
+      <td style="width: 45%; vertical-align: top; padding: 0; text-align: left;">
+        <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+          <!-- Hidden spacer matching date + headerTtd height -->
+          <div style="visibility: hidden; font-size: 10.5pt; line-height: 1.2; margin-bottom: 6px;">
+            <div>Jakarta, {{tanggalHijriah}}</div>
+            <div style="padding-top: 2px;">{{tanggalMasehi}}</div>
+          </div>
+          <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
+          <div style="font-weight: normal; font-size: 10.5pt;">{{jabatanKiri}},</div>
+          <div style="height: 55px;"></div>
+          <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+        </div>
+      </td>
+      <td style="width: 55%; vertical-align: top; padding: 0; text-align: left;">
+        <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+          <!-- TANGGAL SURAT -->
+          <table style="border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt; line-height: 1.2; margin-bottom: 6px;">
+            <tr>
+              <td style="padding: 0; white-space: nowrap; vertical-align: bottom;">Jakarta,&nbsp;</td>
+              <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
+                <span style="border-bottom: 1px solid #000; display: inline-block; padding-bottom: 0px;">{{tanggalHijriah}}</span>
+              </td>
+            </tr>
+            <tr>
+              <td></td>
+              <td style="padding: 2px 0 0 0; white-space: nowrap;">{{tanggalMasehi}}</td>
+            </tr>
+          </table>
+          <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
+          <div style="font-weight: normal; font-size: 10.5pt;">{{jabatanKanan}},</div>
+          <!-- QR_CODE_TTE_PLACEHOLDER -->
+          <div style="height: 55px;"></div>
+          <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+        </div>
+      </td>
+    </tr>
+  </table>
+</div>`;
+
+export const FULL_VARS_SURAT_TUGAS = [
+  { key: 'nomorSurat', label: 'Nomor Surat Tugas', type: 'text', required: true, placeholder: 'ST-0650/DSN-MUI/VIII/2026', defaultValue: 'ST-0650/DSN-MUI/VIII/2026' },
+  { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '6 Agustus 2026 M', defaultValue: '6 Agustus 2026 M' },
+  { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '22 Shafar 1448 H', defaultValue: '22 Shafar 1448 H' },
+  { key: 'namaLembagaPengundang', label: 'Nama Lembaga Pengundang', type: 'text', required: true, placeholder: 'Lembaga Penggerak Ekonomi Umat (LPEU) Majelis Ulama Indonesia', defaultValue: 'Lembaga Penggerak Ekonomi Umat (LPEU) Majelis Ulama Indonesia' },
+  { key: 'nomorSuratPengundang', label: 'Nomor Surat Pengundang', type: 'text', required: true, placeholder: 'A-120/LPEU MUI/VII/2026', defaultValue: 'A-120/LPEU MUI/VII/2026' },
+  { key: 'tanggalSuratPengundang', label: 'Tanggal Surat Pengundang', type: 'text', required: true, placeholder: '28 Juli 2026', defaultValue: '28 Juli 2026' },
+  { key: 'namaRapatPengambilKeputusan', label: 'Nama Rapat Pengambil Keputusan', type: 'text', required: true, placeholder: 'Kesekretarisan', defaultValue: 'Kesekretarisan' },
+  { key: 'tanggalRapat', label: 'Tanggal Rapat Keputusan', type: 'text', required: true, placeholder: '6 Agustus 2026', defaultValue: '6 Agustus 2026' },
+  { key: 'daftarNamaPenugasan', label: 'Daftar Nama yang Ditugaskan (Multiline)', type: 'textarea', required: true, placeholder: '1. Ibnu Wazi\n   (Anggota Bidang Fatwa)\n2. Dr. Nofrianto, M.Ag., CM.\n   (Anggota Bidang Layanan, Literasi, Relasi Industri, dan Regulasi)', defaultValue: '1. Ibnu Wazi\n   (Anggota Bidang Fatwa)\n2. Dr. Nofrianto, M.Ag., CM.\n   (Anggota Bidang Layanan, Literasi, Relasi Industri, dan Regulasi)' },
+  { key: 'keperluan', label: 'Keperluan Tugas (Paragraf Pengantar)', type: 'textarea', required: true, placeholder: 'menghadiri kegiatan Risk Based Performance Management Training, yang diselenggarakan oleh LPEU MUI, yang insyaAllah dilaksanakan pada:', defaultValue: 'menghadiri kegiatan Risk Based Performance Management Training, yang diselenggarakan oleh LPEU MUI, yang insyaAllah dilaksanakan pada:' },
+  { key: 'hariTanggalKegiatan', label: 'Hari & Tanggal Kegiatan', type: 'text', required: true, placeholder: 'Jumat-Sabtu, 7-8 Agustus 2026', defaultValue: 'Jumat-Sabtu, 7-8 Agustus 2026' },
+  { key: 'waktuKegiatan', label: 'Waktu Kegiatan', type: 'text', required: true, placeholder: '08.00 WIB - selesai (Rundown acara terlampir)', defaultValue: '08.00 WIB - selesai (Rundown acara terlampir)' },
+  { key: 'tempatKegiatan', label: 'Tempat Kegiatan', type: 'textarea', required: true, placeholder: 'Aula Buya Hamka Gedung MUI Pusat\nJl. Proklamasi 51, Menteng, Jakarta Pusat', defaultValue: 'Aula Buya Hamka Gedung MUI Pusat\nJl. Proklamasi 51, Menteng, Jakarta Pusat' },
+  { key: 'keteranganNarahubung', label: 'Keterangan Narahubung', type: 'textarea', required: true, placeholder: '❖ Sekretariat DSN-MUI\n   Telp./WA : 0818 404 852 (Sdr. Abdul Wasik, M.Si)\n   WA Hotline : 0822 6000 4146\n   Email : sekretariat@dsnmui.or.id\n           dsnmui@gmail.com\n\n❖ LPEU MUI\n   Telp. : 0812 1569 7070 (Admin WA LPEU MUI)\n   Email : lpeu.mui.pusat@gmail.com', defaultValue: '❖ Sekretariat DSN-MUI\n   Telp./WA : 0818 404 852 (Sdr. Abdul Wasik, M.Si)\n   WA Hotline : 0822 6000 4146\n   Email : sekretariat@dsnmui.or.id\n           dsnmui@gmail.com\n\n❖ LPEU MUI\n   Telp. : 0812 1569 7070 (Admin WA LPEU MUI)\n   Email : lpeu.mui.pusat@gmail.com' },
+  { key: 'headerTtd', label: 'Header Tanda Tangan', type: 'textarea', required: true, placeholder: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA', defaultValue: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA' },
+  { key: 'jabatanKiri', label: 'Jabatan Kiri', type: 'text', required: true, placeholder: 'Ketua', defaultValue: 'Ketua' },
+  { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.', defaultValue: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
+  { key: 'jabatanKanan', label: 'Jabatan Kanan', type: 'text', required: true, placeholder: 'Sekretaris', defaultValue: 'Sekretaris' },
+  { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
+];
+
 export const DEFAULT_TEMPLATES = [
   {
     name: 'Pernyataan Kesesuaian Syariah',
@@ -1036,6 +1164,22 @@ export const DEFAULT_TEMPLATES = [
     description: 'Template surat Pernyataan Keselarasan (Opini) Syariah untuk transaksi atau kebijakan yang memerlukan opini kesesuaian dari DSN-MUI.',
     htmlContent: FULL_HTML_OPINI,
     variables: FULL_VARS_OPINI,
+  },
+  {
+    name: 'Surat Tugas DSN-MUI (ST-0650)',
+    code: 'ST-0650-TUGAS',
+    category: 'Surat Tugas',
+    description: 'Template resmi Surat Tugas Dewan Syariah Nasional - Majelis Ulama Indonesia (DSN-MUI) untuk penugasan anggota/pengurus menghadiri kegiatan atau agenda eksternal.',
+    htmlContent: FULL_HTML_SURAT_TUGAS,
+    variables: FULL_VARS_SURAT_TUGAS,
+  },
+  {
+    name: 'Surat Tugas',
+    code: 'SK-TUGAS',
+    category: 'Surat Tugas',
+    description: 'Template standar Surat Tugas Dewan Syariah Nasional - Majelis Ulama Indonesia (DSN-MUI).',
+    htmlContent: FULL_HTML_SURAT_TUGAS,
+    variables: FULL_VARS_SURAT_TUGAS,
   },
   {
     name: 'Undangan Silaturahim dan Wawancara Calon DPS kepada PT (U-0000)',

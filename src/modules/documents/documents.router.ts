@@ -20,6 +20,7 @@ const __dirname = path.dirname(__filename);
 const router = Router();
 import qrcode from 'qrcode';
 import puppeteer from 'puppeteer';
+import { PDFDocument } from 'pdf-lib';
 
 function getApiBaseUrl(req: Request) {
   const rawProtoHeader = req.get('x-forwarded-proto') || req.get('x-forwarded-protocol');
@@ -95,6 +96,87 @@ export function getWqaUkasBase64(): string {
     cachedWqaUkasBase64 = getStaticImageBase64('wqa-ukas.png', 'image/png');
   }
   return cachedWqaUkasBase64;
+}
+
+export async function mergePdfWithEvidence(
+  mainPdfBuffer: Buffer,
+  evidenceFiles: { id: string; name: string; fileUrl: string; mimeType: string }[]
+): Promise<Buffer> {
+  if (!evidenceFiles || evidenceFiles.length === 0) {
+    return mainPdfBuffer;
+  }
+
+  try {
+    const mergedPdf = await PDFDocument.load(mainPdfBuffer, { ignoreEncryption: true });
+
+    for (const file of evidenceFiles) {
+      let actualPath = file.fileUrl;
+      if (!path.isAbsolute(actualPath)) {
+        actualPath = path.resolve(process.cwd(), actualPath);
+      }
+      if (!fs.existsSync(actualPath)) {
+        const altPath = path.resolve(process.cwd(), 'uploads', path.basename(file.fileUrl));
+        if (fs.existsSync(altPath)) {
+          actualPath = altPath;
+        } else {
+          console.warn(`[mergePdfWithEvidence] Evidence file not found on disk: ${file.fileUrl}`);
+          continue;
+        }
+      }
+
+      const fileBytes = await fs.promises.readFile(actualPath);
+      const ext = path.extname(file.name || actualPath).toLowerCase();
+      const mime = (file.mimeType || '').toLowerCase();
+
+      if (mime === 'application/pdf' || ext === '.pdf') {
+        try {
+          const donorPdf = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+          const copiedPages = await mergedPdf.copyPages(donorPdf, donorPdf.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        } catch (donorErr) {
+          console.error(`[mergePdfWithEvidence] Failed to copy pages from ${file.name}:`, donorErr);
+        }
+      } else if (
+        mime.startsWith('image/') ||
+        ['.png', '.jpg', '.jpeg'].includes(ext)
+      ) {
+        try {
+          let embeddedImage;
+          if (mime === 'image/png' || ext === '.png') {
+            embeddedImage = await mergedPdf.embedPng(fileBytes);
+          } else {
+            embeddedImage = await mergedPdf.embedJpg(fileBytes);
+          }
+
+          const { width, height } = embeddedImage.scale(1);
+          const pageWidth = 595.28;
+          const pageHeight = 841.89;
+          const margin = 30;
+          const maxW = pageWidth - margin * 2;
+          const maxH = pageHeight - margin * 2;
+          const scaleFactor = Math.min(maxW / width, maxH / height, 1);
+          const drawW = width * scaleFactor;
+          const drawH = height * scaleFactor;
+
+          const page = mergedPdf.addPage([pageWidth, pageHeight]);
+          page.drawImage(embeddedImage, {
+            x: (pageWidth - drawW) / 2,
+            y: (pageHeight - drawH) / 2,
+            width: drawW,
+            height: drawH,
+          });
+        } catch (imgErr) {
+          console.error(`[mergePdfWithEvidence] Failed to embed image ${file.name}:`, imgErr);
+        }
+      }
+    }
+
+    const mergedBytes = await mergedPdf.save();
+    return Buffer.from(mergedBytes);
+  } catch (err) {
+    console.error('[mergePdfWithEvidence] Merging failed, returning main PDF buffer:', err);
+    return mainPdfBuffer;
+  }
 }
 
 // ── STORAGE CONFIG ──
@@ -308,60 +390,85 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ── UPLOAD DOCUMENT ──
-  router.post('/', authenticate, checkPermission('DOC_UPLOAD'), upload.single('file'), async (req: AuthRequest, res: Response) => {
-    try {
-      const { title, categoryId, subCategory, classificationId, documentNumber, documentType, approvalFlowType, status, documentDate, receivedDate } = req.body;
-      const file = req.file;
-  
-      if (!file) {
-        return res.status(400).json({ status: 'error', message: 'File is required' });
-      }
-  
-      if (!title || !categoryId || !classificationId) {
-        return res.status(400).json({ status: 'error', message: 'Missing metadata' });
-      }
+router.post('/', authenticate, checkPermission('DOC_UPLOAD'), upload.any(), async (req: AuthRequest, res: Response) => {
+  try {
+    const { title, categoryId, subCategory, classificationId, documentNumber, documentType, approvalFlowType, status, documentDate, receivedDate } = req.body;
+    const files = (req.files as Express.Multer.File[]) || [];
+    const mainFile = req.file || files.find((f) => f.fieldname === 'file') || files[0];
 
-      // Check if document number is already taken to prevent database constraints crashes
-      if (documentNumber && String(documentNumber).trim()) {
-        const existingDocNum = await prisma.document.findUnique({
-          where: { documentNumber: String(documentNumber).trim() }
+    if (!mainFile) {
+      return res.status(400).json({ status: 'error', message: 'File is required' });
+    }
+
+    if (!title || !categoryId || !classificationId) {
+      return res.status(400).json({ status: 'error', message: 'Missing metadata' });
+    }
+
+    // Check if document number is already taken to prevent database constraints crashes
+    if (documentNumber && String(documentNumber).trim()) {
+      const existingDocNum = await prisma.document.findUnique({
+        where: { documentNumber: String(documentNumber).trim() }
+      });
+      if (existingDocNum) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Nomor surat sudah terdaftar di sistem. Harap gunakan nomor surat yang berbeda.'
         });
-        if (existingDocNum) {
-          return res.status(400).json({
-            status: 'error',
-            message: 'Nomor surat sudah terdaftar di sistem. Harap gunakan nomor surat yang berbeda.'
-          });
-        }
       }
-  
-      // Create Document & Version in a transaction
-      const document = await prisma.document.create({
-        data: {
-          title,
-          documentNumber: documentNumber ? String(documentNumber).trim() || null : null,
-          organizationId: req.user!.organizationId,
-          categoryId,
-          subCategory: subCategory || null,
-          classificationId,
-          documentType: documentType || 'OUTGOING',
-          approvalFlowType: approvalFlowType || 'SEQUENTIAL',
-          creatorId: req.user!.id,
-          status: status || 'DRAFT',
-          documentDate: documentDate ? new Date(documentDate) : null,
-          receivedDate: receivedDate ? new Date(receivedDate) : null,
-          versions: {
-            create: {
-              versionNum: 1,
-              fileUrl: file.path,
-              fileName: file.originalname,
-              fileSize: file.size,
-              mimeType: file.mimetype,
-              createdBy: req.user!.id,
-            },
-          },
+    }
+
+    const supportingFiles = files.filter(
+      (f) =>
+        f !== mainFile &&
+        (f.fieldname === 'dokumenPendukung' ||
+          f.fieldname === 'evidenceFile' ||
+          f.fieldname === 'supportingDocument' ||
+          f.fieldname.startsWith('dokumenPendukung'))
+    );
+
+    const createData: any = {
+      title,
+      documentNumber: documentNumber ? String(documentNumber).trim() || null : null,
+      organizationId: req.user!.organizationId,
+      categoryId,
+      subCategory: subCategory || null,
+      classificationId,
+      documentType: documentType || 'OUTGOING',
+      approvalFlowType: approvalFlowType || 'SEQUENTIAL',
+      creatorId: req.user!.id,
+      status: status || 'DRAFT',
+      documentDate: documentDate ? new Date(documentDate) : null,
+      receivedDate: receivedDate ? new Date(receivedDate) : null,
+      versions: {
+        create: {
+          versionNum: 1,
+          fileUrl: mainFile.path,
+          fileName: mainFile.originalname,
+          fileSize: mainFile.size,
+          mimeType: mainFile.mimetype,
+          createdBy: req.user!.id,
         },
+      },
+    };
+
+    if (supportingFiles.length > 0) {
+      createData.evidenceFiles = {
+        create: supportingFiles.map((sf) => ({
+          name: sf.originalname,
+          fileUrl: sf.path,
+          fileSize: sf.size,
+          mimeType: sf.mimetype,
+          uploaderId: req.user!.id,
+        })),
+      };
+    }
+
+    // Create Document & Version in a transaction
+    const document = await prisma.document.create({
+      data: createData,
       include: {
         versions: true,
+        evidenceFiles: true,
       },
     });
 
@@ -388,6 +495,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         creator: { select: { fullName: true, email: true } },
         versions: { orderBy: { versionNum: 'desc' } },
         signatures: { include: { user: { select: { fullName: true, jobTitle: true } } } },
+        evidenceFiles: { orderBy: { createdAt: 'asc' } },
         workflowInstances: {
           include: {
             steps: { 
@@ -431,6 +539,10 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       versions: document.versions.map(v => ({
         ...v,
         fileUrl: `${baseUrl}/documents/${document.id}/versions/${v.id}/download`
+      })),
+      evidenceFiles: (document.evidenceFiles || []).map(ef => ({
+        ...ef,
+        fileUrl: `${baseUrl}/documents/${document.id}/evidence/files/${ef.id}/download`
       }))
     };
     
@@ -1388,6 +1500,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
             user: { select: { fullName: true, email: true, jobTitle: true } }
           }
         },
+        evidenceFiles: { orderBy: { createdAt: 'asc' } },
         workflowInstances: {
           include: {
             steps: {
@@ -1468,8 +1581,11 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
+        const rawPdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
         await browser.close();
+
+        // Merge supporting documents / evidence files if any
+        const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
 
         const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
         res.setHeader('Content-Type', 'application/pdf');
@@ -1490,6 +1606,19 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         const baseUrl = httpUrlBase;
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
         return res.end(htmlContent);
+      }
+    }
+
+    // If PDF file, check if there are supporting documents to merge
+    if (fileExtension === '.pdf' || version.mimeType === 'application/pdf') {
+      if (document.evidenceFiles && document.evidenceFiles.length > 0) {
+        const rawFileBytes = await fs.promises.readFile(filePath);
+        const mergedBuffer = await mergePdfWithEvidence(rawFileBytes, document.evidenceFiles);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', String(mergedBuffer.length));
+        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.end(mergedBuffer);
       }
     }
 
@@ -1523,6 +1652,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
             user: { select: { fullName: true, email: true, jobTitle: true } }
           }
         },
+        evidenceFiles: { orderBy: { createdAt: 'asc' } },
       }
     });
 
@@ -1572,8 +1702,11 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
+        const rawPdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
         await browser.close();
+
+        // Merge supporting documents / evidence files if any
+        const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
 
         const pdfFileName = version.fileName.replace(/\.(html?|htm)$/i, '.pdf');
         res.setHeader('Content-Type', 'application/pdf');
@@ -1593,6 +1726,19 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         const baseUrl = httpUrlBase;
         const htmlContent = await injectSignaturesToHtml(rawHtml, document.signatures || [], baseUrl);
         return res.end(htmlContent);
+      }
+    }
+
+    // If PDF file, check if there are supporting documents to merge
+    if (fileExtension === '.pdf' || version.mimeType === 'application/pdf') {
+      if (document.evidenceFiles && document.evidenceFiles.length > 0) {
+        const rawFileBytes = await fs.promises.readFile(filePath);
+        const mergedBuffer = await mergePdfWithEvidence(rawFileBytes, document.evidenceFiles);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', String(mergedBuffer.length));
+        res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.end(mergedBuffer);
       }
     }
 
