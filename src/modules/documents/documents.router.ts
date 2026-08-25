@@ -946,9 +946,6 @@ async function ensureExistingFilePath(fileUrl: string, docId?: string, authHeade
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: string): { html: string; injected: boolean } {
   const candidates = row.candidates || [];
-  let match: RegExpExecArray | null = null;
-  let matchedCandidate = "";
-
   let bestMatch: { m: RegExpExecArray, cand: string, score: number, index: number } | null = null;
 
   for (const cand of candidates) {
@@ -957,62 +954,67 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
       .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir|se|ag)$/i.test(t));
     
     if (tokens.length > 0) {
-      // Allow up to 80 chars of any tags/text between tokens (e.g. middle names, titles, HTML tags)
       const patternStr = tokens.map((t: string) => escapeRegExp(t)).join('[\\s\\S]{0,80}?');
       const nameRegex = new RegExp(patternStr, 'gi'); 
       let m: RegExpExecArray | null;
       
       while ((m = nameRegex.exec(htmlContent)) !== null) {
         const prefix = htmlContent.substring(0, m.index);
-        const lastSlice = prefix.slice(Math.max(0, prefix.length - 350));
         
+        // Skip if inside <script> or <style>
+        if (prefix.lastIndexOf('<script') > prefix.lastIndexOf('</script>') ||
+            prefix.lastIndexOf('<style') > prefix.lastIndexOf('</style>')) {
+          continue;
+        }
+
+        const wideSlice = prefix.slice(Math.max(0, prefix.length - 600));
+        const closeSlice = prefix.slice(Math.max(0, prefix.length - 200));
+
         let score = 0;
-        
-        // 1. Proximity to end of document (huge boost for the last 20% of the document)
-        const documentPositionRatio = m.index / htmlContent.length;
-        if (documentPositionRatio > 0.8) score += 20;
-        else if (documentPositionRatio > 0.5) score += 5;
-        else score -= 10; // Penalize matches in the top half
-        
-        // 2. Visually distinct signature block markers in the immediate vicinity
-        const closeSlice = prefix.slice(Math.max(0, prefix.length - 150));
-        if (/(Ketua|Sekretaris|Direktur|Pimpinan|Kepala|Mengetahui|Menyetujui|Ketum|Sekjen)/i.test(closeSlice)) score += 10;
-        
-        if (/(?:<br\s*\/?>\s*){2,}/i.test(closeSlice)) score += 10;
-        if (/margin-bottom:\s*\d{2,}px/i.test(closeSlice)) score += 10;
-        if (/<div[^>]*style="[^"]*height:\s*\d{2,}px/i.test(closeSlice)) score += 10;
-        
-        // 3. Negative indicators
-        // If it's a list item (like in Lampiran: "Sekretaris : Dr..."), penalize heavily!
-        if (/:\s*(<[^>]+>\s*)*$/.test(closeSlice) || /:\s*$/.test(prefix.trim())) score -= 30; // "Name:" or "Name : "
-        if (/:\s*[a-zA-Z.\s<>]*$/.test(closeSlice)) score -= 50; // "Role : Dr. H. "
-        if (/Lampiran/i.test(lastSlice)) score -= 30; // If it's physically near the word Lampiran
-        if (/<li/i.test(closeSlice) && !/<\/li>/i.test(closeSlice)) score -= 20; // Inside a list item
-        
-        if (!bestMatch || score > bestMatch.score || (score === bestMatch.score && m.index > bestMatch.index)) {
+
+        // Negative indicators: Attachment headers (Lampiran 1/Lampiran I), lists, colons like "Wakil Ketua :"
+        if (/Lampiran\s+[0-9I|IVX]+/i.test(prefix)) score -= 100;
+        if (/Wakil\s*(?:Ketua|Sekretaris)\s*:/i.test(wideSlice)) score -= 100;
+        if (/:\s*(<[^>]+>\s*)*$/.test(closeSlice) || /:\s*$/.test(prefix.trim())) score -= 100;
+        if (/<li[^>]*>/i.test(closeSlice) && !/<\/li>/i.test(closeSlice)) score -= 50;
+        if (/<blockquote/i.test(closeSlice) && !/<\/blockquote>/i.test(closeSlice)) score -= 50;
+
+        // Positive indicators: Signature table, role headers, height spacers, placeholder
+        if (/(?:Ketua|Sekretaris|Direktur|Pimpinan|Kepala|Menyetujui|Mengetahui|Ketum|Sekjen)/i.test(wideSlice)) score += 30;
+        if (/(?:<br\s*\/?>\s*){2,}/i.test(wideSlice)) score += 15;
+        if (/margin-bottom:\s*\d{2,}px/i.test(wideSlice)) score += 25;
+        if (/<div[^>]*style="[^"]*height:\s*\d{2,}px/i.test(wideSlice)) score += 25;
+        if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/i.test(wideSlice)) score += 30;
+
+        // Matching specific role
+        if (row.roleName) {
+          const rRegex = new RegExp(escapeRegExp(row.roleName), 'i');
+          if (rRegex.test(wideSlice)) score += 20;
+        }
+
+        if (!bestMatch || score > bestMatch.score) {
           bestMatch = { m, cand, score, index: m.index };
         }
       }
     }
   }
 
-  if (bestMatch && bestMatch.score > -10) {
-    match = bestMatch.m;
-    matchedCandidate = bestMatch.cand;
-  }
-
   const logoBase64 = getLogoDsnBase64();
-  const qrImageHtml = `<div style="text-align:left; margin:-12px 0 4px 0; line-height:1; display:block; position:relative; width:60px; height:60px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:60px !important; height:60px !important; min-width:60px !important; min-height:60px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" /><img src="${logoBase64}" alt="Logo" style="width:16px !important; height:16px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" /></div>`;
+  const logoImg = logoBase64 
+    ? `<img src="${logoBase64}" alt="Logo" style="width:16px !important; height:16px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" />`
+    : `<img src="${baseUrl}/images/logo-dsn.png" alt="Logo" style="width:16px !important; height:16px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" />`;
 
-  if (match) {
-    const matchIndex = match.index;
+  const qrImageHtml = `<div style="text-align:left; margin:-12px 0 4px 0; line-height:1; display:block; position:relative; width:60px; height:60px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:60px !important; height:60px !important; min-width:60px !important; min-height:60px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" />${logoImg}</div>`;
+
+  if (bestMatch && bestMatch.score > 0) {
+    const matchIndex = bestMatch.m.index;
     const prefix = htmlContent.substring(0, matchIndex);
 
     const lastOpenTagIndex = prefix.lastIndexOf('<');
     let targetIndex = matchIndex;
     if (lastOpenTagIndex !== -1) {
       const tagSub = prefix.substring(lastOpenTagIndex);
-      if (/^<(div|p|u|b|strong|span)[^>]*>/i.test(tagSub)) {
+      if (/^<(span|u|b|strong|div|p)[^>]*>/i.test(tagSub)) {
         targetIndex = lastOpenTagIndex;
       }
     }
@@ -1021,16 +1023,24 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
     let suffix = htmlContent.substring(targetIndex);
     suffix = suffix.replace(/^([^>]+style="[^"]*)(?:margin-top|padding-top):\s*\d+px;?/i, "$1margin-top: 2px;");
 
-    const sliceLen = Math.min(1000, realPrefix.length);
+    const sliceLen = Math.min(600, realPrefix.length);
     const prefixBase = realPrefix.slice(0, realPrefix.length - sliceLen);
     const lastSlice = realPrefix.slice(realPrefix.length - sliceLen);
 
-    if (/margin-bottom:\s*\d+px/i.test(lastSlice)) {
+    // If QR placeholder or existing qr-signature-img is already here, skip duplicate injection
+    if (lastSlice.includes('qr-signature-img')) {
+      return { html: htmlContent, injected: true };
+    }
+
+    if (/(<div[^>]*style="[^"]*height:\s*\d+px[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
+      const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:\s*\d+px[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+      return { html: prefixBase + updatedSlice + suffix, injected: true };
+    } else if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi.test(lastSlice)) {
+      const updatedSlice = lastSlice.replace(/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi, qrImageHtml);
+      return { html: prefixBase + updatedSlice + suffix, injected: true };
+    } else if (/margin-bottom:\s*\d+px/i.test(lastSlice)) {
       const updatedSlice = lastSlice.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
       return { html: prefixBase + updatedSlice + qrImageHtml + suffix, injected: true };
-    } else if (/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
-      const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
-      return { html: prefixBase + updatedSlice + suffix, injected: true };
     } else {
       const lastBrMatches = [...lastSlice.matchAll(/(?:<br\s*\/?>\s*){2,}/gi)];
       if (lastBrMatches.length > 0) {
@@ -1046,47 +1056,23 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
     }
   }
 
-  // ── SAFE FALLBACK: Target specific role titles in signature block ("Ketua" or "Sekretaris") ──
-  const roleStr = (row.roleName || '').toLowerCase();
-  const isKetua = /ketua|ketum/i.test(roleStr) || 
-                  (/cholil|nafis|hasan/i.test(row.candidates.join(' '))) ||
-                  (row.signerIndex === 0 && !/sekretaris/i.test(roleStr) && !/amirsyah|tambunan/i.test(row.candidates.join(' ')));
+  // ── SAFE FALLBACK: Target specific role titles in main signature block (before Lampiran) ──
+  const isKetua = row.signerIndex === 0 || /ketua|ketum/i.test(row.roleName || '') || /cholil|nafis/i.test((row.candidates || []).join(' '));
   const targetRole = isKetua ? '(?:Ketua|Menyetujui|Ketum)' : '(?:Sekretaris|Mengetahui|Sekjen)';
-  
-  // Search for role (optional comma) followed by line breaks
-  const roleRegex = new RegExp(`(${targetRole}\\s*,?\\s*(?:<[^>]+>|\\s)*?)(?:<br\\s*\\/?>\\s*){2,}`, 'gi');
-  const roleMatches = [...htmlContent.matchAll(roleRegex)];
-  
-  if (roleMatches.length > 0) {
-    // Pick the LAST match to avoid hitting random headers at the top of the document
-    const lastMatch = roleMatches[roleMatches.length - 1];
-    if (lastMatch && typeof lastMatch.index === 'number') {
-      const p = htmlContent.substring(0, lastMatch.index);
-      const s = htmlContent.substring(lastMatch.index + lastMatch[0].length);
-      const updated = p + lastMatch[1] + qrImageHtml + s;
-      return { html: updated, injected: true };
-    }
-  }
 
-  // Fallback 2: Any role header followed by <p> or <div> spaces (pick the last one)
-  const genericRoleRegex = new RegExp(`(${targetRole})\\s*,?\\s*(?:<[^>]+>|\\s)*?`, 'gi');
-  const genericRoleMatches = [...htmlContent.matchAll(genericRoleRegex)];
-  if (genericRoleMatches.length > 0) {
-    // We only consider it if it's in the bottom half of the document, and NOT inside a Lampiran
-    const validMatches = genericRoleMatches.filter(m => {
-      if (typeof m.index !== 'number' || m.index <= htmlContent.length * 0.4) return false;
-      const surrounding = htmlContent.substring(Math.max(0, m.index - 500), m.index + 100);
-      if (/Lampiran/i.test(surrounding)) return false; // Ignore roles inside attachments
-      return true;
-    });
-    const lastMatch = validMatches.length > 0 ? validMatches[validMatches.length - 1] : genericRoleMatches[genericRoleMatches.length - 1];
-    
-    if (lastMatch && typeof lastMatch.index === 'number') {
-      const idx = lastMatch.index + lastMatch[0].length;
-      const p = htmlContent.substring(0, idx);
-      const s = htmlContent.substring(idx);
-      return { html: p + qrImageHtml + s, injected: true };
-    }
+  // Find targetRole before any Lampiran
+  const lampiranMatch = htmlContent.match(/Lampiran\s+[0-9I|IVX]+/i);
+  const lampiranIndex = lampiranMatch ? lampiranMatch.index : -1;
+  const searchContent = lampiranIndex !== -1 ? htmlContent.substring(0, lampiranIndex) : htmlContent;
+
+  const roleRegex = new RegExp(`(${targetRole}\\s*,?\\s*(?:<[^>]+>|\\s)*?)(?:<div[^>]*style="[^"]*height:[^"]*"[^>]*>\\s*<\\/div>|(?:<br\\s*\\/?>\\s*){2,})`, 'i');
+  const roleMatch = roleRegex.exec(searchContent);
+  if (roleMatch) {
+    const idx = roleMatch.index;
+    const matchLen = roleMatch[0].length;
+    const p = htmlContent.substring(0, idx);
+    const s = htmlContent.substring(idx + matchLen);
+    return { html: p + roleMatch[1] + qrImageHtml + s, injected: true };
   }
 
   return { html: htmlContent, injected: false };
@@ -1109,9 +1095,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     }
   }
 
-  // Only inject QR codes for PENANDATANGAN (final signers), not for PEMPARAF or APPROVER.
-  // If the document has metadata with penandatanganSteps, restrict to those user IDs.
-  // Fall back to all signed sigs for legacy documents without metadata.
+  // Only inject QR codes for PENANDATANGAN (final signers), never for PEMPARAF or APPROVER.
   const penandatanganUserIds = penandatanganSteps.map((st: any) => st.userId).filter(Boolean);
   const signerSigs = penandatanganUserIds.length > 0
     ? signedSigs.filter((s: any) => penandatanganUserIds.includes(s.userId))
@@ -1120,7 +1104,6 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   let documentNumber = '';
   if (signedSigs.length > 0 && signedSigs[0].documentId) {
     try {
-      // Lazy load prisma or it might be in scope (documents.router.ts has prisma imported at the top)
       const { prisma } = await import('../../lib/prisma.js');
       const docInfo = await prisma.document.findUnique({
         where: { id: signedSigs[0].documentId },
@@ -1140,7 +1123,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
       margin: 0,
       width: 240,
       color: { dark: '#1F3F23', light: '#FFFFFF' },
-      errorCorrectionLevel: 'H' // High error correction to allow logo overlay
+      errorCorrectionLevel: 'H'
     });
 
     const signerIndex = penandatanganSteps.findIndex((st: any) => st.userId === s.userId);
@@ -1166,6 +1149,8 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
       if (isUserKetua && templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
       if (isUserSekretaris && templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
       if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
+      if (signerIndex === 0 && templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
+      if (signerIndex === 1 && templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
     }
     
     // Fallbacks for known signers if they use weird accounts
@@ -1176,7 +1161,6 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
       candidates.push("AMIRSYAH TAMBUNAN");
       candidates.push("ANWAR ABBAS");
     } else {
-      // If we really don't know, we can push template variables just in case
       if (templateVariables.namaKetua && signerIndex === 0) candidates.push(templateVariables.namaKetua);
       if (templateVariables.namaSekretaris && signerIndex === 1) candidates.push(templateVariables.namaSekretaris);
     }
@@ -1203,7 +1187,10 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     };
   }));
 
+  // Clean up any previously misplaced QR codes in Lampiran before injecting fresh QR codes
   let htmlContent = rawHtml;
+  htmlContent = htmlContent.replace(/<div style="text-align:left;[^>]*><img[^>]*class="qr-signature-img"[^>]*><img[^>]*alt="Logo"[^>]*><\/div>/g, '');
+  htmlContent = htmlContent.replace(/<div style="text-align:center;[^>]*><img[^>]*class="qr-signature-img"[^>]*><img[^>]*alt="Logo"[^>]*><\/div>/g, '');
 
   const kopBase64 = getKopSuratBase64();
   const bismillahBase64 = getBismillahBase64();
@@ -1454,7 +1441,7 @@ router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req:
     if (document.workflowInstances) {
       document.workflowInstances.forEach((wf: any) => {
         (wf.steps || []).forEach((st: any) => {
-          if (st.status === 'APPROVED' && st.userId) {
+          if (st.status === 'APPROVED' && st.userId && (!st.roleId || st.roleId === 'PENANDATANGAN')) {
             const exists = allSignatures.some((sig: any) => sig.userId === st.userId);
             if (!exists) {
               allSignatures.push({

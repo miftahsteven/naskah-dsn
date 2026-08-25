@@ -425,20 +425,31 @@ router.post('/action', authenticate, async (req: AuthRequest, res: Response) => 
 
 
     if (action === 'APPROVE') {
-      // 1. Mark current step as APPROVED and record signature if needed
-      await prisma.$transaction([
+      // 1. Mark current step as APPROVED
+      // Only record documentSignature if the user is a PENANDATANGAN (final signer).
+      // PEMPARAF and APPROVER steps do not get a document signature / QR code on the letter.
+      const isPenandatangan = !step.roleId || step.roleId === 'PENANDATANGAN';
+
+      const transactionOps: any[] = [
         prisma.documentWorkflowStep.update({
           where: { id: stepId },
           data: { status: 'APPROVED', comment, actionedAt: new Date() },
-        }),
-        prisma.documentSignature.create({
-          data: {
-            documentId: step.workflowInstance.documentId,
-            userId: req.user!.id,
-            signedAt: new Date(),
-          }
         })
-      ]);
+      ];
+
+      if (isPenandatangan) {
+        transactionOps.push(
+          prisma.documentSignature.create({
+            data: {
+              documentId: step.workflowInstance.documentId,
+              userId: req.user!.id,
+              signedAt: new Date(),
+            }
+          })
+        );
+      }
+
+      await prisma.$transaction(transactionOps);
 
       const docTitle = step.workflowInstance.document.title;
       const creatorId = step.workflowInstance.document.creatorId;
