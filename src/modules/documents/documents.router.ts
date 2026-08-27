@@ -1,5 +1,6 @@
 
 import { calculateAttendees } from '../meeting/meeting.router.js';
+import { FOOTER_HTML } from '../letter-template/default-templates.js';
 
 import { Router } from 'express';
 import type { Response, Request } from 'express';
@@ -1004,7 +1005,7 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
     ? `<img src="${logoBase64}" alt="Logo" style="width:16px !important; height:16px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" />`
     : `<img src="${baseUrl}/images/logo-dsn.png" alt="Logo" style="width:16px !important; height:16px !important; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:2; background:#fff; border-radius:50%; padding:2px; object-fit:contain; border:1px solid #1F3F23;" />`;
 
-  const qrImageHtml = `<div style="text-align:left; margin:-12px 0 4px 0; line-height:1; display:block; position:relative; width:60px; height:60px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:60px !important; height:60px !important; min-width:60px !important; min-height:60px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" />${logoImg}</div>`;
+  const qrImageHtml = `<div style="text-align:left; margin:4px 0 4px 0; line-height:1; display:block; position:relative; width:60px; height:60px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:60px !important; height:60px !important; min-width:60px !important; min-height:60px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" />${logoImg}</div>`;
 
   if (bestMatch && bestMatch.score > 0) {
     const matchIndex = bestMatch.m.index;
@@ -1187,8 +1188,9 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     };
   }));
 
-  // Clean up any previously misplaced QR codes in Lampiran before injecting fresh QR codes
+  // Clean up any previously injected styles or misplaced QR codes before injecting fresh styles and QR codes
   let htmlContent = rawHtml;
+  htmlContent = htmlContent.replace(/<style id="amanah-kop-styles">[\s\S]*?<\/style>/gi, '');
   htmlContent = htmlContent.replace(/<div style="text-align:left;[^>]*><img[^>]*class="qr-signature-img"[^>]*><img[^>]*alt="Logo"[^>]*><\/div>/g, '');
   htmlContent = htmlContent.replace(/<div style="text-align:center;[^>]*><img[^>]*class="qr-signature-img"[^>]*><img[^>]*alt="Logo"[^>]*><\/div>/g, '');
 
@@ -1209,6 +1211,22 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     <img src="${bismillahBase64}" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
   </div>`;
     htmlContent = htmlContent.replace(kopPlaceholderRegex, headerReplacement);
+  }
+
+  // Retroactively resolve un-interpolated FOOTER_HTML strings in static document HTML files
+  const footerPlaceholderRegex = /(\\?\${FOOTER_HTML}|\${FOOTER_HTML})/g;
+  if (footerPlaceholderRegex.test(htmlContent)) {
+    htmlContent = htmlContent.replace(footerPlaceholderRegex, FOOTER_HTML);
+  }
+
+  // Ensure every completed/rendered letter has the official TTE footer element
+  if (!htmlContent.includes('amanah-letter-footer')) {
+    const lastClosingDiv = htmlContent.lastIndexOf('</div>');
+    if (lastClosingDiv !== -1) {
+      htmlContent = htmlContent.substring(0, lastClosingDiv) + FOOTER_HTML + '\n' + htmlContent.substring(lastClosingDiv);
+    } else {
+      htmlContent += '\n' + FOOTER_HTML;
+    }
   }
 
   // Replace any relative or absolute image references with self-contained Base64 Data URLs
@@ -1326,12 +1344,32 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
         display: inline-block !important;
         object-fit: contain !important;
       }
-      /* Force negative margin to pull QR Code up into jabatan */
+      /* QR Code container spacing - ensure clean margin above & below without covering text */
       div[style*="width: 60px"][style*="height: 60px"],
       div[style*="width: 70px"][style*="height: 70px"] {
-        margin: -12px 0 4px 0 !important;
+        margin: 4px 0 4px 0 !important;
         width: 60px !important;
         height: 60px !important;
+      }
+      /* Official TTE Footer - Hidden on screen preview, fixed at bottom edge on print/PDF */
+      @media screen {
+        .amanah-letter-footer {
+          display: none !important;
+        }
+      }
+      @media print {
+        .amanah-letter-footer {
+          display: table !important;
+          position: fixed !important;
+          bottom: 5mm !important;
+          left: 15mm !important;
+          right: 15mm !important;
+          width: calc(100% - 30mm) !important;
+          max-width: 750px !important;
+          margin: 0 auto !important;
+          background: transparent !important;
+          z-index: 99999 !important;
+        }
       }
     </style>
   `;

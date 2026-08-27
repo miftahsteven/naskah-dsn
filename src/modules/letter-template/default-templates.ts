@@ -7,6 +7,21 @@ export const HEADER_HTML = `<div style="text-align: center; margin-bottom: 4px; 
     <img src="/images/bismillah.svg" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
   </div>`;
 
+export const FOOTER_HTML = `<table class="amanah-letter-footer" style="display: none; width: 100%; border-collapse: collapse; margin-top: 14px; font-family: Arial, sans-serif;">
+    <tr>
+      <td style="vertical-align: middle; text-align: left; padding: 2px 10px 2px 0; font-size: 7.5pt; line-height: 1.35; font-style: italic; color: #1f2937;">
+        Dokumen ini telah ditandatangani secara elektronik oleh Sistem Digital Amanah dibawah otoritas Dewan Syariah Nasional-Majelis Ulama Indonesia. Untuk memastikan keaslian tanda tangan elektronik, silahkan pindai QR-Code
+      </td>
+      <td style="vertical-align: middle; text-align: right; width: 32px; padding: 2px 0;">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: inline-block; vertical-align: middle;">
+          <path d="M16 2L5 6.5V14.5C5 21.2 9.7 27.5 16 29.5C22.3 27.5 27 21.2 27 14.5V6.5L16 2Z" fill="#006633" stroke="#004D26" stroke-width="1.5" stroke-linejoin="round"/>
+          <circle cx="16" cy="16" r="8.5" fill="#006633" stroke="#ffffff" stroke-width="1" stroke-dasharray="2 1.5"/>
+          <path d="M12 16L14.8 18.8L20.5 13" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </td>
+    </tr>
+  </table>`;
+
 export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
   \${HEADER_HTML}
 
@@ -80,6 +95,7 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
             <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
             <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
@@ -95,6 +111,8 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
         </td>
       </tr>
     </table>
+
+    \${FOOTER_HTML}
   </div>
 </div>`;
 
@@ -198,6 +216,7 @@ export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
             <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
             <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
@@ -213,6 +232,8 @@ export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font
         </td>
       </tr>
     </table>
+
+    \${FOOTER_HTML}
   </div>
 </div>`;
 
@@ -336,6 +357,7 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
             <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
             <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
@@ -374,6 +396,8 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
       {{agendaRapatLampiran}}
     </div>
   </div>
+
+  \${FOOTER_HTML}
 </div>`;
 
 export const FULL_VARS_UNDANGAN_FATWA = [
@@ -492,6 +516,7 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
             <div style="font-weight: bold; font-size: 10pt;">{{jabatanKiri}},</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
             <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
@@ -530,6 +555,8 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
       {{agendaDetail}}
     </div>
   </div>
+
+  \${FOOTER_HTML}
 </div>`;
 
 export const FULL_VARS_UNDANGAN_BPH = [
@@ -651,6 +678,7 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
             <div style="font-weight: bold; font-size: 10pt;">{{jabatanKiri}},</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
             <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
@@ -689,6 +717,8 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
       {{agendaDetail}}
     </div>
   </div>
+
+  \${FOOTER_HTML}
 </div>`;
 
 export const FULL_VARS_UNDANGAN_KESEKRETARISAN = [
@@ -810,6 +840,7 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
             <div style="font-weight: bold; font-size: 10pt;">{{jabatanKiri}},</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
             <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
@@ -846,6 +877,8 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
       {{agendaDetail}}
     </div>
   </div>
+
+  \${FOOTER_HTML}
 </div>`;
 
 export const FULL_VARS_UNDANGAN_LAYANAN = [
@@ -979,6 +1012,7 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
             <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
             <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
@@ -994,6 +1028,8 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
         </td>
       </tr>
     </table>
+
+    \${FOOTER_HTML}
   </div>
 </div>`;
 
@@ -1096,6 +1132,7 @@ export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif
           </div>
           <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
           <div style="font-weight: normal; font-size: 10.5pt;">{{jabatanKiri}},</div>
+          <!-- QR_CODE_TTE_PLACEHOLDER -->
           <div style="height: 55px;"></div>
           <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
         </div>
@@ -1124,6 +1161,8 @@ export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif
       </td>
     </tr>
   </table>
+
+  \${FOOTER_HTML}
 </div>`;
 
 export const FULL_VARS_SURAT_TUGAS = [

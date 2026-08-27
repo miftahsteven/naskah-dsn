@@ -4,7 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 import { authenticate } from '../../middleware/auth.js';
 import type { AuthRequest } from '../../middleware/auth.js';
 import { getKopSuratBase64, getBismillahBase64, getLogoDsnBase64, getWqaUkasBase64 } from '../documents/documents.router.js';
-import { DEFAULT_TEMPLATES, HEADER_HTML } from './default-templates.js';
+import { DEFAULT_TEMPLATES, HEADER_HTML, FOOTER_HTML } from './default-templates.js';
 
 const router = Router();
 
@@ -20,13 +20,23 @@ router.post('/seed', authenticate, async (_req: AuthRequest, res: Response) => {
           description: tpl.description,
           htmlContent: tpl.htmlContent,
           variables: tpl.variables,
+          isArchived: false,
         },
-        create: tpl,
+        create: {
+          name: tpl.name,
+          code: tpl.code,
+          category: tpl.category,
+          description: tpl.description,
+          htmlContent: tpl.htmlContent,
+          variables: tpl.variables,
+          isArchived: false,
+        },
       });
     }
-    res.json({ status: 'success', message: 'Default templates seeded.' });
-  } catch (error: any) {
-    res.status(500).json({ status: 'error', message: error.message });
+    return res.json({ message: 'Default templates seeded successfully', count: DEFAULT_TEMPLATES.length });
+  } catch (error) {
+    console.error('Error seeding templates:', error);
+    return res.status(500).json({ error: 'Failed to seed default templates' });
   }
 });
 
@@ -49,6 +59,10 @@ function sanitizeTemplateHtml(html: string): string {
     <img src="${bismillahBase64}" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
   </div>`;
     out = out.replace(kopPlaceholderRegex, headerReplacement);
+  }
+  const footerPlaceholderRegex = /(\\?\${FOOTER_HTML}|\${FOOTER_HTML})/g;
+  if (footerPlaceholderRegex.test(out)) {
+    out = out.replace(footerPlaceholderRegex, FOOTER_HTML);
   }
   out = out.replace(/src=["'][^"']*kop-surat\.png["']/gi, `src="${kopBase64}" class="kop-surat-img"`);
   out = out.replace(/src=["'][^"']*bismillah\.svg["']/gi, `src="${bismillahBase64}"`);
