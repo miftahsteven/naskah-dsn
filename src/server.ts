@@ -121,34 +121,37 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
       return next();
     }
 
-    const filePath = path.resolve('uploads', subPath);
-    let html = '';
-    if (fs.existsSync(filePath)) {
-      html = fs.readFileSync(filePath, 'utf8');
-    } else {
-      // Fetch from production if not found on local disk
-      try {
-        const prodRes = await fetch(`https://amanah.dsnmui.or.id/uploads/${subPath}`);
-        if (prodRes.ok) {
-          html = await prodRes.text();
-          // Cache locally
-          await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-          await fs.promises.writeFile(filePath, html, 'utf8');
-        } else {
-          return next();
-        }
-      } catch {
-        return next();
+    const candidates = [
+      path.resolve(process.cwd(), 'uploads', subPath),
+      path.resolve(process.cwd(), '../uploads', subPath),
+      path.resolve('/var/www/mui-dsn-naskah/backend/uploads', subPath),
+      path.resolve('/var/www/mui-dsn-naskah/uploads', subPath),
+      path.resolve(process.cwd(), 'uploads', path.basename(subPath)),
+      path.resolve('/var/www/mui-dsn-naskah/backend/uploads', path.basename(subPath)),
+    ];
+
+    let foundPath: string | null = null;
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        foundPath = c;
+        break;
       }
     }
 
+    if (!foundPath) {
+      return next();
+    }
+
+    const html = fs.readFileSync(foundPath, 'utf8');
+
     // Look up this version in DB to check if SIGNED
     const version = await prisma.documentVersion.findFirst({
-      where: { fileUrl: { contains: subPath } },
+      where: { fileUrl: { contains: path.basename(subPath) } },
       include: { document: true }
     });
 
     const doc = version?.document;
+    let finalHtml = html;
     if (doc && doc.status === 'SIGNED' && html.includes('<!-- QR_CODE_TTE_PLACEHOLDER -->')) {
       const frontendUrl = process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id';
       const verifyUrl = `${frontendUrl}/verify/document/${doc.id}`;
@@ -172,13 +175,13 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
         </div>
       `;
 
-      html = html.replace('<!-- QR_CODE_TTE_PLACEHOLDER -->', qrHtml);
+      finalHtml = html.replace('<!-- QR_CODE_TTE_PLACEHOLDER -->', qrHtml);
     }
 
-    html = html.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
+    finalHtml = finalHtml.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(html);
+    return res.send(finalHtml);
   } catch (error) {
     console.error('[Uploads HTML Interceptor] Error:', error);
     next();
@@ -187,29 +190,11 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
 
 // Fallback static file server for non-HTML files (images, PDFs, etc.)
 uploadsRouter.use(express.static('uploads'));
-
-// Proxy fallback for non-HTML files not present locally
-uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return next();
-  }
-  const subPath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
-  const targetPath = path.resolve('uploads', subPath);
-  try {
-    const prodRes = await fetch(`https://amanah.dsnmui.or.id/uploads/${subPath}`);
-    if (prodRes.ok) {
-      const buffer = Buffer.from(await prodRes.arrayBuffer());
-      await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.promises.writeFile(targetPath, buffer);
-      return res.sendFile(targetPath);
-    }
-  } catch (e) {
-    console.warn(`[Uploads Proxy] Failed to proxy ${subPath} from production:`, e);
-  }
-  next();
-});
+uploadsRouter.use(express.static(path.resolve(process.cwd(), 'uploads')));
+uploadsRouter.use(express.static(path.resolve(process.cwd(), '../uploads')));
 
 app.use('/uploads', uploadsRouter);
+app.use('/api/uploads', uploadsRouter);
 app.use('/images', express.static(path.join(process.cwd(), 'public/images')));
 app.use('/api/images', express.static(path.join(process.cwd(), 'public/images')));
 app.use(express.static(path.join(process.cwd(), 'public')));

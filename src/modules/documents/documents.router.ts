@@ -858,16 +858,32 @@ async function launchPuppeteerBrowser() {
 function resolveExistingFilePath(fileUrl: string): string | null {
   if (!fileUrl) return null;
 
+  const cleanPath = fileUrl.replace(/^\/+/, '');
+  const relPathWithoutUploads = cleanPath.replace(/^uploads\/+/, '');
   const filename = path.basename(fileUrl);
+
   const candidates = [
-    path.isAbsolute(fileUrl) ? fileUrl : null,
-    path.resolve(process.cwd(), fileUrl),
-    path.resolve(process.cwd(), 'backend', fileUrl),
+    fs.existsSync(fileUrl) ? fileUrl : null,
+    path.resolve(process.cwd(), cleanPath),
+    path.resolve(process.cwd(), 'backend', cleanPath),
+    path.resolve(process.cwd(), '../', cleanPath),
+    path.resolve('/var/www/mui-dsn-naskah/backend', cleanPath),
+    path.resolve('/var/www/mui-dsn-naskah', cleanPath),
+    path.resolve(process.cwd(), uploadDir, relPathWithoutUploads),
+    path.resolve(process.cwd(), 'backend', uploadDir, relPathWithoutUploads),
+    path.resolve(process.cwd(), 'uploads', relPathWithoutUploads),
+    path.resolve(process.cwd(), 'backend/uploads', relPathWithoutUploads),
+    path.resolve('/var/www/mui-dsn-naskah/backend/uploads', relPathWithoutUploads),
+    path.resolve('/var/www/mui-dsn-naskah/uploads', relPathWithoutUploads),
     path.resolve(process.cwd(), uploadDir, filename),
     path.resolve(process.cwd(), 'backend', uploadDir, filename),
     path.resolve(process.cwd(), 'uploads', filename),
     path.resolve(process.cwd(), 'backend/uploads', filename),
+    path.resolve('/var/www/mui-dsn-naskah/backend/uploads', filename),
+    path.resolve('/var/www/mui-dsn-naskah/uploads', filename),
+    path.resolve(__dirname, '../../uploads', relPathWithoutUploads),
     path.resolve(__dirname, '../../uploads', filename),
+    path.resolve(__dirname, '../../../uploads', relPathWithoutUploads),
     path.resolve(__dirname, '../../../uploads', filename),
     path.resolve(__dirname, '../../../../uploads', filename),
   ].filter(Boolean) as string[];
@@ -881,52 +897,7 @@ function resolveExistingFilePath(fileUrl: string): string | null {
 }
 
 async function ensureExistingFilePath(fileUrl: string, docId?: string, authHeader?: string): Promise<string | null> {
-  const local = resolveExistingFilePath(fileUrl);
-  if (local) return local;
-
-  const filename = path.basename(fileUrl);
-  const targetPath = path.resolve(process.cwd(), 'uploads', filename);
-  try {
-    const headers: Record<string, string> = {};
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
-
-    // Try 1: If docId is provided, fetch rendered HTML from production
-    if (docId) {
-      const prodRenderUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/render`;
-      const res = await fetch(prodRenderUrl, { headers });
-      if (res.ok) {
-        const text = await res.text();
-        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-        await fs.promises.writeFile(targetPath, text, 'utf8');
-        return targetPath;
-      }
-
-      // Try download endpoint as fallback
-      const prodDownloadUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/download`;
-      const dlRes = await fetch(prodDownloadUrl, { headers });
-      if (dlRes.ok) {
-        const buffer = Buffer.from(await dlRes.arrayBuffer());
-        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-        await fs.promises.writeFile(targetPath, buffer);
-        return targetPath;
-      }
-    }
-
-    // Try 2: Direct upload URL
-    const prodUploadUrl = `https://amanah.dsnmui.or.id/uploads/${filename}`;
-    const directRes = await fetch(prodUploadUrl, { headers });
-    if (directRes.ok) {
-      const buffer = Buffer.from(await directRes.arrayBuffer());
-      await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.promises.writeFile(targetPath, buffer);
-      return targetPath;
-    }
-  } catch (err) {
-    console.warn(`[Sync] Failed to fetch missing file ${filename} from production:`, err);
-  }
-  return null;
+  return resolveExistingFilePath(fileUrl);
 }
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: string): { html: string; injected: boolean } {
@@ -1063,6 +1034,26 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   return { html: htmlContent, injected: false };
 }
 
+const qrCodeCache = new Map<string, string>();
+
+async function getCachedQrCode(payload: string): Promise<string> {
+  if (qrCodeCache.has(payload)) {
+    return qrCodeCache.get(payload)!;
+  }
+  const qrDataUrl = await qrcode.toDataURL(payload, {
+    margin: 0,
+    width: 240,
+    color: { dark: '#1F3F23', light: '#FFFFFF' },
+    errorCorrectionLevel: 'H'
+  });
+  if (qrCodeCache.size > 500) {
+    const firstKey = qrCodeCache.keys().next().value;
+    if (firstKey) qrCodeCache.delete(firstKey);
+  }
+  qrCodeCache.set(payload, qrDataUrl);
+  return qrDataUrl;
+}
+
 async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
   const signedSigs = (signatures || []).filter((s: any) => s.signedAt);
 
@@ -1104,12 +1095,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     const frontendUrl = process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id';
     const payload = `${frontendUrl}/verify/document/${s.documentId}`;
     
-    const qrDataUrl = await qrcode.toDataURL(payload, {
-      margin: 0,
-      width: 240,
-      color: { dark: '#1F3F23', light: '#FFFFFF' },
-      errorCorrectionLevel: 'H'
-    });
+    const qrDataUrl = await getCachedQrCode(payload);
 
     const signerIndex = penandatanganSteps.findIndex((st: any) => st.userId === s.userId);
 
@@ -1597,7 +1583,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
 // ── RENDER DOCUMENT HTML (with QR codes, for client-side PDF conversion) ──
 // This endpoint always returns the processed HTML (with signatures injected).
 // The frontend uses html2pdf.js to convert to PDF client-side so we never depend on Puppeteer.
-router.get('/:id/render', authenticate, checkPermission('DOC_VIEW'), async (req: AuthRequest, res: Response) => {
+router.get('/:id/render', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
