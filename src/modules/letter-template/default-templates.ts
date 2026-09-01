@@ -1,18 +1,18 @@
-export const HEADER_HTML = `<div style="text-align: center; margin-bottom: 4px; margin-left: -30px; margin-right: -30px; padding-top: 10px;">
-    <img src="/images/kop-surat.png" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 750px; height: auto; display: block; margin: 0 auto;" />
+export const HEADER_HTML = `<div style="text-align: center; margin-bottom: 4px; margin-left: 0; margin-right: 0; padding-top: 0;">
+    <img src="/images/kop-surat.png" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 100%; height: auto; display: block; margin: 0 auto;" />
   </div>
 
   <!-- Bismillah Calligraphy -->
-  <div style="text-align: center; margin-top: 2px; margin-bottom: 6px;">
-    <img src="/images/bismillah.svg" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
+  <div style="text-align: center; margin-top: 8px; margin-bottom: 14px;">
+    <img src="/images/bismillah.svg" alt="Bismillah" style="width: 260px; max-width: 45%; height: auto; max-height: 48px; object-fit: contain; filter: brightness(0); display: block; margin: 8px auto 14px auto;" />
   </div>`;
 
-export const FOOTER_HTML = `<table class="amanah-letter-footer" style="display: none; width: 100%; border-collapse: collapse; margin-top: 14px; font-family: Arial, sans-serif;">
+export const FOOTER_HTML = `<table class="amanah-letter-footer" style="width: 100%; border-collapse: collapse; font-family: Arial, sans-serif;">
     <tr>
-      <td style="vertical-align: middle; text-align: left; padding: 2px 10px 2px 0; font-size: 7.5pt; line-height: 1.35; font-style: italic; color: #1f2937;">
+      <td style="vertical-align: middle; text-align: left; padding: 4px 10px 4px 0; font-size: 7.5pt; line-height: 1.25; font-style: italic; color: #1f2937; border-top: 1px solid #e5e7eb;">
         Dokumen ini telah ditandatangani secara elektronik oleh Sistem Digital Amanah dibawah otoritas Dewan Syariah Nasional-Majelis Ulama Indonesia. Untuk memastikan keaslian tanda tangan elektronik, silahkan pindai QR-Code
       </td>
-      <td style="vertical-align: middle; text-align: right; width: 32px; padding: 2px 0;">
+      <td style="vertical-align: middle; text-align: right; width: 32px; padding: 4px 0; border-top: 1px solid #e5e7eb;">
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: inline-block; vertical-align: middle;">
           <path d="M16 2L5 6.5V14.5C5 21.2 9.7 27.5 16 29.5C22.3 27.5 27 21.2 27 14.5V6.5L16 2Z" fill="#006633" stroke="#004D26" stroke-width="1.5" stroke-linejoin="round"/>
           <circle cx="16" cy="16" r="8.5" fill="#006633" stroke="#ffffff" stroke-width="1" stroke-dasharray="2 1.5"/>
@@ -22,12 +22,12 @@ export const FOOTER_HTML = `<table class="amanah-letter-footer" style="display: 
     </tr>
   </table>`;
 
-export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
-    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
       <tr>
         <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
         <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
@@ -42,7 +42,7 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 11pt; line-height: 1.35;">
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
     <tr><td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td><td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{nomorSurat}}</td></tr>
     <tr><td style="vertical-align: top; padding: 2px 0;">Lamp.</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{lampiran}}</td></tr>
     <tr><td style="vertical-align: top; padding: 2px 0;">Hal</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="font-weight: bold; padding: 2px 0;">{{perihal}}</td></tr>
@@ -51,7 +51,7 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
   <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
   <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
-    <div style="margin-bottom: 12px; font-size: 11pt; line-height: 1.35;">
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
       <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{namaLembaga}}</div>
       <div>di -</div>
@@ -60,13 +60,13 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
 
     <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Sehubungan dengan permohonan kesesuaian syariah atas <strong>{{namaTransaksi}}</strong>
       yang diajukan oleh <strong>{{namaPemohon}}</strong> pada tanggal <strong>{{tanggalPermohonan}}</strong>,
       dengan ini Dewan Syariah Nasional – Majelis Ulama Indonesia (DSN-MUI) menyatakan bahwa:
     </p>
 
-    <ol style="text-align: justify; margin-top: 0; margin-bottom: 8px; margin-left: 0; padding-left: 20px; line-height: 1.35;">
+    <ol style="text-align: justify; margin-top: 0; margin-bottom: 8px; margin-left: 0; padding-left: 20px; line-height: 1.25;">
       <li style="margin-bottom: 6px;">
         <strong>{{namaTransaksi}}</strong> yang dilaksanakan oleh <strong>{{namaPelaksana}}</strong>
         <strong>telah sesuai dengan ketentuan syariah</strong> berdasarkan fatwa DSN-MUI
@@ -82,7 +82,7 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
       </li>
     </ol>
 
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Demikian Pernyataan Kesesuaian Syariah ini kami sampaikan untuk dapat dipergunakan sebagaimana mestinya.
     </p>
 
@@ -94,19 +94,19 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
         <td style="width: 45%; vertical-align: top; padding: 0; text-align: left;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Ketua,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
         </td>
         <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Sekretaris,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Sekretaris,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
           </div>
         </td>
       </tr>
@@ -137,12 +137,12 @@ export const FULL_VARS_PKS = [
   { key: 'namaSekretaris', label: 'Nama Sekretaris DSN-MUI', type: 'text', required: true, placeholder: 'Dr. H. Anwar Abbas, M.M., M.Ag.' },
 ];
 
-export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
-    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
       <tr>
         <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
         <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
@@ -157,7 +157,7 @@ export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 11pt; line-height: 1.35;">
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
     <tr><td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td><td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{nomorSurat}}</td></tr>
     <tr><td style="vertical-align: top; padding: 2px 0;">Lamp.</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{lampiran}}</td></tr>
     <tr><td style="vertical-align: top; padding: 2px 0;">Hal</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="font-weight: bold; padding: 2px 0;">Opini Syariah atas {{perihal}}</td></tr>
@@ -166,7 +166,7 @@ export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font
   <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
   <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
-    <div style="margin-bottom: 12px; font-size: 11pt; line-height: 1.35;">
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
       <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{namaLembaga}}</div>
       <div>di -</div>
@@ -175,35 +175,35 @@ export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font
 
     <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Menanggapi surat/permohonan dari <strong>{{namaPemohon}}</strong> Nomor <strong>{{nomorSuratPermohonan}}</strong>
       tanggal <strong>{{tanggalPermohonan}}</strong> perihal <strong>{{perihal}}</strong>,
       setelah melakukan kajian mendalam, dengan ini DSN-MUI menyampaikan Opini Syariah sebagai berikut:
     </p>
 
     <p style="font-weight: bold; margin-top: 0; margin-bottom: 4px;">A. Deskripsi Transaksi</p>
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; white-space: pre-line; line-height: 1.35;">{{deskripsiTransaksi}}</p>
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; white-space: pre-line; line-height: 1.25;">{{deskripsiTransaksi}}</p>
 
     <p style="font-weight: bold; margin-top: 0; margin-bottom: 4px;">B. Dasar Hukum Syariah</p>
-    <ol style="margin-top: 0; margin-bottom: 8px; margin-left: 0; padding-left: 20px; line-height: 1.35;">
+    <ol style="margin-top: 0; margin-bottom: 8px; margin-left: 0; padding-left: 20px; line-height: 1.25;">
       <li>Al-Qur'an dan Hadis yang relevan;</li>
       <li>Fatwa DSN-MUI Nomor <strong>{{nomorFatwa}}</strong> tentang <strong>{{judulFatwa}}</strong>;</li>
       <li style="white-space: pre-line;">{{dasarHukumTambahan}}</li>
     </ol>
 
     <p style="font-weight: bold; margin-top: 0; margin-bottom: 4px;">C. Opini Syariah</p>
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; line-height: 1.25;">
       Berdasarkan kajian dan analisis syariah, DSN-MUI berpendapat bahwa
       <strong>{{namaTransaksi}}</strong> yang dilaksanakan oleh <strong>{{namaPelaksana}}</strong>
       <strong>selaras dengan prinsip-prinsip syariah</strong>, dengan catatan:
     </p>
-    <ol style="text-align: justify; margin-top: 0; margin-bottom: 8px; margin-left: 0; padding-left: 20px; line-height: 1.35;">
+    <ol style="text-align: justify; margin-top: 0; margin-bottom: 8px; margin-left: 0; padding-left: 20px; line-height: 1.25;">
       <li style="margin-bottom: 6px; white-space: pre-line;">{{syaratSatu}}</li>
       <li style="margin-bottom: 6px; white-space: pre-line;">{{syaratDua}}</li>
       <li style="margin-bottom: 6px;">Apabila terdapat perubahan struktur transaksi, perlu dilakukan kajian ulang untuk memastikan keselarasan syariah.</li>
     </ol>
 
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Demikian Opini Syariah ini kami sampaikan untuk menjadi perhatian dan dapat dipergunakan sebagaimana mestinya.
     </p>
 
@@ -215,19 +215,19 @@ export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font
         <td style="width: 45%; vertical-align: top; padding: 0; text-align: left;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Ketua,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
         </td>
         <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Sekretaris,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Sekretaris,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
           </div>
         </td>
       </tr>
@@ -261,12 +261,12 @@ export const FULL_VARS_OPINI = [
   { key: 'namaSekretaris', label: 'Nama Sekretaris DSN-MUI', type: 'text', required: false, placeholder: 'Dr. H. Anwar Abbas, M.M., M.Ag.' },
 ];
 
-export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
-    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
       <tr>
         <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
         <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
@@ -281,7 +281,7 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 11pt; line-height: 1.35;">
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
     <tr>
       <td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td>
       <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -302,7 +302,7 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
   <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
   <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
-    <div style="margin-bottom: 12px; font-size: 11pt; line-height: 1.35;">
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
       <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{penerimaUndangan}}</div>
       <div>di -</div>
@@ -313,12 +313,12 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
     <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
     <!-- PARAGRAF PEMBUKA -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{perihalRapat}}</strong>, yang insyaAllah akan diadakan pada:
     </p>
 
     <!-- JADWAL TABLE -->
-    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 11pt; line-height: 1.35;">
+    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
       <tr>
         <td style="width: 120px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
         <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -342,7 +342,7 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
     </table>
 
     <!-- PARAGRAF PENUTUP -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
     </p>
 
@@ -356,19 +356,19 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Ketua,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
         </td>
         <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Sekretaris,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Sekretaris,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
           </div>
         </td>
       </tr>
@@ -377,22 +377,22 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
 
   <!-- Page Break for Lampiran 1 -->
   <div style="page-break-before: always; margin-top: 40px;">
-    <div style="font-weight: bold; font-size: 11pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
+    <div style="font-weight: bold; font-size: 10.5pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
       Lampiran 1 Daftar Undangan {{perihal}}<br />
       {{nomorSurat}}
     </div>
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25;">
       {{daftarUndanganLampiran}}
     </div>
   </div>
 
   <!-- Page Break for Lampiran 2 -->
   <div style="page-break-before: always; margin-top: 40px;">
-    <div style="font-weight: bold; font-size: 11pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
+    <div style="font-weight: bold; font-size: 10.5pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
       Lampiran 2 Agenda Rapat {{perihal}}<br />
       {{nomorSurat}}
     </div>
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25;">
       {{agendaRapatLampiran}}
     </div>
   </div>
@@ -420,12 +420,12 @@ export const FULL_VARS_UNDANGAN_FATWA = [
   { key: 'agendaRapatLampiran', label: 'Lampiran 2: Agenda Rapat (Pre-line)', type: 'textarea', required: true, placeholder: 'Pukul 13.00 – 14.00 WIB:\n1. Pembahasan Lanjutan Hasil FGD...\n...' }
 ];
 
-export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
-    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
       <tr>
         <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
         <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
@@ -440,7 +440,7 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 11pt; line-height: 1.35;">
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
     <tr>
       <td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td>
       <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -461,7 +461,7 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
   <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
   <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
-    <div style="margin-bottom: 12px; font-size: 11pt; line-height: 1.35;">
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
       <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{daftarPenerima}}</div>
       <div>di -</div>
@@ -472,12 +472,12 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
     <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
     <!-- PARAGRAF ISI -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
     </p>
 
     <!-- JADWAL TABLE -->
-    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 11pt; line-height: 1.35;">
+    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
       <tr>
         <td style="width: 120px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
         <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -501,7 +501,7 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
     </table>
 
     <!-- PARAGRAF PENUTUP -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
     </p>
 
@@ -515,19 +515,19 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">{{jabatanKiri}},</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKiri}},</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
         </td>
         <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">{{jabatanKanan}},</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKanan}},</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
           </div>
         </td>
       </tr>
@@ -536,22 +536,22 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
 
   <!-- PAGE BREAK FOR LAMPIRAN 1 -->
   <div style="page-break-before: always; margin-top: 40px;">
-    <div style="font-weight: bold; font-size: 11pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
+    <div style="font-weight: bold; font-size: 10.5pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
       Lampiran 1 Daftar Undangan {{perihal}}<br />
       {{nomorSurat}}
     </div>
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25; text-align: justify;">
       {{daftarUndangan}}
     </div>
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
-  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px;">
-    <div style="font-weight: bold; font-size: 11pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
+  <div class="page-break" style="page-break-before: always; margin-top: 40px;">
+    <div style="font-weight: bold; font-size: 10.5pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
       Lampiran 2 Agenda Rapat {{perihal}}<br />
       {{nomorSurat}}
     </div>
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25; text-align: justify;">
       {{agendaDetail}}
     </div>
   </div>
@@ -578,16 +578,15 @@ export const FULL_VARS_UNDANGAN_BPH = [
   { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
   { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
   { key: 'daftarUndangan', label: 'Daftar Undangan Detail (Lampiran 1)', type: 'textarea', required: true, placeholder: '1. Unsur Pimpinan:\n   Ketua : K.H. M. Cholil Nafis, Lc., Ph.D...' },
-  { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: 'Pukul 13.00 - 15.00 WIB:\n1. Laporan...' },
-  { key: 'showAgendaDetail', label: 'Show Agenda Detail', type: 'text', required: false, placeholder: 'block' }
+  { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: 'Pukul 13.00 - 15.00 WIB:\n1. Laporan...' }
 ];
 
-export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
-    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
       <tr>
         <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
         <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
@@ -602,7 +601,7 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 11pt; line-height: 1.35;">
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
     <tr>
       <td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td>
       <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -623,7 +622,7 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
   <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
   <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
-    <div style="margin-bottom: 12px; font-size: 11pt; line-height: 1.35;">
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
       <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{daftarPenerima}}</div>
       <div>di -</div>
@@ -634,12 +633,12 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
     <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
     <!-- PARAGRAF ISI -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
     </p>
 
     <!-- JADWAL TABLE -->
-    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 11pt; line-height: 1.35;">
+    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
       <tr>
         <td style="width: 120px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
         <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -663,7 +662,7 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
     </table>
 
     <!-- PARAGRAF PENUTUP -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
     </p>
 
@@ -677,19 +676,19 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">{{jabatanKiri}},</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKiri}},</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
         </td>
         <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">{{jabatanKanan}},</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKanan}},</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
           </div>
         </td>
       </tr>
@@ -698,22 +697,22 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
 
   <!-- PAGE BREAK FOR LAMPIRAN 1 -->
   <div style="page-break-before: always; margin-top: 40px;">
-    <div style="font-weight: bold; font-size: 11pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
+    <div style="font-weight: bold; font-size: 10.5pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
       Lampiran 1 Daftar Undangan {{perihal}}<br />
       {{nomorSurat}}
     </div>
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25; text-align: justify;">
       {{daftarUndangan}}
     </div>
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
-  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px;">
-    <div style="font-weight: bold; font-size: 11pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
+  <div class="page-break" style="page-break-before: always; margin-top: 40px;">
+    <div style="font-weight: bold; font-size: 10.5pt; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
       Lampiran 2 Agenda Rapat {{perihal}}<br />
       {{nomorSurat}}
     </div>
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25; text-align: justify;">
       {{agendaDetail}}
     </div>
   </div>
@@ -740,16 +739,15 @@ export const FULL_VARS_UNDANGAN_KESEKRETARISAN = [
   { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
   { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
   { key: 'daftarUndangan', label: 'Daftar Undangan Detail (Lampiran 1)', type: 'textarea', required: true, placeholder: 'Sekretaris : Dr. H. Amirsyah Tambunan, M.A\nWakil Sekretaris : Dr. K.H. Moch. Bukhori Muslim, Lc., M.A.\nWakil Sekretaris : Kanny Hidaya, S.E., M.A.\nWakil Sekretaris : Dr. Asrori S. Karni, S.Ag., M.H.\nWakil Sekretaris : Drs. H. Muhammad Ziyad, M.A.' },
-  { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: '1. Tindak Lanjut Keputusan Rapat Pimpinan.\n2. Pembahasan surat-surat Masuk\n3. Dan lain-lain.' },
-  { key: 'showAgendaDetail', label: 'Show Agenda Detail', type: 'text', required: false, placeholder: 'block' }
+  { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: '1. Tindak Lanjut Keputusan Rapat Pimpinan.\n2. Pembahasan surat-surat Masuk\n3. Dan lain-lain.' }
 ];
 
-export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
-    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
       <tr>
         <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
         <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
@@ -764,7 +762,7 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 11pt; line-height: 1.35;">
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
     <tr>
       <td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td>
       <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -785,7 +783,7 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
   <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
   <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
-    <div style="margin-bottom: 12px; font-size: 11pt; line-height: 1.35;">
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
       <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{daftarPenerima}}</div>
       <div>di -</div>
@@ -796,12 +794,12 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
     <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
     <!-- PARAGRAF ISI -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
     </p>
 
     <!-- JADWAL TABLE -->
-    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 11pt; line-height: 1.35;">
+    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
       <tr>
         <td style="width: 120px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
         <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -825,7 +823,7 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
     </table>
 
     <!-- PARAGRAF PENUTUP -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
       Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
     </p>
 
@@ -839,19 +837,19 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">{{jabatanKiri}},</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKiri}},</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
         </td>
         <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">{{jabatanKanan}},</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKanan}},</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
           </div>
         </td>
       </tr>
@@ -859,21 +857,21 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 1 -->
-  <div style="page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+  <div style="page-break-before: always; margin-top: 40px; padding-top: 0;">
     <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan {{namaRapat}}</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25; text-align: justify;">
       {{daftarUndangan}}
     </div>
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
-  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+  <div class="page-break" style="page-break-before: always; margin-top: 40px; padding-top: 0;">
     <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat {{namaRapat}}</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.25; text-align: justify;">
       {{agendaDetail}}
     </div>
   </div>
@@ -900,16 +898,15 @@ export const FULL_VARS_UNDANGAN_LAYANAN = [
   { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
   { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
   { key: 'daftarUndangan', label: 'Daftar Undangan Detail (Lampiran 1)', type: 'textarea', required: true, placeholder: '1. Unsur Pimpinan:\n   Wakil Ketua : K.H. Sholahudin Al Aiyub\n   Wakil Ketua : Ir. H. Adiwarman A. Karim, S.E., M.B.A., M.A.E.P.\n   Wakil Sekretaris : Kanny Hidaya, S.E., M.A.\n   Wakil Sekretaris : Dr. Asrori S. Karni, S.Ag., M.H.\n\n2. Koordinator Bidang Fatwa:\n   Dr. Asep Supyadillah, M.Ag.\n\n3. Anggota Bidang Fatwa:\n   1. Ah. Azharuddin Latif, M.Ag., M.H.\n   2. Dr. Yuke Rahmawati, M.A.' },
-  { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: '1. Tindak Lanjut atas Rapat Kesekretarisan DSN-MUI tanggal 6 Agustus 2026:\n   a. Pemohonan Izin Penelitian Skripsi dari Velisa Universitas Darussalam\n   b. Permohonan Surat Rekomendasi Dewan Pengawas Syariah dari PT LKM Artha Kerta Raharja (Perseroda)\n   ...' },
-  { key: 'showAgendaDetail', label: 'Show Agenda Detail', type: 'text', required: false, placeholder: 'block' }
+  { key: 'agendaDetail', label: 'Detail Agenda Rapat (Lampiran 2)', type: 'textarea', required: true, placeholder: '1. Tindak Lanjut atas Rapat Kesekretarisan DSN-MUI tanggal 6 Agustus 2026:\n   a. Pemohonan Izin Penelitian Skripsi dari Velisa Universitas Darussalam\n   b. Permohonan Surat Rekomendasi Dewan Pengawas Syariah dari PT LKM Artha Kerta Raharja (Perseroda)\n   ...' }
 ];
 
-export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
-    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 11pt;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
       <tr>
         <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">Jakarta,&nbsp;</td>
         <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
@@ -924,7 +921,7 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 11pt; line-height: 1.35;">
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
     <tr>
       <td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td>
       <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -945,7 +942,7 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
   <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
   <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
-    <div style="margin-bottom: 12px; font-size: 11pt; line-height: 1.35;">
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
       <div style="font-weight: bold;">Direktur Utama {{nama_pt}}</div>
       <div style="font-weight: bold;">Sdr. {{nama_dirut}}</div>
@@ -957,17 +954,17 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
     <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
 
     <!-- PARAGRAF PEMBUKA -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Puji syukur ke hadirat Allah Subhanahu wa Ta’ala, teriring doa semoga Saudara dalam keadaan sehat wal afiat dan mendapat lindungan dari Allah SWT dalam menjalankan tugas sehari-hari.
     </p>
 
     <!-- PARAGRAF ISI -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Menunjuk surat Saudara No. <strong>{{no_surat_permohonan}}</strong> tertanggal <strong>{{tgl_surat_permohonan}}</strong> perihal <strong>{{perihal_surat_permohonan}}</strong>; dan berdasarkan keputusan Rapat Bidang Layanan, Literasi, Relasi Industri, dan Regulasi Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) tanggal <strong>{{tgl_rapat_dsn}}</strong>, DSN-MUI mengundang calon Dewan Pengawas Syariah (DPS) yang Saudara ajukan yaitu <strong>Sdr. {{nama_calon_dps}}</strong> untuk silaturahim dan wawancara melalui <em>video conference</em>, yang insyaAllah akan diadakan pada:
     </p>
 
     <!-- JADWAL WAWANCARA TABLE -->
-    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 11pt; line-height: 1.35;">
+    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
       <tr>
         <td style="width: 120px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, Tanggal</td>
         <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -989,20 +986,20 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
     </table>
 
     <!-- PARAGRAF KONFIRMASI -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Konfirmasi kehadiran dapat menghubungi Kepala Sekretariat DSN-MUI (Sdr. Abdul Wasik, M.Si, HP: 0818 404 852), Hotline DSN-MUI (HP: 0822 6000 4146) atau email <a href="mailto:sekretariat@dsnmui.or.id" style="color: #006633; text-decoration: underline;">sekretariat@dsnmui.or.id</a> dan <a href="mailto:dsnmui@gmail.com" style="color: #006633; text-decoration: underline;">dsnmui@gmail.com</a>.
     </p>
 
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Mengingat pentingnya acara tersebut, kami mengharapkan calon DPS yang Saudara ajukan dapat menghadiri tepat pada waktunya.
     </p>
 
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
       Demikian surat ini kami sampaikan. Atas perhatian dan kerja sama Saudara, kami ucapkan terima kasih.
     </p>
 
     <!-- SALAM PENUTUP -->
-    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh.</p>
+    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
 
     <!-- TANDA TANGAN SECTION -->
     <table style="width: 100%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid;">
@@ -1011,19 +1008,19 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <!-- Hidden spacer matching headerTtd height so jabatanKiri aligns with jabatanKanan -->
             <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Ketua,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Ketua,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
           </div>
         </td>
         <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
             <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
-            <div style="font-weight: bold; font-size: 10pt;">Sekretaris,</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">Sekretaris,</div>
             <!-- QR_CODE_TTE_PLACEHOLDER -->
             <div style="height: 60px;"></div>
-            <span style="font-size: 9.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
           </div>
         </td>
       </tr>
@@ -1056,22 +1053,22 @@ export const FULL_VARS_U0000 = [
   { key: 'namaSekretaris', label: 'Nama Sekretaris', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' }
 ];
 
-export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.35; max-width: 750px; margin: auto; padding: 0px 40px 10px 40px;">
+export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
   <!-- JUDUL SURAT & NOMOR -->
   <div style="text-align: center; margin-top: 6px; margin-bottom: 12px;">
-    <div style="font-weight: bold; font-size: 11pt; text-decoration: underline; letter-spacing: 4px; text-transform: uppercase; display: inline-block;">S U R A T &nbsp; T U G A S</div>
+    <div style="font-weight: bold; font-size: 10.5pt; text-decoration: underline; letter-spacing: 4px; text-transform: uppercase; display: inline-block;">S U R A T &nbsp; T U G A S</div>
     <div style="font-size: 10.5pt; margin-top: 2px;">No: {{nomorSurat}}</div>
   </div>
 
   <!-- KONSIDERANS PEMBUKA -->
-  <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
     Menunjuk surat dari {{namaLembagaPengundang}} No. {{nomorSuratPengundang}} tertanggal {{tanggalSuratPengundang}}, dan berdasarkan keputusan Rapat {{namaRapatPengambilKeputusan}} Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) tanggal {{tanggalRapat}}, DSN-MUI dengan ini <strong>menugaskan</strong> kepada:
   </p>
 
   <!-- TABEL RINCIAN PENUGASAN -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.35;">
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
     <tr>
       <td style="width: 100px; vertical-align: top; padding: 2px 0;">Nama</td>
       <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -1082,7 +1079,7 @@ export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif
       <td style="vertical-align: top; padding: 4px 0 2px 0;">:</td>
       <td style="padding: 4px 0 2px 0; text-align: justify;">
         {{keperluan}}
-        <table style="width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 10.5pt; line-height: 1.35;">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 10.5pt; line-height: 1.25;">
           <tr>
             <td style="width: 100px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
             <td style="width: 15px; vertical-align: top; font-weight: bold; padding: 2px 0;">:</td>
@@ -1106,17 +1103,17 @@ export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif
       <td style="vertical-align: top; padding: 4px 0 2px 0;">:</td>
       <td style="padding: 4px 0 2px 0;">
         <div style="font-weight: normal; margin-bottom: 2px;">Narahubung</div>
-        <div style="line-height: 1.35;">{{keteranganNarahubung}}</div>
+        <div style="line-height: 1.25;">{{keteranganNarahubung}}</div>
       </td>
     </tr>
   </table>
 
   <!-- PARAGRAF PENUTUP -->
-  <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.35;">
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
     Demikian Surat Tugas ini diberikan kepada yang bersangkutan untuk dilaksanakan sebagaimana mestinya dan melaporkan hasilnya kepada Pimpinan DSN-MUI.
   </p>
 
-  <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.35;">
+  <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
     Apabila dalam penugasan ini terdapat kekeliruan, atau ada kebutuhan organisasi, akan diperbaiki sebagaimana mestinya.
   </p>
 

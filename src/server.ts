@@ -175,6 +175,8 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
       html = html.replace('<!-- QR_CODE_TTE_PLACEHOLDER -->', qrHtml);
     }
 
+    html = html.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
+
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (error) {

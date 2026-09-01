@@ -278,7 +278,7 @@ const TEMPLATES = [
     code: 'U-0638-UNDANGAN-BPH',
     category: 'Undangan',
     description: 'Template resmi Undangan Rapat Pimpinan Badan Pengurus DSN-MUI.',
-    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
+    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
   <!-- KOP SURAT DSN-MUI -->
   <table style="width: 100%; border-collapse: collapse; border-bottom: 3px double #000000; padding-bottom: 8px; margin-bottom: 12px;">
     <tr>
@@ -316,13 +316,13 @@ const TEMPLATES = [
   </div>
 
   <!-- TANGGAL SURAT -->
-  <div style="text-align: right; font-size: 11pt; margin-bottom: 15px; line-height: 1.3;">
+  <div style="text-align: right; font-size: 10.5pt; margin-bottom: 15px; line-height: 1.3;">
     Jakarta, {{tanggalHijriah}}<br />
     {{tanggalMasehi}}
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11pt;">
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 10.5pt;">
     <tr>
       <td style="width: 80px; vertical-align: top;">Nomor</td>
       <td style="width: 15px; vertical-align: top;">:</td>
@@ -341,7 +341,7 @@ const TEMPLATES = [
   </table>
 
   <!-- KEPADA YTH -->
-  <div style="margin-bottom: 20px; font-size: 11pt; line-height: 1.4;">
+  <div style="margin-bottom: 20px; font-size: 10.5pt; line-height: 1.4;">
     <strong>Kepada Yth.:</strong><br />
     <div style="white-space: pre-line; font-weight: bold; margin-bottom: 4px;">{{daftarPenerima}}</div>
     di -<br />
@@ -357,7 +357,7 @@ const TEMPLATES = [
   </p>
 
   <!-- JADWAL TABLE -->
-  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 11pt;">
+  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 10.5pt;">
     <tr>
       <td style="width: 140px; vertical-align: top; font-weight: bold;">Hari, tanggal</td>
       <td style="width: 15px; vertical-align: top;">:</td>
@@ -395,35 +395,35 @@ const TEMPLATES = [
     </div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
       <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
+        <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
+        <div style="font-size: 10.5pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
       </div>
       
       <!-- QR_CODE_TTE_PLACEHOLDER -->
       
       <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>
+        <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
+        <div style="font-size: 10.5pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>
       </div>
     </div>
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 1 -->
-  <div style="page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+  <div style="page-break-before: always; margin-top: 40px; padding-top: 0;">
     <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan Rapat Pimpinan Badan Pengurus DSN-MUI</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.5; text-align: justify;">
       {{daftarUndangan}}
     </div>
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
-  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; padding-top: 0;">
     <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat Pimpinan Badan Pengurus DSN-MUI</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.5; text-align: justify;">
       {{agendaDetail}}
     </div>
   </div>
@@ -456,7 +456,7 @@ const TEMPLATES = [
     code: 'U-0643-UNDANGAN-KESEKRETARISAN',
     category: 'Undangan',
     description: 'Template resmi Undangan Rapat Kesekretarisan Badan Pengurus DSN-MUI.',
-    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
+    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
   <!-- KOP SURAT DSN-MUI -->
   <table style="width: 100%; border-collapse: collapse; border-bottom: 3px double #000000; padding-bottom: 8px; margin-bottom: 12px;">
     <tr>
@@ -494,13 +494,13 @@ const TEMPLATES = [
   </div>
 
   <!-- TANGGAL SURAT -->
-  <div style="text-align: right; font-size: 11pt; margin-bottom: 15px; line-height: 1.3;">
+  <div style="text-align: right; font-size: 10.5pt; margin-bottom: 15px; line-height: 1.3;">
     Jakarta, {{tanggalHijriah}}<br />
     {{tanggalMasehi}}
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11pt;">
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 10.5pt;">
     <tr>
       <td style="width: 80px; vertical-align: top;">Nomor</td>
       <td style="width: 15px; vertical-align: top;">:</td>
@@ -519,7 +519,7 @@ const TEMPLATES = [
   </table>
 
   <!-- KEPADA YTH -->
-  <div style="margin-bottom: 20px; font-size: 11pt; line-height: 1.4;">
+  <div style="margin-bottom: 20px; font-size: 10.5pt; line-height: 1.4;">
     <strong>Kepada Yth.:</strong><br />
     <div style="white-space: pre-line; font-weight: bold; margin-bottom: 4px;">{{daftarPenerima}}</div>
     di -<br />
@@ -535,7 +535,7 @@ const TEMPLATES = [
   </p>
 
   <!-- JADWAL TABLE -->
-  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 11pt;">
+  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 10.5pt;">
     <tr>
       <td style="width: 140px; vertical-align: top; font-weight: bold;">Hari, tanggal</td>
       <td style="width: 15px; vertical-align: top;">:</td>
@@ -573,35 +573,35 @@ const TEMPLATES = [
     </div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
       <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
+        <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKiri}},</div>
+        <div style="font-size: 10.5pt; font-weight: bold; text-decoration: underline;">{{namaKetua}}</div>
       </div>
       
       <!-- QR_CODE_TTE_PLACEHOLDER -->
       
       <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>
+        <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 60px;">{{jabatanKanan}},</div>
+        <div style="font-size: 10.5pt; font-weight: bold; text-decoration: underline;">{{namaSekretaris}}</div>
       </div>
     </div>
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 1 -->
-  <div style="page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+  <div style="page-break-before: always; margin-top: 40px; padding-top: 0;">
     <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 1 Daftar Undangan Rapat Kesekretarisan Badan Pengurus DSN-MUI</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.5; text-align: justify;">
       {{daftarUndangan}}
     </div>
   </div>
 
   <!-- PAGE BREAK FOR LAMPIRAN 2 (CONDITIONAL) -->
-  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; border-top: 1px solid #000000; padding-top: 20px;">
+  <div style="display: {{showAgendaDetail}}; page-break-before: always; margin-top: 40px; padding-top: 0;">
     <p style="font-weight: bold; margin-bottom: 2px;">Lampiran 2 Agenda Rapat Kesekretarisan Badan Pengurus DSN-MUI</p>
     <p style="font-weight: bold; text-decoration: underline; margin-bottom: 20px;">Nomor: {{nomorSurat}}</p>
     
-    <div style="white-space: pre-line; font-size: 11pt; line-height: 1.5; text-align: justify;">
+    <div style="white-space: pre-line; font-size: 10.5pt; line-height: 1.5; text-align: justify;">
       {{agendaDetail}}
     </div>
   </div>

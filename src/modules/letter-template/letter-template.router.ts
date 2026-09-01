@@ -50,13 +50,13 @@ function sanitizeTemplateHtml(html: string): string {
   let out = html;
   const kopPlaceholderRegex = /(\\?\${HEADER_HTML}|\${HEADER_HTML})/g;
   if (kopPlaceholderRegex.test(out)) {
-    const headerReplacement = `<div style="text-align: center; margin-bottom: 4px; margin-left: -30px; margin-right: -30px; padding-top: 10px;">
-    <img src="${kopBase64}" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 750px; height: auto; display: block; margin: 0 auto;" />
+    const headerReplacement = `<div style="text-align: center; margin-bottom: 4px; margin-left: 0; margin-right: 0; padding-top: 0;">
+    <img src="${kopBase64}" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 100%; height: auto; display: block; margin: 0 auto;" />
   </div>
 
   <!-- Bismillah Calligraphy -->
-  <div style="text-align: center; margin-top: 2px; margin-bottom: 6px;">
-    <img src="${bismillahBase64}" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
+  <div style="text-align: center; margin-top: 8px; margin-bottom: 14px;">
+    <img src="${bismillahBase64}" alt="Bismillah" style="width: 260px; max-width: 45%; height: auto; max-height: 48px; object-fit: contain; filter: brightness(0); display: block; margin: 8px auto 14px auto;" />
   </div>`;
     out = out.replace(kopPlaceholderRegex, headerReplacement);
   }
@@ -66,8 +66,14 @@ function sanitizeTemplateHtml(html: string): string {
   }
   out = out.replace(/src=["'][^"']*kop-surat\.png["']/gi, `src="${kopBase64}" class="kop-surat-img"`);
   out = out.replace(/src=["'][^"']*bismillah\.svg["']/gi, `src="${bismillahBase64}"`);
+  out = out.replace(/src=["']data:image\/svg\+xml;base64,[^"']*["']/gi, `src="${bismillahBase64}"`);
   out = out.replace(/src=["'][^"']*logo-dsn\.png["']/gi, `src="${logoBase64}"`);
   out = out.replace(/src=["'][^"']*wqa-ukas\.png["']/gi, `src="${wqaBase64}"`);
+  out = out.replace(/(<img[^>]*(?:bismillah|Bismillah)[^>]*style=["'])([^"']*)(["'])/gi, (match, p1, p2, p3) => {
+    let cleanStyle = p2.replace(/height:\s*[^;]+;?/gi, '').replace(/max-height:\s*[^;]+;?/gi, '').replace(/width:\s*[^;]+;?/gi, '').replace(/max-width:\s*[^;]+;?/gi, '').trim();
+    return `${p1}${cleanStyle ? cleanStyle + '; ' : ''}width: 260px; max-width: 45%; height: auto; max-height: 48px; object-fit: contain; filter: brightness(0); display: block; margin: 8px auto 14px auto;${p3}`;
+  });
+  out = out.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
   return out;
 }
 

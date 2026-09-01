@@ -47,15 +47,11 @@ function escapeHtml(text: string) {
 
 const HTML_PDF_PRIMARY_COLOR = '#2563eb';
 
-let cachedKopSuratBase64: string | null = null;
-let cachedBismillahBase64: string | null = null;
-let cachedLogoDsnBase64: string | null = null;
-let cachedWqaUkasBase64: string | null = null;
-
 export function getStaticImageBase64(filename: string, mimeType: string): string {
   try {
     const candidates = [
       path.join(process.cwd(), 'public/images', filename),
+      path.join(process.cwd(), 'src/assets', filename),
       path.join(process.cwd(), 'public', filename),
       path.join(process.cwd(), '../frontend/public/images', filename),
     ];
@@ -72,31 +68,19 @@ export function getStaticImageBase64(filename: string, mimeType: string): string
 }
 
 export function getKopSuratBase64(): string {
-  if (!cachedKopSuratBase64) {
-    cachedKopSuratBase64 = getStaticImageBase64('kop-surat.png', 'image/png');
-  }
-  return cachedKopSuratBase64;
+  return getStaticImageBase64('kop-surat.png', 'image/png');
 }
 
 export function getBismillahBase64(): string {
-  if (!cachedBismillahBase64) {
-    cachedBismillahBase64 = getStaticImageBase64('bismillah.svg', 'image/svg+xml');
-  }
-  return cachedBismillahBase64;
+  return getStaticImageBase64('bismillah.svg', 'image/svg+xml');
 }
 
 export function getLogoDsnBase64(): string {
-  if (!cachedLogoDsnBase64) {
-    cachedLogoDsnBase64 = getStaticImageBase64('logo-dsn.png', 'image/png');
-  }
-  return cachedLogoDsnBase64;
+  return getStaticImageBase64('logo-dsn.png', 'image/png');
 }
 
 export function getWqaUkasBase64(): string {
-  if (!cachedWqaUkasBase64) {
-    cachedWqaUkasBase64 = getStaticImageBase64('wqa-ukas.png', 'image/png');
-  }
-  return cachedWqaUkasBase64;
+  return getStaticImageBase64('wqa-ukas.png', 'image/png');
 }
 
 export async function mergePdfWithEvidence(
@@ -1190,10 +1174,6 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
 
   // Clean up any previously injected styles or misplaced QR codes before injecting fresh styles and QR codes
   let htmlContent = rawHtml;
-  htmlContent = htmlContent.replace(/<style id="amanah-kop-styles">[\s\S]*?<\/style>/gi, '');
-  htmlContent = htmlContent.replace(/<div style="text-align:left;[^>]*><img[^>]*class="qr-signature-img"[^>]*><img[^>]*alt="Logo"[^>]*><\/div>/g, '');
-  htmlContent = htmlContent.replace(/<div style="text-align:center;[^>]*><img[^>]*class="qr-signature-img"[^>]*><img[^>]*alt="Logo"[^>]*><\/div>/g, '');
-
   const kopBase64 = getKopSuratBase64();
   const bismillahBase64 = getBismillahBase64();
   const logoBase64 = getLogoDsnBase64();
@@ -1202,32 +1182,27 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   // Retroactively resolve un-interpolated HEADER_HTML strings in static document HTML files
   const kopPlaceholderRegex = /(\\?\${HEADER_HTML}|\${HEADER_HTML})/g;
   if (kopPlaceholderRegex.test(htmlContent)) {
-    const headerReplacement = `<div style="text-align: center; margin-bottom: 4px; margin-left: -30px; margin-right: -30px; padding-top: 10px;">
-    <img src="${kopBase64}" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 750px; height: auto; display: block; margin: 0 auto;" />
+    const headerReplacement = `<div style="text-align: center; margin-bottom: 4px; margin-left: 0; margin-right: 0; padding-top: 0;">
+    <img src="${kopBase64}" alt="Kop Surat DSN-MUI" class="kop-surat-img" style="width: 100%; max-width: 100%; height: auto; display: block; margin: 0 auto;" />
   </div>
 
   <!-- Bismillah Calligraphy -->
-  <div style="text-align: center; margin-top: 2px; margin-bottom: 6px;">
-    <img src="${bismillahBase64}" alt="Bismillah" style="height: 35px; object-fit: contain; filter: brightness(0); display: block; margin: 0 auto;" />
+  <div style="text-align: center; margin-top: 8px; margin-bottom: 14px;">
+    <img src="${bismillahBase64}" alt="Bismillah" style="width: 260px; max-width: 45%; height: auto; max-height: 48px; object-fit: contain; filter: brightness(0); display: block; margin: 8px auto 14px auto;" />
   </div>`;
     htmlContent = htmlContent.replace(kopPlaceholderRegex, headerReplacement);
   }
 
-  // Retroactively resolve un-interpolated FOOTER_HTML strings in static document HTML files
-  const footerPlaceholderRegex = /(\\?\${FOOTER_HTML}|\${FOOTER_HTML})/g;
-  if (footerPlaceholderRegex.test(htmlContent)) {
-    htmlContent = htmlContent.replace(footerPlaceholderRegex, FOOTER_HTML);
-  }
+  // Clean up legacy footers and un-interpolated placeholders
+  htmlContent = htmlContent.replace(/<table class="amanah-letter-footer"[\s\S]*?<\/table>/gi, '');
+  htmlContent = htmlContent.replace(/\\?\${FOOTER_HTML}/g, '');
 
-  // Ensure every completed/rendered letter has the official TTE footer element
-  if (!htmlContent.includes('amanah-letter-footer')) {
-    const lastClosingDiv = htmlContent.lastIndexOf('</div>');
-    if (lastClosingDiv !== -1) {
-      htmlContent = htmlContent.substring(0, lastClosingDiv) + FOOTER_HTML + '\n' + htmlContent.substring(lastClosingDiv);
-    } else {
-      htmlContent += '\n' + FOOTER_HTML;
-    }
-  }
+  // Clean up unwanted borders and negative margins from raw HTML
+  htmlContent = htmlContent.replace(/border-top:\s*1px\s*solid\s*#000000;?/gi, 'border-top: none;');
+  htmlContent = htmlContent.replace(/border-top:\s*1px\s*solid\s*black;?/gi, 'border-top: none;');
+  htmlContent = htmlContent.replace(/border-top:\s*1px\s*solid\s*#000;?/gi, 'border-top: none;');
+  htmlContent = htmlContent.replace(/margin-left:\s*-30px;\s*margin-right:\s*-30px;/gi, 'margin-left: 0; margin-right: 0;');
+  htmlContent = htmlContent.replace(/margin-left:\s*-40px;\s*margin-right:\s*-40px;/gi, 'margin-left: 0; margin-right: 0;');
 
   // Replace any relative or absolute image references with self-contained Base64 Data URLs
   htmlContent = htmlContent.replace(/src=["'][^"']*kop-surat\.png["']/gi, `src="${kopBase64}" class="kop-surat-img"`);
@@ -1235,7 +1210,65 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   htmlContent = htmlContent.replace(/src=["'][^"']*logo-dsn\.png["']/gi, `src="${logoBase64}"`);
   htmlContent = htmlContent.replace(/src=["'][^"']*wqa-ukas\.png["']/gi, `src="${wqaBase64}"`);
 
-  if (!/<!doctype html>/i.test(htmlContent)) htmlContent = `<!doctype html>\n${htmlContent}`;
+  // Ensure Bismillah image inline styles are consistently scaled across all letters
+  htmlContent = htmlContent.replace(/(<img[^>]*(?:bismillah|Bismillah)[^>]*style=["'])([^"']*)(["'])/gi, (match, p1, p2, p3) => {
+    let cleanStyle = p2.replace(/height:\s*[^;]+;?/gi, '').replace(/max-height:\s*[^;]+;?/gi, '').replace(/width:\s*[^;]+;?/gi, '').replace(/max-width:\s*[^;]+;?/gi, '').trim();
+    return `${p1}${cleanStyle ? cleanStyle + '; ' : ''}width: 260px; max-width: 45%; height: auto; max-height: 48px; margin: 8px auto 14px auto;${p3}`;
+  });
+
+  // Normalize closing greeting (salam penutup) to Wassalamu’alaikum
+  htmlContent = htmlContent.replace(
+    /(<!--\s*SALAM\s*PENUTUP\s*-->[\s\S]*?<p[^>]*>)\s*[Aa]ssalamu([’'‘`]?alaikum\s+Warahmatullah\s+Wabarakatuh[\.,]?)\s*(<\/p>)/gi,
+    '$1Wassalamu’alaikum Warahmatullah Wabarakatuh.$3'
+  );
+  htmlContent = htmlContent.replace(
+    /(<p[^>]*>)\s*[Aa]ssalamu([’'‘`]?alaikum\s+Warahmatullah\s+Wabarakatuh)\.\s*(<\/p>)/gi,
+    '$1Wassalamu’alaikum Warahmatullah Wabarakatuh.$3'
+  );
+
+  // Extract body content and wrap in master-page-table with tfoot spacer
+  let headPart = '';
+  let bodyInner = htmlContent;
+  if (htmlContent.includes('<body')) {
+    const headEnd = htmlContent.indexOf('<body');
+    headPart = htmlContent.substring(0, headEnd);
+    const bodyStart = htmlContent.indexOf('>', headEnd) + 1;
+    const bodyEnd = htmlContent.lastIndexOf('</body>');
+    bodyInner = htmlContent.substring(bodyStart, bodyEnd !== -1 ? bodyEnd : undefined);
+  }
+
+  if (bodyInner.includes('master-page-table')) {
+    bodyInner = bodyInner
+      .replace(/<table class="master-page-table"[\s\S]*?<tbody>\s*<tr>\s*<td>/gi, '')
+      .replace(/<\/td>\s*<\/tr>\s*<\/tbody>\s*<tfoot>[\s\S]*?<\/tfoot>\s*<\/table>/gi, '');
+  }
+
+  const wrappedBody = `
+  ${FOOTER_HTML}
+  <table class="master-page-table">
+    <tbody>
+      <tr>
+        <td>
+          ${bodyInner}
+        </td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>
+          <div style="height: 20mm;"></div>
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+  `;
+
+  if (headPart) {
+    htmlContent = `${headPart}<body>\n${wrappedBody}\n</body>\n</html>`;
+  } else {
+    htmlContent = `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n</head>\n<body>\n${wrappedBody}\n</body>\n</html>`;
+  }
+
   if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
     htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
   }
@@ -1245,81 +1278,267 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     <style id="amanah-kop-styles">
       @page {
         size: A4;
-        margin: 15mm 15mm 8mm 15mm !important;
+        margin-top: 20mm !important;
+        margin-bottom: 12mm !important;
+        margin-left: 25mm !important;
+        margin-right: 20mm !important;
       }
       body {
         margin: 0 !important;
         padding: 0 !important;
-        line-height: 1.35 !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-size: 10.5pt !important;
+        line-height: 1.25 !important;
+        color: #111827 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
-      /* Outer container padding top override */
-      div[style*="padding: 25px 40px 10px 40px"], 
-      div[style*="padding: 25px 40px 10px 40px;"] {
-        padding-top: 0px !important;
-        line-height: 1.35 !important;
+
+      /* Master Print Layout Table */
+      table.master-page-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
       }
-      /* General line height override */
-      div, p, span, td {
-        line-height: 1.35 !important;
+      table.master-page-table > tbody > tr > td {
+        padding: 0 !important;
+        border: none !important;
+        vertical-align: top !important;
       }
-      /* Space-saving overrides for paragraphs and margins */
+      table.master-page-table > tfoot > tr > td {
+        height: 20mm !important; /* Reserves space so body never overlaps footer */
+        padding: 0 !important;
+        border: none !important;
+      }
+
+      /* Screen presentation: Clean centered A4 preview container with footer at the BOTTOM */
+      @media screen {
+        body {
+          background-color: #f8fafc;
+          padding: 20px 10px !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+        }
+        .master-page-table {
+          max-width: 794px !important;
+          width: 100% !important;
+          margin: 0 auto !important;
+          padding: 32px 42px !important;
+          background: #ffffff !important;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05) !important;
+          border-radius: 4px !important;
+          box-sizing: border-box !important;
+          order: 1 !important;
+        }
+        .amanah-letter-footer {
+          display: table !important;
+          order: 2 !important;
+          width: 100% !important;
+          max-width: 794px !important;
+          margin: 16px auto 24px auto !important;
+          padding: 0 42px !important;
+          box-sizing: border-box !important;
+        }
+        /* Clear Visual Page Break Divider on Screen Preview */
+        div[style*="page-break-before: always"],
+        div[style*="page-break-before:always"],
+        div[style*="break-before: page"],
+        .page-break {
+          margin-top: 48px !important;
+          margin-bottom: 32px !important;
+          padding-top: 32px !important;
+          border-top: 2px dashed #94a3b8 !important;
+          position: relative !important;
+        }
+        div[style*="page-break-before: always"]::before,
+        div[style*="page-break-before:always"]::before,
+        div[style*="break-before: page"]::before,
+        .page-break::before {
+          content: "📄 HALAMAN BERIKUTNYA (LAMPIRAN)" !important;
+          display: block !important;
+          text-align: center !important;
+          font-size: 8.5pt !important;
+          font-weight: 700 !important;
+          letter-spacing: 1.5px !important;
+          color: #475569 !important;
+          background: #e2e8f0 !important;
+          border: 1px solid #cbd5e1 !important;
+          border-radius: 9999px !important;
+          padding: 4px 18px !important;
+          width: fit-content !important;
+          margin: -45px auto 24px auto !important;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.06) !important;
+        }
+      }
+
+      /* Print / PDF presentation */
+      @media print {
+        body {
+          background: transparent !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        .master-page-table {
+          max-width: 100% !important;
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+        tfoot {
+          display: table-footer-group !important;
+        }
+        /* Repeating running footer fixed at bottom: 4mm on EVERY page */
+        .amanah-letter-footer {
+          display: table !important;
+          position: fixed !important;
+          bottom: 4mm !important;
+          left: 0 !important;
+          right: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          background: #ffffff !important;
+          z-index: 99999 !important;
+        }
+        div[style*="page-break-before: always"]::before,
+        div[style*="page-break-before:always"]::before,
+        div[style*="break-before: page"]::before,
+        .page-break::before {
+          display: none !important;
+          content: "" !important;
+        }
+        div[style*="page-break-before: always"],
+        div[style*="page-break-before:always"],
+        div[style*="break-before: page"],
+        .page-break {
+          border-top: none !important;
+          padding-top: 0 !important;
+          margin-top: 0 !important;
+          page-break-before: always !important;
+          break-before: page !important;
+        }
+      }
+
+      /* Eliminate unwanted horizontal lines / borders on page break sections */
+      hr { display: none !important; }
+      div[style*="border-top: 1px solid #000000"],
+      div[style*="border-top:1px solid #000000"],
+      div[style*="border-top: 1px solid black"],
+      div[style*="border-top:1px solid black"],
+      div[style*="border-top: 1px solid #000"],
+      div[style*="border-top:1px solid #000"] {
+        border-top: none !important;
+        padding-top: 0 !important;
+      }
+
+      /* Eliminate negative margins on kop surat header */
+      div[style*="margin-left: -30px"],
+      div[style*="margin-left:-30px"],
+      div[style*="margin-left: -40px"],
+      div[style*="margin-left:-40px"] {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-top: 0 !important;
+      }
+
+      /* Standardize font size and line height across all letter elements */
+      div, p, span, td, th, li, a, ol, ul, b, strong {
+        font-family: Arial, Helvetica, sans-serif !important;
+      }
+      p, td, th, li, ol, ul {
+        font-size: 10.5pt !important;
+      }
+      ol, ul {
+        margin-top: 4px !important;
+        margin-bottom: 8px !important;
+        padding-left: 20px !important;
+      }
+      li {
+        margin-bottom: 3px !important;
+        font-size: 10.5pt !important;
+        line-height: 1.3 !important;
+      }
       p {
         margin-top: 0px !important;
-        margin-bottom: 4px !important;
+        margin-bottom: 8px !important;
+        font-size: 10.5pt !important;
+        line-height: 1.35 !important;
       }
-      /* Margins of meta/date blocks */
-      div[style*="margin-bottom: 10px"] {
-        margin-bottom: 4px !important;
-      }
-      table[style*="margin-bottom: 12px"], 
-      div[style*="margin-bottom: 12px"] {
-        margin-bottom: 4px !important;
-      }
-      /* Jadwal table spacing and padding override */
-      table[style*="margin: 8px auto"] {
-        margin: 2px auto !important;
-      }
-      table[style*="margin: 8px auto"] td {
-        padding: 2px 0 !important;
-      }
-      /* Bismillah size and margins override */
-      img[src*="bismillah"], img[alt*="Bismillah"] {
-        height: 35px !important;
-        max-height: 40px !important;
+
+      /* Kop Surat Header */
+      .kop-surat-img, img[alt*="Kop Surat"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
         display: block !important;
-        margin: 0 auto !important;
+        margin: 0 auto 6px auto !important;
       }
-      div[style*="margin-top: 6px"][style*="margin-bottom: 12px"] {
-        margin-top: 2px !important;
-        margin-bottom: 4px !important;
+
+      /* Bismillah - proper, elegant calligraphy */
+      img[src*="bismillah"], img[alt*="Bismillah"], .bismillah-img {
+        width: 260px !important;
+        max-width: 45% !important;
+        height: auto !important;
+        max-height: 48px !important;
+        display: block !important;
+        margin: 8px auto 14px auto !important;
+        object-fit: contain !important;
+        filter: brightness(0) !important;
       }
-      /* Signature table spacing override */
-      table[style*="margin-top: 15px"], 
-      table[style*="margin-top: 30px"] {
+
+      /* Spacing of meta table & date block */
+      table[style*="calc(100% - 15px)"] td,
+      table.meta-table td {
+        padding: 2.5px 0 !important;
+        line-height: 1.25 !important;
+      }
+
+      /* Jadwal table spacing and padding */
+      table[style*="margin: 8px auto"],
+      table[style*="margin: 15px auto"],
+      table[style*="margin-left: 30px"] {
         margin-top: 6px !important;
+        margin-bottom: 10px !important;
+        font-size: 10.5pt !important;
       }
-      /* Signature container width & headerTtd font size override */
+      table[style*="margin: 8px auto"] td,
+      table[style*="margin: 15px auto"] td,
+      table[style*="margin-left: 30px"] td {
+        padding: 2.5px 0 !important;
+        line-height: 1.25 !important;
+      }
+
+      /* Signature table spacing */
+      table[style*="margin-top: 14px"],
+      table[style*="margin-top: 15px"],
+      table[style*="margin-top: 30px"] {
+        margin-top: 8px !important;
+        page-break-inside: avoid !important;
+      }
       div[style*="width: 280px"] {
         width: 310px !important;
       }
-      div[style*="font-size: 10pt"][style*="margin-bottom: 10px"],
+      div[style*="font-size: 9.5pt"],
       div[style*="font-size: 10pt"][style*="margin-bottom: 6px"] {
-        font-size: 9pt !important;
-        margin-bottom: 4px !important;
+        font-size: 9.5pt !important;
         line-height: 1.2 !important;
       }
-      /* Signature spacer height override */
+      div[style*="height: 60px"],
       div[style*="height: 70px"] {
-        height: 55px !important;
+        height: 50px !important;
       }
-      /* Logo inside signature */
       div[style*="width: 60px"] img[src*="logo-dsn"],
       div[style*="width: 70px"] img[src*="logo-dsn"] {
         width: 16px !important;
         height: 16px !important;
       }
-      .kop-surat img:not(.kop-surat-img):not([alt*="Kop Surat"]), 
-      td img:not(.qr-signature-img):not(.kop-surat-img):not([alt*="Kop Surat"]) {
+      .kop-surat img:not(.kop-surat-img):not([alt*="Kop Surat"]):not([alt*="Bismillah"]):not([src*="bismillah"]):not(.bismillah-img), 
+      td img:not(.qr-signature-img):not(.kop-surat-img):not([alt*="Kop Surat"]):not([alt*="Bismillah"]):not([src*="bismillah"]):not(.bismillah-img) {
         max-width: 75px !important;
         max-height: 90px !important;
         height: auto !important;
@@ -1327,53 +1546,36 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
         display: inline-block !important;
         vertical-align: middle !important;
       }
-      .kop-surat-img, img[alt*="Kop Surat"] {
-        width: 100% !important;
-        max-width: 750px !important;
-        height: auto !important;
-        display: block !important;
-        margin: 0 auto !important;
-      }
       img.qr-signature-img {
-        width: 60px !important;
-        height: 60px !important;
-        max-width: 60px !important;
-        max-height: 60px !important;
-        min-width: 60px !important;
-        min-height: 60px !important;
+        width: 55px !important;
+        height: 55px !important;
+        max-width: 55px !important;
+        max-height: 55px !important;
+        min-width: 55px !important;
+        min-height: 55px !important;
         display: inline-block !important;
         object-fit: contain !important;
       }
-      /* QR Code container spacing - ensure clean margin above & below without covering text */
       div[style*="width: 60px"][style*="height: 60px"],
       div[style*="width: 70px"][style*="height: 70px"] {
-        margin: 4px 0 4px 0 !important;
-        width: 60px !important;
-        height: 60px !important;
+        margin: 2px 0 2px 0 !important;
+        width: 55px !important;
+        height: 55px !important;
       }
-      /* Official TTE Footer - Hidden on screen preview, fixed at bottom edge on print/PDF */
-      @media screen {
-        .amanah-letter-footer {
-          display: none !important;
-        }
-      }
-      @media print {
-        .amanah-letter-footer {
-          display: table !important;
-          position: fixed !important;
-          bottom: 5mm !important;
-          left: 15mm !important;
-          right: 15mm !important;
-          width: calc(100% - 30mm) !important;
-          max-width: 750px !important;
-          margin: 0 auto !important;
-          background: transparent !important;
-          z-index: 99999 !important;
-        }
+      .amanah-letter-footer td {
+        font-size: 7.5pt !important;
+        line-height: 1.25 !important;
       }
     </style>
   `;
-  htmlContent = htmlContent.replace('</head>', `${imageStyle}\n</head>`);
+  if (htmlContent.includes('id="amanah-kop-styles"')) {
+    htmlContent = htmlContent.replace(/<style id="amanah-kop-styles">[\s\S]*?<\/style>/i, imageStyle);
+  } else {
+    htmlContent = htmlContent.replace('</head>', `${imageStyle}\n</head>`);
+  }
+
+  // Convert any 11pt or 12pt font sizes in existing HTML letters to standard 10.5pt
+  htmlContent = htmlContent.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
 
   if (signatureRows.length > 0) {
     signatureRows.forEach(row => {
@@ -1601,12 +1803,15 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
 
         const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
-        await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
-        await page.emulateMediaType('screen');
+        await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
+        await page.emulateMediaType('print');
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const rawPdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
+        const rawPdfBuffer = await page.pdf({
+          format: 'A4',
+          printBackground: true
+        });
         await browser.close();
 
         // Merge supporting documents / evidence files if any

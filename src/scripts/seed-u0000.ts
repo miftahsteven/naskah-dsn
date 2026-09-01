@@ -7,7 +7,7 @@ async function main() {
     category: 'Undangan',
     description:
       'Template resmi Draf Undangan Silaturahim dan Wawancara Calon Dewan Pengawas Syariah (DPS) kepada Direktur Utama PT.',
-    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 11pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
+    htmlContent: `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.5; max-width: 800px; margin: auto; padding: 20px;">
   <!-- KOP SURAT DSN-MUI -->
   <table style="width: 100%; border-collapse: collapse; border-bottom: 3px double #000000; padding-bottom: 8px; margin-bottom: 12px;">
     <tr>
@@ -45,13 +45,13 @@ async function main() {
   </div>
 
   <!-- TANGGAL SURAT -->
-  <div style="text-align: right; font-size: 11pt; margin-bottom: 15px; line-height: 1.3;">
+  <div style="text-align: right; font-size: 10.5pt; margin-bottom: 15px; line-height: 1.3;">
     Jakarta, {{tanggal_masehi}}<br />
     {{tanggal_hijriah}}
   </div>
 
   <!-- META SECTION (Nomor, Lampiran, Hal) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11pt;">
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 10.5pt;">
     <tr>
       <td style="width: 80px; vertical-align: top;">Nomor</td>
       <td style="width: 15px; vertical-align: top;">:</td>
@@ -70,7 +70,7 @@ async function main() {
   </table>
 
   <!-- KEPADA YTH -->
-  <div style="margin-bottom: 20px; font-size: 11pt; line-height: 1.4;">
+  <div style="margin-bottom: 20px; font-size: 10.5pt; line-height: 1.4;">
     <strong>Kepada Yth.:</strong><br />
     <strong>Direktur Utama {{nama_pt}}</strong><br />
     <strong>Sdr. {{nama_dirut}}</strong><br />
@@ -92,7 +92,7 @@ async function main() {
   </p>
 
   <!-- JADWAL WAWANCARA TABLE -->
-  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 11pt;">
+  <table style="width: 90%; border-collapse: collapse; margin: 15px auto; font-size: 10.5pt;">
     <tr>
       <td style="width: 140px; vertical-align: top; font-weight: bold;">Hari, Tanggal</td>
       <td style="width: 15px; vertical-align: top;">:</td>
@@ -137,12 +137,12 @@ async function main() {
     </div>
     <div style="display: flex; justify-content: space-between; margin-top: 15px;">
       <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">Ketua,</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">K.H. M. CHOLIL NAFIS, Lc., Ph.D.</div>
+        <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 60px;">Ketua,</div>
+        <div style="font-size: 10.5pt; font-weight: bold; text-decoration: underline;">K.H. M. CHOLIL NAFIS, Lc., Ph.D.</div>
       </div>
       <div style="text-align: center; min-width: 200px;">
-        <div style="font-size: 11pt; font-weight: bold; margin-bottom: 60px;">Sekretaris,</div>
-        <div style="font-size: 11pt; font-weight: bold; text-decoration: underline;">Dr. H. AMIRSYAH TAMBUNAN, M.A.</div>
+        <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 60px;">Sekretaris,</div>
+        <div style="font-size: 10.5pt; font-weight: bold; text-decoration: underline;">Dr. H. AMIRSYAH TAMBUNAN, M.A.</div>
       </div>
     </div>
   </div>
