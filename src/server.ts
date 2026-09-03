@@ -139,23 +139,6 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
     }
 
     if (!foundPath) {
-      const filename = path.basename(subPath);
-      const targetDir = path.resolve(process.cwd(), 'uploads');
-      const targetPath = path.resolve(targetDir, filename);
-      try {
-        const prodRes = await fetch(`https://amanah.dsnmui.or.id/api/uploads/${encodeURIComponent(filename)}`);
-        if (prodRes.ok) {
-          const buffer = Buffer.from(await prodRes.arrayBuffer());
-          await fs.promises.mkdir(targetDir, { recursive: true });
-          await fs.promises.writeFile(targetPath, buffer);
-          foundPath = targetPath;
-        }
-      } catch (err) {
-        console.warn(`[Uploads HTML Interceptor] Failed to fetch ${filename} from production:`, err);
-      }
-    }
-
-    if (!foundPath) {
       return next();
     }
 
@@ -184,31 +167,8 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
 uploadsRouter.use(express.static('uploads'));
 uploadsRouter.use(express.static(path.resolve(process.cwd(), 'uploads')));
 uploadsRouter.use(express.static(path.resolve(process.cwd(), '../uploads')));
-
-// Proxy fallback for non-HTML files not present locally
-uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return next();
-  }
-  const subPath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
-  const filename = path.basename(subPath);
-  const targetDir = path.resolve(process.cwd(), 'uploads');
-  const targetPath = path.resolve(targetDir, filename);
-  if (!fs.existsSync(targetPath)) {
-    try {
-      const prodRes = await fetch(`https://amanah.dsnmui.or.id/api/uploads/${encodeURIComponent(filename)}`);
-      if (prodRes.ok) {
-        const buffer = Buffer.from(await prodRes.arrayBuffer());
-        await fs.promises.mkdir(targetDir, { recursive: true });
-        await fs.promises.writeFile(targetPath, buffer);
-        return res.sendFile(targetPath);
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-  next();
-});
+uploadsRouter.use(express.static('/var/www/mui-dsn-naskah/backend/uploads'));
+uploadsRouter.use(express.static('/var/www/mui-dsn-naskah/uploads'));
 
 app.use('/uploads', uploadsRouter);
 app.use('/api/uploads', uploadsRouter);

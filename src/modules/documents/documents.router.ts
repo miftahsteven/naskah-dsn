@@ -819,7 +819,13 @@ function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+let isPuppeteerAvailable: boolean | null = null;
+
 async function launchPuppeteerBrowser() {
+  if (isPuppeteerAvailable === false) {
+    throw new Error('Puppeteer is disabled or browser libraries missing');
+  }
+
   const launchOptions: any = {
     headless: true,
     args: [
@@ -852,7 +858,15 @@ async function launchPuppeteerBrowser() {
     }
   }
 
-  return await puppeteer.launch(launchOptions);
+  try {
+    const browser = await puppeteer.launch(launchOptions);
+    isPuppeteerAvailable = true;
+    return browser;
+  } catch (err: any) {
+    console.warn('[Puppeteer] Chrome failed to launch on this server, disabling server-side PDF conversion fallback to HTML:', err.message);
+    isPuppeteerAvailable = false;
+    throw err;
+  }
 }
 
 function resolveExistingFilePath(fileUrl: string): string | null {
@@ -896,79 +910,8 @@ function resolveExistingFilePath(fileUrl: string): string | null {
   return null;
 }
 
-async function ensureExistingFilePath(fileUrl: string, docId?: string, authHeader?: string): Promise<string | null> {
-  const local = resolveExistingFilePath(fileUrl);
-  if (local) return local;
-
-  const filename = path.basename(fileUrl);
-  const targetDir = path.resolve(process.cwd(), uploadDir);
-  const targetPath = path.resolve(targetDir, filename);
-
-  try {
-    const headers: Record<string, string> = {};
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
-
-    // Try 1: Remote API uploads URL
-    const prodApiUploadUrl = `https://amanah.dsnmui.or.id/api/uploads/${encodeURIComponent(filename)}`;
-    const directRes = await fetch(prodApiUploadUrl, { headers });
-    if (directRes.ok) {
-      let buffer = Buffer.from(await directRes.arrayBuffer());
-      if (filename.toLowerCase().endsWith('.html')) {
-        let text = buffer.toString('utf8');
-        text = text.replace(/<div style="text-align: center; display: inline-flex;[\s\S]*?TTE VERIFIED[\s\S]*?<\/div>\s*<\/div>/gi, '<!-- QR_CODE_TTE_PLACEHOLDER -->');
-        buffer = Buffer.from(text, 'utf8');
-      }
-      await fs.promises.mkdir(targetDir, { recursive: true });
-      await fs.promises.writeFile(targetPath, buffer);
-      console.log(`[Sync] Downloaded missing file ${filename} from production api/uploads`);
-      return targetPath;
-    }
-
-    // Try 2: Direct uploads URL
-    const prodUploadUrl = `https://amanah.dsnmui.or.id/uploads/${encodeURIComponent(filename)}`;
-    const prodRes = await fetch(prodUploadUrl, { headers });
-    if (prodRes.ok) {
-      let buffer = Buffer.from(await prodRes.arrayBuffer());
-      if (filename.toLowerCase().endsWith('.html')) {
-        let text = buffer.toString('utf8');
-        text = text.replace(/<div style="text-align: center; display: inline-flex;[\s\S]*?TTE VERIFIED[\s\S]*?<\/div>\s*<\/div>/gi, '<!-- QR_CODE_TTE_PLACEHOLDER -->');
-        buffer = Buffer.from(text, 'utf8');
-      }
-      await fs.promises.mkdir(targetDir, { recursive: true });
-      await fs.promises.writeFile(targetPath, buffer);
-      console.log(`[Sync] Downloaded missing file ${filename} from production uploads`);
-      return targetPath;
-    }
-
-    // Try 3: If docId is provided, fetch via production download/render
-    if (docId) {
-      const prodDownloadUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/download`;
-      const dlRes = await fetch(prodDownloadUrl, { headers });
-      if (dlRes.ok) {
-        const buffer = Buffer.from(await dlRes.arrayBuffer());
-        await fs.promises.mkdir(targetDir, { recursive: true });
-        await fs.promises.writeFile(targetPath, buffer);
-        console.log(`[Sync] Downloaded missing file for doc ${docId} from production download`);
-        return targetPath;
-      }
-
-      const prodRenderUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/render`;
-      const renderRes = await fetch(prodRenderUrl, { headers });
-      if (renderRes.ok) {
-        const text = await renderRes.text();
-        await fs.promises.mkdir(targetDir, { recursive: true });
-        await fs.promises.writeFile(targetPath, text, 'utf8');
-        console.log(`[Sync] Downloaded rendered HTML for doc ${docId} from production render`);
-        return targetPath;
-      }
-    }
-  } catch (err) {
-    console.warn(`[Sync] Failed to fetch missing file ${filename} from production:`, err);
-  }
-
-  return null;
+async function ensureExistingFilePath(fileUrl: string, _docId?: string, _authHeader?: string): Promise<string | null> {
+  return resolveExistingFilePath(fileUrl);
 }
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: string): { html: string; injected: boolean } {
