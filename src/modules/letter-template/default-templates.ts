@@ -506,7 +506,7 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
   </table>
 
   <!-- BODY CONTENT -->
-  <div style="margin-right: 15px;">
+  <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
     <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
@@ -516,15 +516,15 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
     </div>
 
     <!-- SALAM PEMBUKA -->
-    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</div>
 
     <!-- PARAGRAF ISI -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.25;">
       Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
     </p>
 
     <!-- JADWAL TABLE -->
-    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
+    <table style="margin-left: 20px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
       <tr>
         <td style="width: 120px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
         <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -548,12 +548,12 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
     </table>
 
     <!-- PARAGRAF PENUTUP -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.25;">
       Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
     </p>
 
     <!-- SALAM PENUTUP -->
-    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</div>
 
     <!-- TANDA TANGAN SECTION -->
     <table style="width: 100%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid;">
@@ -679,7 +679,7 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
   </table>
 
   <!-- BODY CONTENT -->
-  <div style="margin-right: 15px;">
+  <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
     <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.</div>
@@ -689,15 +689,15 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
     </div>
 
     <!-- SALAM PEMBUKA -->
-    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</div>
 
     <!-- PARAGRAF ISI -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.25;">
       Dengan ini Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengundang Bapak/Ibu/Sdr/i untuk hadir dalam <strong>{{namaRapat}}</strong>, yang insyaAllah akan diadakan pada:
     </p>
 
     <!-- JADWAL TABLE -->
-    <table style="margin-left: 30px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
+    <table style="margin-left: 20px; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
       <tr>
         <td style="width: 120px; vertical-align: top; font-weight: bold; padding: 2px 0;">Hari, tanggal</td>
         <td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td>
@@ -721,12 +721,12 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
     </table>
 
     <!-- PARAGRAF PENUTUP -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.25;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.25;">
       Mengingat pentingnya acara tersebut, kami mengharapkan Bapak/Ibu/Sdr/i dapat menghadirinya. Atas perhatian & kehadirannya diucapkan terima kasih.
     </p>
 
     <!-- SALAM PENUTUP -->
-    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</div>
 
     <!-- TANDA TANGAN SECTION -->
     <table style="width: 100%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid;">
@@ -2161,7 +2161,7 @@ export const FULL_HTML_KONTRIBUSI_DPS = `<div style="font-family: Arial, sans-se
   </table>
 
   <!-- BODY CONTENT -->
-  <div style="margin-right: 15px;">
+  <div style="margin-left: 75px; margin-right: 15px;">
     <!-- KEPADA YTH -->
     <div style="margin-bottom: 10px; font-size: 10.5pt; line-height: 1.25;">
       <div>Kepada Yth.:</div>
@@ -2171,10 +2171,10 @@ export const FULL_HTML_KONTRIBUSI_DPS = `<div style="font-family: Arial, sans-se
     </div>
 
     <!-- SALAM PEMBUKA -->
-    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">Assalamu’alaikum Warahmatullah Wabarakatuh,</div>
 
     <!-- PARAGRAF PEMBUKA -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.3;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.3;">
       {{paragrafPembuka}}
     </p>
 
@@ -2184,12 +2184,12 @@ export const FULL_HTML_KONTRIBUSI_DPS = `<div style="font-family: Arial, sans-se
     </div>
 
     <!-- PARAGRAF PENUTUP -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; text-indent: 30px; line-height: 1.3;">
+    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.3;">
       {{paragrafPenutup}}
     </p>
 
     <!-- SALAM PENUTUP -->
-    <p style="margin-top: 0; margin-bottom: 4px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</p>
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">Wassalamu’alaikum Warahmatullah Wabarakatuh.</div>
 
     <!-- TANDA TANGAN SECTION -->
     <table style="width: 100%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid;">
