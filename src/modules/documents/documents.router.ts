@@ -897,10 +897,84 @@ function resolveExistingFilePath(fileUrl: string): string | null {
 }
 
 async function ensureExistingFilePath(fileUrl: string, docId?: string, authHeader?: string): Promise<string | null> {
-  return resolveExistingFilePath(fileUrl);
+  const local = resolveExistingFilePath(fileUrl);
+  if (local) return local;
+
+  const filename = path.basename(fileUrl);
+  const targetDir = path.resolve(process.cwd(), uploadDir);
+  const targetPath = path.resolve(targetDir, filename);
+
+  try {
+    const headers: Record<string, string> = {};
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+
+    // Try 1: Remote API uploads URL
+    const prodApiUploadUrl = `https://amanah.dsnmui.or.id/api/uploads/${encodeURIComponent(filename)}`;
+    const directRes = await fetch(prodApiUploadUrl, { headers });
+    if (directRes.ok) {
+      let buffer = Buffer.from(await directRes.arrayBuffer());
+      if (filename.toLowerCase().endsWith('.html')) {
+        let text = buffer.toString('utf8');
+        text = text.replace(/<div style="text-align: center; display: inline-flex;[\s\S]*?TTE VERIFIED[\s\S]*?<\/div>\s*<\/div>/gi, '<!-- QR_CODE_TTE_PLACEHOLDER -->');
+        buffer = Buffer.from(text, 'utf8');
+      }
+      await fs.promises.mkdir(targetDir, { recursive: true });
+      await fs.promises.writeFile(targetPath, buffer);
+      console.log(`[Sync] Downloaded missing file ${filename} from production api/uploads`);
+      return targetPath;
+    }
+
+    // Try 2: Direct uploads URL
+    const prodUploadUrl = `https://amanah.dsnmui.or.id/uploads/${encodeURIComponent(filename)}`;
+    const prodRes = await fetch(prodUploadUrl, { headers });
+    if (prodRes.ok) {
+      let buffer = Buffer.from(await prodRes.arrayBuffer());
+      if (filename.toLowerCase().endsWith('.html')) {
+        let text = buffer.toString('utf8');
+        text = text.replace(/<div style="text-align: center; display: inline-flex;[\s\S]*?TTE VERIFIED[\s\S]*?<\/div>\s*<\/div>/gi, '<!-- QR_CODE_TTE_PLACEHOLDER -->');
+        buffer = Buffer.from(text, 'utf8');
+      }
+      await fs.promises.mkdir(targetDir, { recursive: true });
+      await fs.promises.writeFile(targetPath, buffer);
+      console.log(`[Sync] Downloaded missing file ${filename} from production uploads`);
+      return targetPath;
+    }
+
+    // Try 3: If docId is provided, fetch via production download/render
+    if (docId) {
+      const prodDownloadUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/download`;
+      const dlRes = await fetch(prodDownloadUrl, { headers });
+      if (dlRes.ok) {
+        const buffer = Buffer.from(await dlRes.arrayBuffer());
+        await fs.promises.mkdir(targetDir, { recursive: true });
+        await fs.promises.writeFile(targetPath, buffer);
+        console.log(`[Sync] Downloaded missing file for doc ${docId} from production download`);
+        return targetPath;
+      }
+
+      const prodRenderUrl = `https://amanah.dsnmui.or.id/api/documents/${encodeURIComponent(docId)}/render`;
+      const renderRes = await fetch(prodRenderUrl, { headers });
+      if (renderRes.ok) {
+        const text = await renderRes.text();
+        await fs.promises.mkdir(targetDir, { recursive: true });
+        await fs.promises.writeFile(targetPath, text, 'utf8');
+        console.log(`[Sync] Downloaded rendered HTML for doc ${docId} from production render`);
+        return targetPath;
+      }
+    }
+  } catch (err) {
+    console.warn(`[Sync] Failed to fetch missing file ${filename} from production:`, err);
+  }
+
+  return null;
 }
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: string): { html: string; injected: boolean } {
+  // Strip any legacy/baked-in TTE VERIFIED badge to prevent duplicate badges
+  htmlContent = htmlContent.replace(/<div style="text-align: center; display: inline-flex;[\s\S]*?TTE VERIFIED[\s\S]*?<\/div>\s*<\/div>/gi, '<!-- QR_CODE_TTE_PLACEHOLDER -->');
+
   const candidates = row.candidates || [];
   let bestMatch: { m: RegExpExecArray, cand: string, score: number, index: number } | null = null;
 
@@ -934,6 +1008,18 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
         if (/:\s*(<[^>]+>\s*)*$/.test(closeSlice) || /:\s*$/.test(prefix.trim())) score -= 100;
         if (/<li[^>]*>/i.test(closeSlice) && !/<\/li>/i.test(closeSlice)) score -= 50;
         if (/<blockquote/i.test(closeSlice) && !/<\/blockquote>/i.test(closeSlice)) score -= 50;
+
+        // Numbered lists (e.g. 1. ... 2. ... 3. ... in delegasi / peserta penugasan list) are NOT signature blocks
+        if (/(?:^|>|\n)\s*\d+\.\s*$/i.test(closeSlice.trim()) || /(?:^|>|\n)\s*\d+\.\s*[^<]*$/i.test(closeSlice)) score -= 200;
+
+        // Signatures are ALWAYS located AFTER the letter closing (Demikian ... or Wassalamu'alaikum ...)
+        const closingIndex = Math.min(
+          htmlContent.toLowerCase().indexOf('wassalamu') !== -1 ? htmlContent.toLowerCase().indexOf('wassalamu') : Infinity,
+          htmlContent.toLowerCase().indexOf('demikian') !== -1 ? htmlContent.toLowerCase().indexOf('demikian') : Infinity
+        );
+        if (closingIndex !== Infinity && m.index < closingIndex) {
+          score -= 200;
+        }
 
         // Positive indicators: Signature table, role headers, height spacers, placeholder
         if (/(?:Ketua|Sekretaris|Direktur|Pimpinan|Kepala|Menyetujui|Mengetahui|Ketum|Sekjen)/i.test(wideSlice)) score += 30;
@@ -1071,11 +1157,86 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     }
   }
 
-  // Only inject QR codes for PENANDATANGAN (final signers), never for PEMPARAF or APPROVER.
-  const penandatanganUserIds = penandatanganSteps.map((st: any) => st.userId).filter(Boolean);
-  const signerSigs = penandatanganUserIds.length > 0
-    ? signedSigs.filter((s: any) => penandatanganUserIds.includes(s.userId))
-    : signedSigs;
+  // Helper to match user name against target signatory name
+  const isNameMatch = (userName: string, targetName: string) => {
+    if (!userName || !targetName) return false;
+    const cleanTokens = (str: string) => str
+      .toLowerCase()
+      .replace(/\b(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir|se|ag|mb|mba)\b\.?/gi, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(t => t.length >= 3);
+    const uTokens = cleanTokens(userName);
+    const tTokens = cleanTokens(targetName);
+    if (uTokens.length === 0 || tTokens.length === 0) return false;
+    return uTokens.some(ut => tTokens.includes(ut));
+  };
+
+  const targetKiri = templateVariables.namaKetua || templateVariables.namaKiri;
+  const targetKanan = templateVariables.namaSekretaris || templateVariables.namaKanan;
+  const targetSingle = templateVariables.namaPenandatangan;
+
+  // Filter signedSigs: ONLY include signers who actually belong to the letter's designated signature slots!
+  const validSigners: Array<{ sig: any; slot: 'kiri' | 'kanan' | 'single'; targetName: string; roleName: string; signerIndex: number }> = [];
+
+  const userLowerKetua = ['cholil', 'nafis', 'adiwarman', 'hasanuddin'];
+  const userLowerSekretaris = ['amirsyah', 'tambunan', 'asrori', 'anwar'];
+
+  for (const s of signedSigs) {
+    const fullName = s.user?.fullName || '';
+    const lowerName = fullName.toLowerCase();
+    const isUserKetua = userLowerKetua.some(k => lowerName.includes(k));
+    const isUserSekretaris = userLowerSekretaris.some(k => lowerName.includes(k));
+
+    let matchedSlot: 'kiri' | 'kanan' | 'single' | null = null;
+    let targetName = '';
+    let roleName = '';
+
+    if (targetKiri && (isNameMatch(fullName, targetKiri) || isUserKetua)) {
+      matchedSlot = 'kiri';
+      targetName = targetKiri;
+      roleName = templateVariables.jabatanKiri || 'Ketua';
+    } else if (targetKanan && (isNameMatch(fullName, targetKanan) || isUserSekretaris)) {
+      matchedSlot = 'kanan';
+      targetName = targetKanan;
+      roleName = templateVariables.jabatanKanan || 'Sekretaris';
+    } else if (targetSingle && isNameMatch(fullName, targetSingle)) {
+      matchedSlot = 'single';
+      targetName = targetSingle;
+      roleName = templateVariables.jabatanPenandatangan || 'Ketua';
+    } else if (!targetKiri && !targetKanan && !targetSingle) {
+      // Fallback for letters without templateVariables metadata
+      if (isUserKetua) {
+        matchedSlot = 'kiri';
+        targetName = '';
+        roleName = 'Ketua';
+      } else if (isUserSekretaris) {
+        matchedSlot = 'kanan';
+        targetName = '';
+        roleName = 'Sekretaris';
+      } else if (signedSigs.length === 1) {
+        matchedSlot = 'single';
+        targetName = '';
+        roleName = s.user?.jobTitle || 'Ketua';
+      }
+    }
+
+    if (matchedSlot) {
+      const alreadyHasSlot = validSigners.some(v => v.slot === matchedSlot);
+      if (!alreadyHasSlot) {
+        validSigners.push({
+          sig: s,
+          slot: matchedSlot,
+          targetName,
+          roleName,
+          signerIndex: matchedSlot === 'kiri' ? 0 : (matchedSlot === 'kanan' ? 1 : 0)
+        });
+      }
+    } else {
+      console.log(`[injectSignaturesToHtml] Skipping signer ${fullName} because not matching any signature slot in template`);
+    }
+  }
 
   let documentNumber = '';
   if (signedSigs.length > 0 && signedSigs[0].documentId) {
@@ -1091,20 +1252,20 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     }
   }
 
-  const signatureRows = await Promise.all(signerSigs.map(async (s: any) => {
+  const signatureRows = await Promise.all(validSigners.map(async (v) => {
+    const s = v.sig;
     const frontendUrl = process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id';
     const payload = `${frontendUrl}/verify/document/${s.documentId}`;
     
     const qrDataUrl = await getCachedQrCode(payload);
 
-    const signerIndex = penandatanganSteps.findIndex((st: any) => st.userId === s.userId);
-
     // Build comprehensive candidates list for name matching
     const candidates: string[] = [];
+    if (v.targetName) candidates.push(v.targetName);
     if (s.user?.fullName) {
       candidates.push(s.user.fullName);
       const cleanName = s.user.fullName
-        .replace(/\b(Dr|K\.?H|Prof|Drs|H|Lc|Ph\.?D|M\.?A|S\.?H|M\.?Si|Ir|M\.?Ag|S\.?Ag|S\.?E)\b\.?/gi, '')
+        .replace(/\b(Dr|K\.?H|Prof|Drs|H|Lc|Ph\.?D|M\.?A|S\.?H|M\.?Si|Ir|M\.?Ag|S\.?Ag|S\.?E|M\.?B\.?A)\b\.?/gi, '')
         .replace(/[\s,.]+/g, ' ')
         .trim();
       if (cleanName && cleanName.length >= 3) {
@@ -1112,42 +1273,21 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
       }
     }
     
-    const userLower = (s.user?.fullName || '').toLowerCase();
-    const isUserKetua = userLower.includes('cholil') || userLower.includes('nafis') || userLower.includes('hasanuddin');
-    const isUserSekretaris = userLower.includes('amirsyah') || userLower.includes('tambunan') || userLower.includes('anwar');
-
-    if (templateVariables) {
-      if (isUserKetua && templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
-      if (isUserSekretaris && templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
-      if (templateVariables.namaPenandatangan) candidates.push(templateVariables.namaPenandatangan);
-      if (signerIndex === 0 && templateVariables.namaKetua) candidates.push(templateVariables.namaKetua);
-      if (signerIndex === 1 && templateVariables.namaSekretaris) candidates.push(templateVariables.namaSekretaris);
-    }
-    
-    // Fallbacks for known signers if they use weird accounts
-    if (isUserKetua || /ketua/i.test(s.user?.jobTitle || '')) {
+    if (v.slot === 'kiri') {
       candidates.push("CHOLIL NAFIS");
+      candidates.push("ADIWARMAN");
       candidates.push("HASANUDDIN");
-    } else if (isUserSekretaris || /sekretaris/i.test(s.user?.jobTitle || '')) {
+    } else if (v.slot === 'kanan') {
       candidates.push("AMIRSYAH TAMBUNAN");
+      candidates.push("ASRORI KARNI");
       candidates.push("ANWAR ABBAS");
-    } else {
-      if (templateVariables.namaKetua && signerIndex === 0) candidates.push(templateVariables.namaKetua);
-      if (templateVariables.namaSekretaris && signerIndex === 1) candidates.push(templateVariables.namaSekretaris);
-    }
-
-    let resolvedRole = s.user?.jobTitle;
-    if (!resolvedRole) {
-      if (isUserKetua) resolvedRole = 'Ketua';
-      else if (isUserSekretaris) resolvedRole = 'Sekretaris';
-      else resolvedRole = signerIndex === 0 ? 'Ketua' : 'Sekretaris';
     }
 
     return {
-      signerIndex,
+      signerIndex: v.signerIndex,
       fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
       jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
-      roleName: resolvedRole,
+      roleName: v.roleName,
       signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', {
         timeZone: 'Asia/Jakarta',
         dateStyle: 'long',
@@ -1186,9 +1326,13 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   // Clean up unwanted borders and negative margins from raw HTML
   htmlContent = htmlContent.replace(/border-top:\s*1px\s*solid\s*#000000;?/gi, 'border-top: none;');
   htmlContent = htmlContent.replace(/border-top:\s*1px\s*solid\s*black;?/gi, 'border-top: none;');
-  htmlContent = htmlContent.replace(/border-top:\s*1px\s*solid\s*#000;?/gi, 'border-top: none;');
   htmlContent = htmlContent.replace(/margin-left:\s*-30px;\s*margin-right:\s*-30px;/gi, 'margin-left: 0; margin-right: 0;');
   htmlContent = htmlContent.replace(/margin-left:\s*-40px;\s*margin-right:\s*-40px;/gi, 'margin-left: 0; margin-right: 0;');
+
+  // Remove any stray <br> tags directly inside <table>, <thead>, <tbody>, <tfoot>, <tr> which trigger browser foster-parenting gaps
+  htmlContent = htmlContent.replace(/(<table\b[^>]*>[\s\S]*?<\/table>)/gi, (tbl) => {
+    return tbl.replace(/<br\s*\/?>/gi, '');
+  });
 
   // Replace any relative or absolute image references with self-contained Base64 Data URLs
   htmlContent = htmlContent.replace(/src=["'][^"']*kop-surat\.png["']/gi, `src="${kopBase64}" class="kop-surat-img"`);

@@ -139,6 +139,23 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
     }
 
     if (!foundPath) {
+      const filename = path.basename(subPath);
+      const targetDir = path.resolve(process.cwd(), 'uploads');
+      const targetPath = path.resolve(targetDir, filename);
+      try {
+        const prodRes = await fetch(`https://amanah.dsnmui.or.id/api/uploads/${encodeURIComponent(filename)}`);
+        if (prodRes.ok) {
+          const buffer = Buffer.from(await prodRes.arrayBuffer());
+          await fs.promises.mkdir(targetDir, { recursive: true });
+          await fs.promises.writeFile(targetPath, buffer);
+          foundPath = targetPath;
+        }
+      } catch (err) {
+        console.warn(`[Uploads HTML Interceptor] Failed to fetch ${filename} from production:`, err);
+      }
+    }
+
+    if (!foundPath) {
       return next();
     }
 
@@ -150,34 +167,9 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
       include: { document: true }
     });
 
-    const doc = version?.document;
     let finalHtml = html;
-    if (doc && doc.status === 'SIGNED' && html.includes('<!-- QR_CODE_TTE_PLACEHOLDER -->')) {
-      const frontendUrl = process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id';
-      const verifyUrl = `${frontendUrl}/verify/document/${doc.id}`;
-
-      // Generate QR Code as Base64 Data URL (dark color #006633 MUI green)
-      const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
-        color: {
-          dark: '#006633',
-          light: '#ffffff'
-        },
-        margin: 1,
-        width: 120
-      });
-
-      // Digital Signature Badge
-      const qrHtml = `
-        <div style="text-align: center; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; border: 1.5px solid #006633; padding: 10px; border-radius: 12px; background: #ffffff; box-shadow: 0 4px 12px rgba(0, 102, 51, 0.08); font-family: Arial, sans-serif; margin: 0 15px;">
-          <img src="${qrDataUrl}" alt="QR Code TTE" style="width: 85px; height: 85px; object-fit: contain;" />
-          <div style="font-size: 8px; font-weight: bold; color: #006633; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 6px; white-space: nowrap;">TTE VERIFIED</div>
-          <div style="font-size: 6.5px; color: #64748b; margin-top: 1px; font-weight: 500; white-space: nowrap;">Scan untuk verifikasi</div>
-        </div>
-      `;
-
-      finalHtml = html.replace('<!-- QR_CODE_TTE_PLACEHOLDER -->', qrHtml);
-    }
-
+    // Strip any legacy TTE VERIFIED badge if present in downloaded file
+    finalHtml = finalHtml.replace(/<div style="text-align: center; display: inline-flex;[\s\S]*?TTE VERIFIED[\s\S]*?<\/div>\s*<\/div>/gi, '<!-- QR_CODE_TTE_PLACEHOLDER -->');
     finalHtml = finalHtml.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -192,6 +184,31 @@ uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
 uploadsRouter.use(express.static('uploads'));
 uploadsRouter.use(express.static(path.resolve(process.cwd(), 'uploads')));
 uploadsRouter.use(express.static(path.resolve(process.cwd(), '../uploads')));
+
+// Proxy fallback for non-HTML files not present locally
+uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
+  const subPath = req.path.startsWith('/') ? req.path.slice(1) : req.path;
+  const filename = path.basename(subPath);
+  const targetDir = path.resolve(process.cwd(), 'uploads');
+  const targetPath = path.resolve(targetDir, filename);
+  if (!fs.existsSync(targetPath)) {
+    try {
+      const prodRes = await fetch(`https://amanah.dsnmui.or.id/api/uploads/${encodeURIComponent(filename)}`);
+      if (prodRes.ok) {
+        const buffer = Buffer.from(await prodRes.arrayBuffer());
+        await fs.promises.mkdir(targetDir, { recursive: true });
+        await fs.promises.writeFile(targetPath, buffer);
+        return res.sendFile(targetPath);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  next();
+});
 
 app.use('/uploads', uploadsRouter);
 app.use('/api/uploads', uploadsRouter);

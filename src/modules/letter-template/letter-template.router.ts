@@ -97,10 +97,21 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       orderBy: { updatedAt: 'desc' },
     });
 
-    const sanitized = templates.map(t => ({
-      ...t,
-      htmlContent: sanitizeTemplateHtml(t.htmlContent)
-    }));
+    const sanitized = templates.map(t => {
+      let vars = t.variables;
+      if (typeof vars === 'string') {
+        try {
+          vars = JSON.parse(vars);
+        } catch {
+          vars = [];
+        }
+      }
+      return {
+        ...t,
+        variables: vars,
+        htmlContent: sanitizeTemplateHtml(t.htmlContent)
+      };
+    });
 
     res.json({ status: 'success', data: sanitized });
   } catch (error: any) {
@@ -113,10 +124,19 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const template = await prisma.letterTemplate.findUnique({ where: { id: String(req.params.id) } });
     if (!template) return res.status(404).json({ status: 'error', message: 'Template tidak ditemukan' });
+    let vars = template.variables;
+    if (typeof vars === 'string') {
+      try {
+        vars = JSON.parse(vars);
+      } catch {
+        vars = [];
+      }
+    }
     res.json({
       status: 'success',
       data: {
         ...template,
+        variables: vars,
         htmlContent: sanitizeTemplateHtml(template.htmlContent)
       }
     });
