@@ -196,7 +196,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 // ── CREATE MEETING ──
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, agendaNumber, dateTime, endDateTime, location, description, targetType, departmentId, customAttendeeIds, externalEmails, discussedDocIds } = req.body;
+    const { title, agendaNumber, dateTime, endDateTime, location, description, targetType, departmentId, customAttendeeIds, externalEmails, discussedDocIds, documentId, attachedDocTitles } = req.body;
 
     if (!title || !dateTime || !location || !targetType) {
       return res.status(400).json({
@@ -225,15 +225,21 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       externalEmails
     );
 
+    let finalDescription = description || '';
+    if (attachedDocTitles && Array.isArray(attachedDocTitles) && attachedDocTitles.length > 0) {
+      finalDescription += (finalDescription ? '\n\n' : '') + `[Dokumen Bawaan Rapat: ${attachedDocTitles.join(', ')}]`;
+    }
+
     const meetingData: any = {
       title,
       agendaNumber: agendaNumber || null,
       dateTime: new Date(dateTime),
       endDateTime: endDateTime ? new Date(endDateTime) : null,
       location,
-      description: description || null,
+      description: finalDescription || null,
       targetType: targetType.toUpperCase(),
       departmentId: departmentId || null,
+      documentId: documentId || null,
       status: 'DRAFT',
       attendees: resolvedAttendees
     };
@@ -250,6 +256,39 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         discussedDocs: true
       }
     });
+
+    // If linked to document, log activity to publicSubmission and internal disposisi
+    if (documentId) {
+      try {
+        const docWithPubSub = await prisma.document.findUnique({
+          where: { id: documentId },
+          include: { publicSubmissions: true }
+        });
+        if (docWithPubSub?.publicSubmissions?.[0]) {
+          await prisma.publicSubmissionActivity.create({
+            data: {
+              submissionId: docWithPubSub.publicSubmissions[0].id,
+              title: `Agenda Rapat Dijadwalkan: ${newMeeting.title}`,
+              description: `Rapat pembahasan dijadwalkan pada ${formatDateStr(newMeeting.dateTime)} di ${newMeeting.location}. Seluruh dokumen pengajuan dilampirkan dalam berkas rapat.`,
+              publicStatus: 'Agenda Rapat',
+              visibility: 'PUBLIC',
+              performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
+            },
+          });
+        }
+
+        await prisma.disposisiLog.create({
+          data: {
+            documentId,
+            userId: req.user!.id,
+            action: 'AGENDA_RAPAT',
+            description: `Dijadwalkan rapat "${newMeeting.title}" pada ${formatDateStr(newMeeting.dateTime)}. Berkas pengajuan dibawa ke rapat.`,
+          }
+        });
+      } catch (logErr) {
+        console.error('Error logging meeting creation to document trail:', logErr);
+      }
+    }
 
     // Notify attendees if meeting is active/not draft
     if (newMeeting.status === 'AKTIF') {

@@ -12,91 +12,138 @@ const prisma = new PrismaClient({ adapter });
 async function seedPublicPortal() {
   console.log('🌱 Seeding Amanah Public Portal Master Data...');
 
-  // 1. Submission Types & Requirements Master Data
+  // 1. Official 9 DSN-MUI Services & Requirements Master Data
   const submissionTypes = [
     {
-      code: 'BANK_SYARIAH',
-      name: 'Perbankan & Lembaga Keuangan Syariah',
-      description: 'Pengajuan kesesuaian syariah untuk produk penghimpunan dana, pembiayaan, treasury, trade finance, dan layanan digital perbankan syariah.',
-      icon: 'Building2',
+      code: 'FATWA',
+      name: 'Permohonan Fatwa',
+      description: 'Permohonan fatwa hukum syariah baru atau fatwa turunan terkait inovasi akad, produk, atau skema transaksi keuangan dan bisnis syariah.',
+      icon: 'BookOpen',
       sortOrder: 1,
       requirements: [
         { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Resmi Direksi', description: 'Surat resmi bertanda tangan direksi dan stempel basah/TTE perusahaan.', isMandatory: true, sortOrder: 1 },
-        { code: 'LEGALITAS_PERUSAHAAN', name: 'Akta Pendirian & Izin Usaha (OJK/BI)', description: 'Salinan Akta Notaris, SK Kemenkumham, NIB, dan Izin Operasional Lembaga.', isMandatory: true, sortOrder: 2 },
-        { code: 'PROFIL_PRODUK', name: 'Deskripsi & Spesifikasi Produk/Layanan', description: 'Dokumen penjelasan fitur, skema akad syariah, flow transaksi, dan simulasi perhitungan margin/bagi hasil.', isMandatory: true, sortOrder: 3 },
-        { code: 'DRAFT_AKAD', name: 'Draf Perjanjian / Kontrak Akad Nasabah', description: 'Format baku akad/perjanjian yang akan ditandatangani oleh nasabah.', isMandatory: true, sortOrder: 4 },
-        { code: 'OPINI_DPS', name: 'Rekomendasi / Opini DPS Internal', description: 'Hasil review dan persetujuan awal dari Dewan Pengawas Syariah internal lembaga.', isMandatory: false, sortOrder: 5 },
-        { code: 'SOP_PRODUK', name: 'Standar Operasional Prosedur (SOP)', description: 'Manual operasional penanganan produk oleh unit kerja terkait.', isMandatory: false, sortOrder: 6 },
+        { code: 'KAJIAN_AKADEMIS', name: 'Dokumen Kajian / Latar Belakang Kebutuhan Fatwa', description: 'Penjelasan latar belakang, dasar kebutuhan fatwa, dan analisis muamalah.', isMandatory: true, sortOrder: 2 },
+        { code: 'DRAFT_KONSEP_AKAD', name: 'Draf Usulan Akad / Skema Produk', description: 'Rancangan klausul akad dan alur transaksi yang dimohonkan fatwanya.', isMandatory: true, sortOrder: 3 },
+        { code: 'OPINI_DPS', name: 'Opini Awal DPS / Rekomendasi Ahli Syariah', description: 'Pendapat atau telaah awal dari DPS internal pemohon.', isMandatory: false, sortOrder: 4 },
       ],
     },
     {
-      code: 'FINTECH_SYARIAH',
-      name: 'Fintech & P2P Lending Syariah',
-      description: 'Permohonan kesesuaian syariah untuk platform teknologi finansial, P2P lending, payment gateway, e-wallet, dan equity crowdfunding syariah.',
-      icon: 'SmartphoneNfc',
+      code: 'REKOMENDASI_DPS',
+      name: 'Permohonan Rekomendasi DPS',
+      description: 'Permohonan rekomendasi penempatan, perpanjangan masa tugas, atau pergantian anggota Dewan Pengawas Syariah (DPS) pada lembaga.',
+      icon: 'Users',
       sortOrder: 2,
       requirements: [
-        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Resmi Direksi', description: 'Surat resmi permohonan opini/sertifikasi kesesuaian syariah dari direksi.', isMandatory: true, sortOrder: 1 },
-        { code: 'LEGALITAS_PLATFORM', name: 'Legalitas PT, NIB & Tanda Daftar OJK/Kominfo', description: 'Salinan izin usaha fintech berizin/terdaftar di OJK dan PSE Kominfo.', isMandatory: true, sortOrder: 2 },
-        { code: 'BUSINESS_MODEL', name: 'Business Model & Skema Alur Dana (Flowchart)', description: 'Diagram terperinci mengenai aliran dana (fund flow), biaya administrasi (ujrah), dan batas tanggung jawab.', isMandatory: true, sortOrder: 3 },
-        { code: 'DRAFT_ELEKTRONIK_AKAD', name: 'Draf Akad Elektronik & Terms of Service', description: 'Ketentuan layanan elektronik dan klausul akad (Wakalah bil Ujrah, Murabahah, Musyarakah, dll).', isMandatory: true, sortOrder: 4 },
-        { code: 'SECURITY_AUDIT', name: 'Sertifikat Keamanan Sistem (ISO 27001)', description: 'Bukti sertifikasi keamanan informasi sistem elektronik.', isMandatory: false, sortOrder: 5 },
+        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Rekomendasi DPS dari Direksi', description: 'Surat permohonan resmi pengusulan nama calon DPS.', isMandatory: true, sortOrder: 1 },
+        { code: 'CV_CALON_DPS', name: 'Daftar Riwayat Hidup / CV Lengkap Calon DPS', description: 'Curriculum Vitae memuat latar belakang pendidikan syariah dan pengalaman muamalah.', isMandatory: true, sortOrder: 2 },
+        { code: 'SERTIFIKAT_KOMPETENSI', name: 'Sertifikat Kompetensi DPS / Pelatihan DSN-MUI', description: 'Salinan sertifikat pelatihan atau sertifikasi kompetensi DPS yang masih berlaku.', isMandatory: true, sortOrder: 3 },
+        { code: 'PAKTA_INTEGRITAS', name: 'Surat Pernyataan Kesediaan & Pakta Integritas', description: 'Surat pernyataan tidak merangkap jabatan melebihi batas regulasi dan bersedia bertugas aktif.', isMandatory: true, sortOrder: 4 },
+        { code: 'SK_RUPS_STRUKTUR', name: 'SK RUPS / Rencana Struktur Organisasi', description: 'Dokumen keputusan pemegang saham terkait penunjukan DPS.', isMandatory: false, sortOrder: 5 },
       ],
     },
     {
-      code: 'PASAR_MODAL_SYARIAH',
-      name: 'Pasar Modal & Investasi Syariah',
-      description: 'Pengajuan kesesuaian syariah untuk penerbitan Sukuk, Reksa Dana Syariah, Efek Beragun Aset Syariah, dan instrumen pasar modal lainnya.',
-      icon: 'TrendingUp',
+      code: 'REKOMENDASI_TAS',
+      name: 'Permohonan Rekomendasi TAS',
+      description: 'Permohonan rekomendasi penunjukan Tim Ahli Syariah (TAS) dalam penerbitan efek syariah, sukuk, reksa dana syariah, atau konsultasi bisnis.',
+      icon: 'Award',
       sortOrder: 3,
       requirements: [
-        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Penerbitan Sukuk / Reksa Dana', description: 'Surat resmi pengajuan kepada DSN-MUI.', isMandatory: true, sortOrder: 1 },
-        { code: 'PROSPEKTUS_RINGKAS', name: 'Draf Prospektus / Dokumen Penawaran', description: 'Prospektus penerbitan instrumen investasi syariah.', isMandatory: true, sortOrder: 2 },
-        { code: 'DOKUMEN_UNDERLYING', name: 'Legalitas & Bukti Kepemilikan Aset Underlying', description: 'Dokumen hak milik atas aset berwujud/jasa yang menjadi dasar akad (underlying asset).', isMandatory: true, sortOrder: 3 },
-        { code: 'DRAFT_PERJANJIAN_WALI_AMANAT', name: 'Draf Perjanjian Perwaliamanatan / Kustodian', description: 'Kontrak kerja sama dengan bank kustodian atau wali amanat.', isMandatory: true, sortOrder: 4 },
-        { code: 'LEGAL_OPINION', name: 'Pendapat Hukum (Legal Opinion) Konsultan', description: 'Kajian hukum dari konsultan hukum terdaftar OJK.', isMandatory: false, sortOrder: 5 },
+        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Penunjukan Tim Ahli Syariah (TAS)', description: 'Surat permohonan resmi diajukan oleh emiten atau manajer investasi.', isMandatory: true, sortOrder: 1 },
+        { code: 'IZIN_AHLI_SYARIAH', name: 'Izin / Sertifikasi Ahli Syariah Pasar Modal (ASPM)', description: 'Tanda daftar atau izin profesi ahli syariah dari otoritas berwenang (OJK).', isMandatory: true, sortOrder: 2 },
+        { code: 'PORTOFOLIO_TAS', name: 'Profil & Portofolio Pengalaman Calon TAS', description: 'Rekam jejak pengalaman telaah efek syariah atau konsultasi syariah.', isMandatory: true, sortOrder: 3 },
+        { code: 'DRAFT_KONTRAK_KERJA', name: 'Draf Kontrak / Ruang Lingkup Penugasan', description: 'Perjanjian kerja sama penugasan telaah kepatuhan syariah.', isMandatory: false, sortOrder: 4 },
       ],
     },
     {
-      code: 'ASURANSI_SYARIAH',
-      name: 'Asuransi & Reasuransi Syariah',
-      description: 'Kesesuaian syariah untuk produk asuransi jiwa, asuransi umum, dana tabarru, investasi unit link syariah, dan reasuransi syariah.',
-      icon: 'Shield',
+      code: 'KESESUAIAN_SYARIAH',
+      name: 'Permohonan Pernyataan Kesesuaian Syariah',
+      description: 'Permohonan surat pernyataan kesesuaian syariah (Shariah Compliance Statement) atas produk baru, skema pembiayaan, atau layanan institusi.',
+      icon: 'ShieldCheck',
       sortOrder: 4,
       requirements: [
-        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Resmi Direksi', description: 'Surat permohonan persetujuan produk asuransi syariah.', isMandatory: true, sortOrder: 1 },
-        { code: 'POLIS_DAN_AKAD', name: 'Draf Polis & Klausul Akad Tabarru/Tijarah', description: 'Rancangan polis asuransi memuat akad Tabarru, Wakalah bil Ujrah, atau Mudharabah.', isMandatory: true, sortOrder: 2 },
-        { code: 'LAPORAN_AKTUARIA', name: 'Ringkasan Laporan Aktuaria Produk', description: 'Kajian aktuaria terkait pengelolaan risiko dan dana kebajikan.', isMandatory: true, sortOrder: 3 },
-        { code: 'REKOMENDASI_DPS', name: 'Surat Rekomendasi DPS Perusahaan', description: 'Persetujuan dari Dewan Pengawas Syariah internal.', isMandatory: false, sortOrder: 4 },
+        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Pernyataan Kesesuaian Syariah', description: 'Surat permohonan resmi dari direksi instansi pemohon.', isMandatory: true, sortOrder: 1 },
+        { code: 'PROFIL_PRODUK', name: 'Deskripsi Produk, Flowchart Transaksi & Simulasi', description: 'Penjelasan fitur, skema akad, alur dana, serta simulasi perhitungan margin/ujrah.', isMandatory: true, sortOrder: 2 },
+        { code: 'DRAFT_AKAD', name: 'Draf Dokumen Perjanjian / Kontrak Nasabah', description: 'Format akad baku yang akan ditandatangani oleh para pihak.', isMandatory: true, sortOrder: 3 },
+        { code: 'OPINI_DPS', name: 'Opini / Rekomendasi Dewan Pengawas Syariah Internal', description: 'Persetujuan atau kajian kesesuaian syariah dari DPS internal lembaga.', isMandatory: true, sortOrder: 4 },
+        { code: 'SOP_PRODUK', name: 'Standar Operasional Prosedur (SOP) Terkait', description: 'Manual operasional penerapan prinsip syariah pada produk.', isMandatory: false, sortOrder: 5 },
       ],
     },
     {
-      code: 'BISNIS_DAN_WISATA_HALAL',
-      name: 'Hotel, Rumah Sakit & Wisata Halal',
-      description: 'Sertifikasi kesesuaian syariah untuk operasional hotel ramah muslim, rumah sakit syariah, biro perjalanan umrah/haji, dan destinasi wisata halal.',
-      icon: 'Hotel',
+      code: 'KESELARASAN_SYARIAH',
+      name: 'Permohonan Pernyataan Keselarasan Syariah',
+      description: 'Permohonan evaluasi keselarasan implementasi prinsip syariah terhadap fatwa DSN-MUI dan ketentuan regulasi otoritas pengawas (OJK/BI).',
+      icon: 'GitMerge',
       sortOrder: 5,
       requirements: [
-        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Sertifikasi', description: 'Surat pengajuan kesesuaian syariah unit bisnis.', isMandatory: true, sortOrder: 1 },
-        { code: 'LEGALITAS_USAHA', name: 'NIB, Izin Usaha Pariwisata / Izin Operasional RS', description: 'Kelengkapan perizinan operasional instansi.', isMandatory: true, sortOrder: 2 },
-        { code: 'MANUAL_SYARIAH', name: 'Pedoman Standar Pelayanan Syariah (SOP)', description: 'Manual implementasi prinsip syariah dalam fasilitas, makanan halal, keuangan, dan pelayanan.', isMandatory: true, sortOrder: 3 },
-        { code: 'DAFTAR_FASILITAS', name: 'Denah & Inventaris Fasilitas Ibadah / Higienitas', description: 'Foto/layout musala, arah kiblat, toilet bersih, dan dapur halal.', isMandatory: true, sortOrder: 4 },
+        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Evaluasi Keselarasan Syariah', description: 'Surat resmi permohonan keselarasan dari pengurus instansi.', isMandatory: true, sortOrder: 1 },
+        { code: 'MATRIKS_REGULASI', name: 'Matriks Keselarasan Regulasi OJK/BI vs Fatwa DSN', description: 'Tabel komparasi klausul regulasi terhadap fatwa terkait.', isMandatory: true, sortOrder: 2 },
+        { code: 'SELF_ASSESSMENT', name: 'Laporan Self-Assessment Kepatuhan Syariah', description: 'Hasil audit/penilaian mandiri kepatuhan syariah.', isMandatory: true, sortOrder: 3 },
+        { code: 'CATATAN_DPS', name: 'Catatan & Telaah Dewan Pengawas Syariah', description: 'Rekomendasi tertulis dari DPS pemohon.', isMandatory: false, sortOrder: 4 },
       ],
     },
     {
-      code: 'PRODUK_KONSUMEN_SYARIAH',
-      name: 'Multi Level Marketing & Bisnis Syariah',
-      description: 'Kesesuaian syariah untuk skema Penjualan Langsung Berjenjang Syariah (PLBS / MLM Syariah), e-commerce syariah, dan koperasi syariah.',
-      icon: 'ShoppingBag',
+      code: 'SERTIFIKASI_KESESUAIAN_SYARIAH',
+      name: 'Sertifikasi Kesesuaian Syariah',
+      description: 'Pengajuan sertifikasi formal kesesuaian syariah untuk institusi, entitas usaha halal, rumah sakit syariah, perhotelan, atau platform digital.',
+      icon: 'FileCheck2',
       sortOrder: 6,
       requirements: [
-        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Kesesuaian Syariah', description: 'Surat resmi dari direksi perusahaan.', isMandatory: true, sortOrder: 1 },
-        { code: 'MARKETING_PLAN', name: 'Marketing Plan & Skema Komisi / Reward', description: 'Penjelasan terperinci mengenai bonus, pembagian keuntungan, serta pencegahan unsur maisir/gharar/maysir.', isMandatory: true, sortOrder: 2 },
-        { code: 'SERTIFIKAT_HALAL_PRODUK', name: 'Sertifikat Halal Produk (BPJPH)', description: 'Daftar produk yang diperdagangkan beserta sertifikat halal resminya.', isMandatory: true, sortOrder: 3 },
-        { code: 'KODE_ETIK_DISTRIBUTOR', name: 'Kode Etik Mitra / Distributor', description: 'Aturan perilaku dan perlindungan konsumen.', isMandatory: false, sortOrder: 4 },
+        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Sertifikasi Kesesuaian Syariah', description: 'Surat resmi permohonan sertifikasi dari pimpinan tertinggi instansi.', isMandatory: true, sortOrder: 1 },
+        { code: 'LEGALITAS_USAHA', name: 'Akta Pendirian, NIB & Izin Operasional Instansi', description: 'Dokumen legalitas hukum dan izin operasional lengkap.', isMandatory: true, sortOrder: 2 },
+        { code: 'MANUAL_SYARIAH', name: 'Pedoman Pelayanan / Manual Standar Operasi Syariah', description: 'SOP implementasi nilai dan aturan syariah dalam operasional bisnis.', isMandatory: true, sortOrder: 3 },
+        { code: 'LAPORAN_AUDIT', name: 'Laporan Hasil Audit / Evaluasi Lapangan', description: 'Bukti kesiapan fasilitas, SDM, dan tata kelola syariah.', isMandatory: true, sortOrder: 4 },
+        { code: 'FASILITAS_HALAL', name: 'Sertifikat Halal / Daftar Fasilitas Pendukung', description: 'Sertifikat halal produk/dapur dan foto fasilitas ibadah memadai.', isMandatory: false, sortOrder: 5 },
+      ],
+    },
+    {
+      code: 'LAPORAN_PENGAWASAN_DPS',
+      name: 'Laporan Hasil Pengawasan DPS',
+      description: 'Penyampaian berkala Laporan Hasil Pengawasan (LHP) Dewan Pengawas Syariah semesteran atau tahunan dari lembaga keuangan syariah ke DSN-MUI.',
+      icon: 'ClipboardCheck',
+      sortOrder: 7,
+      requirements: [
+        { code: 'SURAT_PENGANTAR', name: 'Surat Pengantar Penyampaian Laporan Pengawasan', description: 'Surat resmi pengantar bertanda tangan DPS dan Direksi.', isMandatory: true, sortOrder: 1 },
+        { code: 'DOKUMEN_LHP', name: 'Dokumen Lengkap Laporan Hasil Pengawasan (LHP)', description: 'Laporan berkala periode semester atau tahunan pengawasan syariah.', isMandatory: true, sortOrder: 2 },
+        { code: 'MATRIKS_TEMUAN', name: 'Matriks Temuan Pengawasan & Rekomendasi Perbaikan', description: 'Daftar temuan audit syariah beserta status tindak lanjut perbaikan.', isMandatory: true, sortOrder: 3 },
+        { code: 'NOTULEN_RAPAT', name: 'Risalah / Notulen Rapat DPS bersama Direksi', description: 'Bukti penyelenggaraan rapat koordinasi pengawasan syariah berkala.', isMandatory: false, sortOrder: 4 },
+      ],
+    },
+    {
+      code: 'SURAT_PENGADUAN',
+      name: 'Surat Pengaduan',
+      description: 'Saluran pengaduan resmi terkait dugaan ketidaksesuaian syariah, sengketa muamalah, atau pelanggaran prinsip syariah pada lembaga terkait.',
+      icon: 'AlertTriangle',
+      sortOrder: 8,
+      requirements: [
+        { code: 'SURAT_PENGADUAN', name: 'Surat Pengaduan Resmi & Kronologis Lengkap', description: 'Uraian runtut permasalahan, pihak terlapor, dan substansi dugaan pelanggaran.', isMandatory: true, sortOrder: 1 },
+        { code: 'BUKTI_TRANSAKSI', name: 'Bukti Perjanjian / Dokumen Transaksi Terkait', description: 'Salinan akad, bukti transfer, atau bukti transaksi relevan.', isMandatory: true, sortOrder: 2 },
+        { code: 'IDENTITAS_PELAPOR', name: 'Salinan KTP / Akta Kuasa Hukum Pelapor', description: 'Tanda pengenal resmi pihak pengadu atau surat kuasa khusus.', isMandatory: true, sortOrder: 3 },
+        { code: 'KORESPONDENSI', name: 'Bukti Korespondensi / Tanggapan Pihak Terlapor', description: 'Upaya penyelesaian musyawarah yang telah dilakukan sebelumnya.', isMandatory: false, sortOrder: 4 },
+      ],
+    },
+    {
+      code: 'UMUM',
+      name: 'Umum',
+      description: 'Permohonan audiensi, konsultasi awal muamalah syariah, permintaan narasumber, atau korespondensi resmi umum lainnya ke DSN-MUI.',
+      icon: 'HelpCircle',
+      sortOrder: 9,
+      requirements: [
+        { code: 'SURAT_PERMOHONAN', name: 'Surat Permohonan Resmi Institusi', description: 'Surat pengajuan berkop resmi instansi atau pemohon.', isMandatory: true, sortOrder: 1 },
+        { code: 'TOR_AGENDA', name: 'Kerangka Acuan Kerja (TOR) / Pokok Konsultasi', description: 'Tujuan kegiatan, daftar topik pembahasan, dan susunan acara.', isMandatory: true, sortOrder: 2 },
+        { code: 'KONTAK_PIC', name: 'Profil Lembaga & Kontak Person Penanggung Jawab', description: 'Informasi kontak narahubung yang dapat dihubungi.', isMandatory: true, sortOrder: 3 },
       ],
     },
   ];
+
+  // Deactivate any legacy submission types
+  await prisma.submissionTypeMaster.updateMany({
+    where: {
+      code: {
+        notIn: submissionTypes.map((t) => t.code),
+      },
+    },
+    data: { isActive: false },
+  });
 
   for (const t of submissionTypes) {
     const typeRecord = await prisma.submissionTypeMaster.upsert({
@@ -188,7 +235,7 @@ async function seedPublicPortal() {
   console.log('📄 Seeding Sample Submissions...');
 
   // Submission 1: Completed with Certificate
-  const typeBank = await prisma.submissionTypeMaster.findUnique({ where: { code: 'BANK_SYARIAH' } });
+  const typeKesesuaian = await prisma.submissionTypeMaster.findUnique({ where: { code: 'KESESUAIAN_SYARIAH' } });
   const sub1 = await prisma.publicSubmission.upsert({
     where: { submissionNumber: 'AMN-2026-000101' },
     update: {},
@@ -196,8 +243,8 @@ async function seedPublicPortal() {
       submissionNumber: 'AMN-2026-000101',
       companyId: demoCompany.id,
       applicantUserId: demoUser.id,
-      submissionTypeId: typeBank?.id,
-      submissionTypeName: 'Perbankan & Lembaga Keuangan Syariah',
+      submissionTypeId: typeKesesuaian?.id,
+      submissionTypeName: 'Permohonan Pernyataan Kesesuaian Syariah',
       title: 'Permohonan Kesesuaian Syariah Produk Pembiayaan Sindikasi Infrastruktur Hijau (Green Sukuk Murabahah)',
       productOrServiceName: 'Pembiayaan Hijau Nusantara iB',
       description: 'Produk pembiayaan berjangka untuk pembiayaan proyek energi terbarukan dengan menggunakan akad Murabahah bil Wakalah dan Ijarah Muntahiyah Bittamlik.',
@@ -324,7 +371,6 @@ async function seedPublicPortal() {
   });
 
   // Submission 2: Need Revision (Action Required)
-  const typeFintech = await prisma.submissionTypeMaster.findUnique({ where: { code: 'FINTECH_SYARIAH' } });
   const sub2 = await prisma.publicSubmission.upsert({
     where: { submissionNumber: 'AMN-2026-000102' },
     update: {},
@@ -332,8 +378,8 @@ async function seedPublicPortal() {
       submissionNumber: 'AMN-2026-000102',
       companyId: demoCompany.id,
       applicantUserId: demoUser.id,
-      submissionTypeId: typeFintech?.id,
-      submissionTypeName: 'Fintech & P2P Lending Syariah',
+      submissionTypeId: typeKesesuaian?.id,
+      submissionTypeName: 'Permohonan Pernyataan Kesesuaian Syariah',
       title: 'Pengajuan Layanan Pembiayaan Modal Kerja UMKM Digital (Nusantara PayLater Syariah)',
       productOrServiceName: 'Nusantara PayLater Syariah',
       description: 'Layanan pembiayaan invoice financing dan talangan belanja produktif UMKM dengan skema Qardh dan Murabahah digital.',
@@ -414,8 +460,8 @@ async function seedPublicPortal() {
       submissionNumber: 'AMN-2026-000103',
       companyId: demoCompany.id,
       applicantUserId: demoUser.id,
-      submissionTypeId: typeBank?.id,
-      submissionTypeName: 'Perbankan & Lembaga Keuangan Syariah',
+      submissionTypeId: typeKesesuaian?.id,
+      submissionTypeName: 'Permohonan Pernyataan Kesesuaian Syariah',
       title: 'Permohonan Kesesuaian Syariah Tabungan Haji Berencana Kuota Fleksibel',
       productOrServiceName: 'Tabungan Mabrur Fleksi iB',
       description: 'Produk tabungan rencana haji berbasis akad Wadiah Yad Dhamanah dengan opsi setoran berkala otomatis.',

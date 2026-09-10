@@ -466,6 +466,8 @@ model Company {
   address         String?
   province        String?
   city            String?
+  district        String?            // Kecamatan
+  subdistrict     String?            // Kelurahan
   postalCode      String?
   phone           String?
   email           String?
@@ -559,6 +561,10 @@ model PublicSubmission {
   erpDocumentId         String?
   erpDocument           Document?                  @relation(fields: [erpDocumentId], references: [id])
   documents             PublicSubmissionDocument[]
+  candidates            Json?                      // Array of DPS candidates with their 5 documents
+  dpsStage              String?                    // PROSES_PENGAJUAN, VALIDASI_DOKUMEN, WAWANCARA, PROSES_INTERNAL, LULUS, TIDAK_LULUS
+  validationType        String?                    // BARU, PAW, PENETAPAN_KEBERLANJUTAN
+  interviewInvitation   Json?                      // Details of interview invitation (number, date, time, venue, etc.)
   timeline              PublicSubmissionActivity[]
   revisions             PublicSubmissionRevision[]
   certificate           ShariaCertificate?

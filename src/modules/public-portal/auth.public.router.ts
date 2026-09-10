@@ -7,8 +7,42 @@ import {
   generatePublicToken,
   type PublicAuthRequest,
 } from './middleware.public.js';
+import {
+  sendOtpEmail,
+  sendRegistrationSuccessEmail,
+} from '../../lib/mailer.service.js';
 
 const router = Router();
+
+// ── CHECK EMAIL AVAILABILITY ────────────────────────────────────────────────
+router.get('/check-email', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.query.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Alamat email tidak valid.',
+      });
+    }
+
+    const existingUser = await prisma.companyUser.findFirst({
+      where: { email, isActive: true },
+      include: { company: { select: { id: true, name: true } } },
+    });
+
+    return res.json({
+      status: 'success',
+      exists: !!existingUser,
+      companyName: existingUser?.company?.name || null,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Gagal mengecek ketersediaan email.',
+      error: error.message,
+    });
+  }
+});
 
 // ── REQUEST OTP ─────────────────────────────────────────────────────────────
 router.post('/request-otp', async (req: Request, res: Response) => {
@@ -24,20 +58,83 @@ router.post('/request-otp', async (req: Request, res: Response) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check if cooldown is active (last OTP generated < 45 seconds ago)
-    const recentOtp = await prisma.publicOtp.findFirst({
-      where: {
-        email: normalizedEmail,
-        createdAt: { gte: new Date(Date.now() - 45 * 1000) },
-      },
+    // Check if user exists
+    const existingUser = await prisma.companyUser.findFirst({
+      where: { email: normalizedEmail, isActive: true },
+      include: { company: true },
     });
 
-    if (recentOtp) {
-      return res.status(429).json({
+    // ── VALIDASI KEBERADAAN EMAIL UNTUK LOGIN & REGISTER ───────────────
+    if (type === 'LOGIN' && !existingUser) {
+      return res.status(404).json({
         status: 'error',
-        message: 'Mohon tunggu 45 detik sebelum meminta kode OTP baru.',
+        code: 'USER_NOT_FOUND',
+        message: `Alamat email "${normalizedEmail}" belum terdaftar sebagai akun perusahaan pemohon. Silakan lakukan pendaftaran terlebih dahulu.`,
       });
     }
+
+    if (type === 'REGISTER' && existingUser) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'EMAIL_ALREADY_REGISTERED',
+        message: `Alamat email "${normalizedEmail}" sudah terdaftar untuk perusahaan "${existingUser.company?.name || 'terkait'}". Silakan langsung masuk (login).`,
+      });
+    }
+
+    // ── RATE LIMIT & LOCKOUT RULES ──────────────────────────────────────
+    // 1. Setiap 1 kode OTP berlaku 45 detik (dengan toleransi transit 15 detik).
+    // 2. Cooldown antar pengiriman: 45 detik.
+    // 3. Maksimal 3x pengiriman OTP berturut-turut dalam 1 siklus.
+    // 4. Jika sudah mencapai 3x kirim, sistem mengunci (lockout) selama 5 menit (300 detik).
+    //    Setelah 5 menit selesai, counter reset kembali ke posisi 1.
+
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentOtps = await prisma.publicOtp.findMany({
+      where: {
+        email: normalizedEmail,
+        createdAt: { gte: fiveMinutesAgo },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Jika sudah ada 3 kali (atau lebih) permintaan OTP dalam rentang 5 menit
+    if (recentOtps.length >= 3 && recentOtps[0]) {
+      const latestOtp = recentOtps[0];
+      const lockoutEnd = new Date(latestOtp.createdAt.getTime() + 5 * 60 * 1000);
+      const remainingMs = lockoutEnd.getTime() - Date.now();
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+
+      if (remainingSeconds > 0) {
+        const mins = Math.floor(remainingSeconds / 60);
+        const secs = remainingSeconds % 60;
+        const formattedWait = mins > 0 ? `${mins} menit ${secs} detik` : `${secs} detik`;
+        return res.status(429).json({
+          status: 'error',
+          code: 'OTP_LIMIT_REACHED',
+          lockoutSeconds: remainingSeconds,
+          message: `Batas pengiriman OTP (3x) telah tercapai. Demi keamanan, silakan tunggu ${formattedWait} sebelum meminta kode OTP kembali.`,
+        });
+      }
+    }
+
+    // Cooldown 45 detik antar pengiriman jika baru saja mengirim OTP (< 45 detik)
+    if (recentOtps.length > 0 && recentOtps[0]) {
+      const latestOtp = recentOtps[0];
+      const timeSinceLast = Date.now() - latestOtp.createdAt.getTime();
+      const cooldownMs = 45 * 1000;
+      if (timeSinceLast < cooldownMs) {
+        const remainingCooldown = Math.ceil((cooldownMs - timeSinceLast) / 1000);
+        return res.status(429).json({
+          status: 'error',
+          code: 'OTP_COOLDOWN',
+          cooldownSeconds: remainingCooldown,
+          message: `Kode OTP sebelumnya masih berlaku. Mohon tunggu ${remainingCooldown} detik sebelum meminta kode baru.`,
+        });
+      }
+    }
+
+    // Hitung nomor urut pengiriman saat ini (1, 2, atau 3)
+    const currentAttempt = (recentOtps.length % 3) + 1;
 
     // Invalidate previous active OTPs for this email
     await prisma.publicOtp.updateMany({
@@ -50,12 +147,12 @@ router.post('/request-otp', async (req: Request, res: Response) => {
       },
     });
 
-    // Generate secure 6-digit OTP
+    // Generate secure 6-digit OTP dengan TTL 60 detik (buffer toleransi transit email)
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const otpHash = await bcrypt.hash(otpCode, 10);
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes TTL
+    const expiresAt = new Date(Date.now() + 60 * 1000);
 
-    await prisma.publicOtp.create({
+    const createdOtp = await prisma.publicOtp.create({
       data: {
         email: normalizedEmail,
         otpHash,
@@ -64,11 +161,28 @@ router.post('/request-otp', async (req: Request, res: Response) => {
       },
     });
 
-    // Check if user exists
-    const existingUser = await prisma.companyUser.findFirst({
-      where: { email: normalizedEmail, isActive: true },
-      include: { company: true },
+    // Send Real OTP Email via Mailer Service
+    const mailResult = await sendOtpEmail({
+      toEmail: normalizedEmail,
+      otpCode,
+      type: type as any,
+      recipientName: existingUser?.fullName,
     });
+
+    // JIKA PENGIRIMAN EMAIL GAGAL, ROLLBACK OTP AGAR TIDAK MEMAKAN JATAH ATTEMPT USER
+    if (!mailResult.success) {
+      await prisma.publicOtp.delete({
+        where: { id: createdOtp.id },
+      });
+
+      console.error(`[Public OTP] Mail delivery failed for ${normalizedEmail}:`, mailResult.error);
+
+      return res.status(500).json({
+        status: 'error',
+        code: 'EMAIL_SEND_FAILED',
+        message: `Gagal mengirimkan kode verifikasi ke email ${normalizedEmail}. ${mailResult.error || 'Server email sedang mengalami kendala jaringan.'} Silakan coba beberapa saat lagi.`,
+      });
+    }
 
     // Public audit log
     await prisma.publicAuditLog.create({
@@ -79,23 +193,32 @@ router.post('/request-otp', async (req: Request, res: Response) => {
         userId: existingUser?.id || null,
         ipAddress: (req.ip || req.socket.remoteAddress) ?? null,
         userAgent: req.get('user-agent') ?? null,
-        metadata: { email: normalizedEmail, type },
+        metadata: {
+          email: normalizedEmail,
+          type,
+          emailSent: mailResult.success,
+          attempt: currentAttempt,
+          messageId: mailResult.messageId,
+        },
       },
     });
 
-    console.log(`[Public OTP] Code for ${normalizedEmail}: ${otpCode}`);
+    console.log(`[Public OTP] Code generated for ${normalizedEmail} (Attempt ${currentAttempt}/3, MessageId: ${mailResult.messageId})`);
 
     return res.json({
       status: 'success',
-      message: `Kode OTP 6-digit telah dikirim ke ${normalizedEmail}. Berlaku selama 5 menit.`,
+      message: `Kode verifikasi OTP telah dikirimkan ke alamat email ${normalizedEmail}. Kode berlaku selama 45 detik.`,
       exists: !!existingUser,
-      demoOtp: otpCode, // Provided for smooth demonstration/testing
+      emailSent: true,
+      attempt: currentAttempt,
+      maxAttempts: 3,
+      validitySeconds: 45,
     });
   } catch (error: any) {
     console.error('[Public Auth] Error requesting OTP:', error);
     return res.status(500).json({
       status: 'error',
-      message: 'Gagal mengirim kode OTP. Silakan coba beberapa saat lagi.',
+      message: 'Gagal memproses permintaan OTP. Silakan coba beberapa saat lagi.',
       error: error.message,
     });
   }
@@ -116,20 +239,40 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     const normalizedEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
 
-    // Find the latest valid OTP record
+    // Find the latest valid OTP record (dengan toleransi transit 15 detik)
+    const graceThreshold = new Date(Date.now() - 15 * 1000);
     const otpRecord = await prisma.publicOtp.findFirst({
       where: {
         email: normalizedEmail,
         isUsed: false,
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: graceThreshold },
       },
       orderBy: { createdAt: 'desc' },
     });
 
     if (!otpRecord) {
+      // Check if there was an OTP that expired
+      const expiredOtp = await prisma.publicOtp.findFirst({
+        where: {
+          email: normalizedEmail,
+          isUsed: false,
+          expiresAt: { lte: graceThreshold },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (expiredOtp) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'OTP_EXPIRED',
+          message: 'Kode OTP telah kedaluwarsa (masa berlaku 45 detik). Silakan klik "Kirim Ulang Kode OTP".',
+        });
+      }
+
       return res.status(400).json({
         status: 'error',
-        message: 'Kode OTP tidak valid atau telah kedaluwarsa. Silakan minta kode baru.',
+        code: 'OTP_INVALID',
+        message: 'Kode OTP tidak valid atau belum diminta. Silakan minta kode baru.',
       });
     }
 
@@ -233,6 +376,9 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
           address: user.company.address,
           province: user.company.province,
           city: user.company.city,
+          district: user.company.district,
+          subdistrict: user.company.subdistrict,
+          postalCode: user.company.postalCode,
           phone: user.company.phone,
           website: user.company.website,
         },
@@ -260,6 +406,8 @@ router.post('/register', async (req: Request, res: Response) => {
       address,
       province,
       city,
+      district,
+      subdistrict,
       postalCode,
       phone,
       website,
@@ -300,6 +448,8 @@ router.post('/register', async (req: Request, res: Response) => {
           address: address?.trim() || null,
           province: province?.trim() || null,
           city: city?.trim() || null,
+          district: district?.trim() || null,
+          subdistrict: subdistrict?.trim() || null,
           postalCode: postalCode?.trim() || null,
           phone: phone?.trim() || null,
           email: normalizedEmail,
@@ -359,9 +509,25 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const token = generatePublicToken(tokenPayload);
 
+    // Send email notification that company account is ready to login
+    let welcomeMailResult: any = null;
+    try {
+      const portalUrl = process.env.PUBLIC_PORTAL_URL || 'http://localhost:5174';
+      welcomeMailResult = await sendRegistrationSuccessEmail({
+        toEmail: normalizedEmail,
+        companyName: result.company.name,
+        picName: result.user.fullName,
+        picPosition: result.user.position || undefined,
+        loginUrl: `${portalUrl}/login?email=${encodeURIComponent(normalizedEmail)}`,
+      });
+    } catch (mailError: any) {
+      console.error('[Public Auth] Error sending welcome/ready-to-login email:', mailError);
+    }
+
     return res.status(201).json({
       status: 'success',
-      message: 'Pendaftaran perusahaan berhasil! Selamat datang di Amanah Public Portal.',
+      message: 'Pendaftaran perusahaan berhasil! Email konfirmasi dan instruksi login telah dikirimkan ke email Anda.',
+      emailSent: welcomeMailResult?.success ?? false,
       data: {
         token,
         user: {
@@ -381,6 +547,9 @@ router.post('/register', async (req: Request, res: Response) => {
           address: result.company.address,
           province: result.company.province,
           city: result.company.city,
+          district: result.company.district,
+          subdistrict: result.company.subdistrict,
+          postalCode: result.company.postalCode,
           phone: result.company.phone,
           website: result.company.website,
         },
@@ -442,6 +611,9 @@ router.get('/session', authenticatePublic, async (req: PublicAuthRequest, res: R
           address: user.company.address,
           province: user.company.province,
           city: user.company.city,
+          district: user.company.district,
+          subdistrict: user.company.subdistrict,
+          postalCode: user.company.postalCode,
           phone: user.company.phone,
           website: user.company.website,
           logoUrl: user.company.logoUrl,

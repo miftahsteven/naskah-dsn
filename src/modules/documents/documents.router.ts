@@ -480,6 +480,12 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         creator: { select: { fullName: true, email: true } },
         versions: { orderBy: { versionNum: 'desc' } },
         signatures: { include: { user: { select: { fullName: true, jobTitle: true } } } },
+        evidenceFolders: {
+          include: {
+            files: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         evidenceFiles: { orderBy: { createdAt: 'asc' } },
         workflowInstances: {
           include: {
@@ -498,8 +504,22 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           }
         },
         meetings: {
-          orderBy: { dateTime: 'asc' }
-        }
+          orderBy: { dateTime: 'desc' }
+        },
+        publicSubmissions: {
+          include: {
+            company: true,
+            applicantUser: { select: { fullName: true, email: true, phone: true, position: true } },
+            documents: true,
+            timeline: { orderBy: { createdAt: 'desc' } },
+          },
+        },
+        disposisiLogs: {
+          include: {
+            user: { select: { fullName: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -518,8 +538,12 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     
     // Transform fileUrl to HTTP/HTTPS download URL for mobile compatibility
     const baseUrl = getApiBaseUrl(req);
+    const dateForDays = document.receivedDate || document.documentDate || document.createdAt;
+    const daysElapsed = Math.max(0, Math.floor((Date.now() - new Date(dateForDays).getTime()) / (1000 * 60 * 60 * 24)));
+
     const transformedDocument = {
       ...document,
+      daysElapsed,
       fileUrl: `${baseUrl}/documents/${document.id}/download`,
       versions: document.versions.map(v => ({
         ...v,
@@ -527,8 +551,20 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       })),
       evidenceFiles: (document.evidenceFiles || []).map(ef => ({
         ...ef,
-        fileUrl: `${baseUrl}/documents/${document.id}/evidence/files/${ef.id}/download`
-      }))
+        fileUrl: ef.fileUrl
+          ? (ef.fileUrl.startsWith('http') ? ef.fileUrl : (ef.fileUrl.startsWith('/') ? ef.fileUrl : `/${ef.fileUrl}`))
+          : `${baseUrl}/documents/${document.id}/evidence/files/${ef.id}/download`
+      })),
+      evidenceFolders: (document.evidenceFolders || []).map(ef => ({
+        ...ef,
+        files: (ef.files || []).map((f: any) => ({
+          ...f,
+          fileUrl: f.fileUrl
+            ? (f.fileUrl.startsWith('http') ? f.fileUrl : (f.fileUrl.startsWith('/') ? f.fileUrl : `/${f.fileUrl}`))
+            : `${baseUrl}/documents/${document.id}/evidence/files/${f.id}/download`
+        }))
+      })),
+      publicSubmissions: document.publicSubmissions || [],
     };
     
     console.log('✅ Document returned with fileUrl:', transformedDocument.fileUrl);
@@ -536,6 +572,423 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('💥 Error in GET /documents/:id:', error);
     res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── UPDATE DPS SUBMISSION STAGE & STATUS FROM BACKOFFICE ──
+router.patch('/:id/dps-stage', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { stage, notes } = req.body;
+    // stage: 'PROSES_PENGAJUAN' | 'VALIDASI_DOKUMEN' | 'WAWANCARA' | 'PROSES_INTERNAL' | 'LULUS' | 'TIDAK_LULUS'
+
+    if (!stage) {
+      return res.status(400).json({ status: 'error', message: 'Tahapan status wajib dipilih.' });
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        publicSubmissions: {
+          include: { company: true },
+        },
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Dokumen Surat Masuk tidak ditemukan.' });
+    }
+
+    const pubSub = document.publicSubmissions?.[0];
+    if (!pubSub) {
+      return res.status(404).json({ status: 'error', message: 'Pengajuan publik terkait tidak ditemukan.' });
+    }
+
+    const stageLabels: Record<string, string> = {
+      PROSES_PENGAJUAN: 'Proses Pengajuan',
+      VALIDASI_DOKUMEN: 'Validasi Dokumen',
+      WAWANCARA: 'Wawancara',
+      PROSES_INTERNAL: 'Proses Internal',
+      LULUS: 'Lulus (Rekomendasi Disetujui)',
+      TIDAK_LULUS: 'Tidak Lulus',
+    };
+
+    const label = stageLabels[stage] || stage;
+
+    // Update status in public submission
+    const statusVal = stage === 'LULUS' ? 'DISETUJUI' : stage === 'TIDAK_LULUS' ? 'DITOLAK' : stage;
+    const updatedSub = await prisma.publicSubmission.update({
+      where: { id: pubSub.id },
+      data: {
+        dpsStage: stage,
+        status: statusVal,
+      },
+    });
+
+    // Add activity log
+    await prisma.publicSubmissionActivity.create({
+      data: {
+        submissionId: pubSub.id,
+        title: `Tahapan DPS Diperbarui: ${label}`,
+        description: notes || `Tahapan permohonan rekomendasi DPS dialihkan ke "${label}" oleh Sekretariat DSN-MUI.`,
+        publicStatus: label,
+        visibility: 'PUBLIC',
+        performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
+      },
+    });
+
+    // Send notification to applicant company
+    await prisma.publicNotification.create({
+      data: {
+        companyId: pubSub.companyId,
+        userId: pubSub.applicantUserId,
+        title: `Status Permohonan DPS: ${label}`,
+        message: notes || `Permohonan Rekomendasi DPS (${pubSub.submissionNumber}) saat ini berada pada tahap: ${label}.`,
+        type: stage === 'LULUS' ? 'SUCCESS' : stage === 'TIDAK_LULUS' ? 'WARNING' : 'INFO',
+        link: `/submissions/${pubSub.id}`,
+      },
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Tahapan permohonan DPS berhasil diubah menjadi ${label}.`,
+      data: updatedSub,
+    });
+  } catch (error: any) {
+    console.error('Error updating DPS stage:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── VALIDASI PERMOHONAN DENGAN 3 KATEGORI (BARU / PAW / KEBERLANJUTAN) ──
+router.post('/:id/validate-submission', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { validationType, notes } = req.body;
+    // validationType: 'BARU' | 'PAW' | 'PENETAPAN_KEBERLANJUTAN'
+
+    if (!validationType) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Pilihan kategori rekomendasi (Baru / PAW / Penetapan Keberlanjutan Rekomendasi) wajib dipilih.',
+      });
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        publicSubmissions: {
+          include: { company: true },
+        },
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Dokumen Surat Masuk tidak ditemukan.' });
+    }
+
+    const pubSub = document.publicSubmissions?.[0];
+    if (!pubSub) {
+      return res.status(404).json({ status: 'error', message: 'Pengajuan publik terkait tidak ditemukan.' });
+    }
+
+    const typeLabels: Record<string, string> = {
+      BARU: 'Pengajuan Rekomendasi Baru',
+      PAW: 'Pergantian Antar Waktu (PAW)',
+      PENETAPAN_KEBERLANJUTAN: 'Penetapan Keberlanjutan Rekomendasi',
+    };
+
+    const typeLabel = typeLabels[validationType] || validationType;
+
+    // Keep stage at VALIDASI_DOKUMEN as requested (only advance to WAWANCARA when interview invitation is created)
+    const updatedSub = await prisma.publicSubmission.update({
+      where: { id: pubSub.id },
+      data: {
+        dpsStage: 'VALIDASI_DOKUMEN',
+        status: 'VERIFIKASI_ADMINISTRASI',
+        validationType: validationType,
+      },
+    });
+
+    // Create public activity log
+    await prisma.publicSubmissionActivity.create({
+      data: {
+        submissionId: pubSub.id,
+        title: `Dokumen Tervalidasi: ${typeLabel}`,
+        description: notes || `Berkas permohonan telah diverifikasi dan dinyatakan VALID dengan kualifikasi: ${typeLabel}. Tahap saat ini: Validasi Dokumen Aktif (menunggu penerbitan jadwal & Surat Undangan Wawancara).`,
+        publicStatus: 'Validasi Dokumen',
+        visibility: 'PUBLIC',
+        performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
+      },
+    });
+
+    // Create notification for applicant
+    await prisma.publicNotification.create({
+      data: {
+        companyId: pubSub.companyId,
+        userId: pubSub.applicantUserId,
+        title: `Berkas Tervalidasi (${typeLabel})`,
+        message: `Berkas pengajuan rekomendasi DPS Anda telah divalidasi sebagai "${typeLabel}". Tahapan berkas berstatus Validasi Dokumen Aktif, menunggu penerbitan Surat Undangan Wawancara oleh Sekretariat DSN-MUI.`,
+        type: 'SUCCESS',
+        link: `/submissions/${pubSub.id}`,
+      },
+    });
+
+    // Create internal Disposisi / Audit Log
+    await prisma.disposisiLog.create({
+      data: {
+        documentId: document.id,
+        userId: req.user!.id,
+        action: 'VALIDASI_BERKAS',
+        description: `Dinyatakan Valid (${typeLabel}). ${notes ? 'Catatan: ' + notes : ''}. Status: Validasi Dokumen Aktif.`,
+        metadata: { validationType },
+      },
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Validasi berkas berhasil disimpan (${typeLabel}). Status tetap pada tahapan Validasi Dokumen aktif.`,
+      data: {
+        submission: updatedSub,
+        validationType,
+        validationLabel: typeLabel,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error in validate-submission:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── REJECT VALIDASI / PERMINTAAN PERBAIKAN BERKAS DENGAN ALASAN DESKRIPTIF ──
+router.post('/:id/reject-submission', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason, requestedDocuments, deadline } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Alasan penolakan / permintaan perbaikan berkas wajib diisi secara deskriptif.',
+      });
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        publicSubmissions: {
+          include: { company: true },
+        },
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Dokumen Surat Masuk tidak ditemukan.' });
+    }
+
+    const pubSub = document.publicSubmissions?.[0];
+    if (!pubSub) {
+      return res.status(404).json({ status: 'error', message: 'Pengajuan publik terkait tidak ditemukan.' });
+    }
+
+    // Set status to PERLU_PERBAIKAN (Perlu Tindakan di web public) dan tetap pada tahap VALIDASI_DOKUMEN
+    const updatedSub = await prisma.publicSubmission.update({
+      where: { id: pubSub.id },
+      data: {
+        status: 'PERLU_PERBAIKAN',
+        dpsStage: 'VALIDASI_DOKUMEN',
+      },
+    });
+
+    // Buat record PublicSubmissionRevision
+    const revisionData: any = {
+      submissionId: pubSub.id,
+      requestNotes: reason.trim(),
+      deadline: deadline ? new Date(deadline) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      status: 'PENDING',
+    };
+    if (Array.isArray(requestedDocuments) && requestedDocuments.length > 0) {
+      revisionData.requestedDocuments = requestedDocuments;
+    }
+    const revision = await prisma.publicSubmissionRevision.create({
+      data: revisionData,
+    });
+
+    // Public activity log
+    await prisma.publicSubmissionActivity.create({
+      data: {
+        submissionId: pubSub.id,
+        title: 'Permintaan Perbaikan Berkas (Perlu Tindakan)',
+        description: reason.trim(),
+        publicStatus: 'Perlu Perbaikan',
+        visibility: 'PUBLIC',
+        performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
+      },
+    });
+
+    // Notification to applicant company
+    await prisma.publicNotification.create({
+      data: {
+        companyId: pubSub.companyId,
+        userId: pubSub.applicantUserId,
+        title: 'Perlu Tindakan: Berkas Pengajuan Memerlukan Perbaikan',
+        message: `Verifikator DSN-MUI meminta perbaikan berkas: "${reason.trim()}". Silakan periksa dan perbarui lampiran dokumen.`,
+        type: 'WARNING',
+        link: `/submissions/${pubSub.id}`,
+      },
+    });
+
+    // Internal Disposisi / Audit Log
+    await prisma.disposisiLog.create({
+      data: {
+        documentId: document.id,
+        userId: req.user!.id,
+        action: 'REJECT_VALIDASI_BERKAS',
+        description: `Pengajuan ditolak sementara / diminta perbaikan berkas. Alasan: ${reason.trim()}`,
+        metadata: { reason: reason.trim(), requestedDocuments },
+      },
+    });
+
+    return res.json({
+      status: 'success',
+      message: 'Permintaan perbaikan berkas berhasil dikirim ke pemohon. Status pengajuan dialihkan ke "Perlu Tindakan".',
+      data: {
+        submission: updatedSub,
+        revision,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error in reject-submission:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── BUAT UNDANGAN WAWANCARA DPS (AGENDA WAWANCARA DILUAR AGENDA RAPAT) ──
+router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      invitationNumber,
+      invitationDate,
+      interviewDayDate,
+      interviewTime,
+      format,
+      venue,
+      zoomUrl,
+      zoomMeetingId,
+      zoomPasscode,
+      subject,
+      candidates,
+      dresscode,
+      requirements,
+      contactPerson,
+      notes,
+      signatoryName,
+      signatoryRole,
+    } = req.body;
+
+    if (!invitationNumber || !interviewDayDate || !interviewTime || !venue) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Nomor surat undangan, hari/tanggal, waktu, dan tempat pelaksanaan wajib diisi.',
+      });
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        publicSubmissions: {
+          include: { company: true },
+        },
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Dokumen Surat Masuk tidak ditemukan.' });
+    }
+
+    const pubSub = document.publicSubmissions?.[0];
+    if (!pubSub) {
+      return res.status(404).json({ status: 'error', message: 'Pengajuan publik terkait tidak ditemukan.' });
+    }
+
+    const invitationData = {
+      invitationNumber,
+      invitationDate: invitationDate || new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+      interviewDayDate,
+      interviewTime,
+      format: format || 'OFFLINE',
+      venue,
+      zoomUrl: zoomUrl || null,
+      zoomMeetingId: zoomMeetingId || null,
+      zoomPasscode: zoomPasscode || null,
+      subject: subject || `Undangan Wawancara Uji Kepatutan dan Kelayakan Calon Anggota DPS Terkait Surat No. ${pubSub.companyLetterNumber || document.documentNumber}`,
+      candidates: Array.isArray(candidates) && candidates.length > 0 ? candidates : ['Calon Anggota Dewan Pengawas Syariah'],
+      dresscode: dresscode || 'Pakaian Sipil Lengkap / Batik Lengan Panjang / Jas Resmi',
+      requirements: requirements || 'Membawa berkas fisik asli, portofolio riwayat hidup, serta bahan pemaparan kesiapan kepengawasan syariah.',
+      contactPerson: contactPerson || 'Sekretariat DSN-MUI (021-3904141 / wa.me/6281234567890)',
+      notes: notes || null,
+      signatoryName: signatoryName || 'Prof. Dr. KH. Hasanuddin, M.Ag',
+      signatoryRole: signatoryRole || 'Ketua Bidang Pengawasan Syariah DSN-MUI',
+      createdAt: new Date().toISOString(),
+    };
+
+    // Saat mulai membuat agenda wawancara, tahapan beralih ke WAWANCARA
+    const updatedSub = await prisma.publicSubmission.update({
+      where: { id: pubSub.id },
+      data: {
+        dpsStage: 'WAWANCARA',
+        status: 'DALAM_PEMBAHASAN',
+        interviewInvitation: invitationData,
+      },
+    });
+
+    // Public activity log
+    await prisma.publicSubmissionActivity.create({
+      data: {
+        submissionId: pubSub.id,
+        title: `Surat Undangan Wawancara Diterbitkan (${invitationNumber})`,
+        description: `DSN-MUI telah menerbitkan Surat Undangan Wawancara Calon DPS No. ${invitationNumber}. Jadwal: ${interviewDayDate} pukul ${interviewTime} WIB berlokasi di ${venue}.`,
+        publicStatus: 'Wawancara',
+        visibility: 'PUBLIC',
+        performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
+      },
+    });
+
+    // Notification to applicant company
+    await prisma.publicNotification.create({
+      data: {
+        companyId: pubSub.companyId,
+        userId: pubSub.applicantUserId,
+        title: `Undangan Wawancara Calon DPS Diterbitkan`,
+        message: `Surat Undangan Wawancara No. ${invitationNumber} telah diterbitkan untuk ${invitationData.candidates.join(', ')}. Pelaksanaan: ${interviewDayDate} pukul ${interviewTime}. Silakan unduh/lihat surat undangan di dashboard.`,
+        type: 'INFO',
+        link: `/submissions/${pubSub.id}`,
+      },
+    });
+
+    // Internal Disposisi / Audit Log
+    await prisma.disposisiLog.create({
+      data: {
+        documentId: document.id,
+        userId: req.user!.id,
+        action: 'TERBIT_UNDANGAN_WAWANCARA',
+        description: `Surat Undangan Wawancara No. ${invitationNumber} diterbitkan untuk pelaksanaan ${interviewDayDate} pukul ${interviewTime}. Tahapan resmi beralih ke WAWANCARA.`,
+        metadata: invitationData,
+      },
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Surat Undangan Wawancara (${invitationNumber}) berhasil diterbitkan dan tahapan pengajuan resmi beralih ke Wawancara.`,
+      data: {
+        submission: updatedSub,
+        invitation: invitationData,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error in interview-invitation:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
   }
 });
 
@@ -2103,7 +2556,9 @@ router.get('/:id/evidence', authenticate, async (req: AuthRequest, res: Response
 
     const transformedFiles = files.map(file => ({
       ...file,
-      fileUrl: `${baseUrl}/documents/${id}/evidence/files/${file.id}/download`,
+      fileUrl: file.fileUrl
+        ? (file.fileUrl.startsWith('http') ? file.fileUrl : (file.fileUrl.startsWith('/') ? file.fileUrl : `/${file.fileUrl}`))
+        : `${baseUrl}/documents/${id}/evidence/files/${file.id}/download`,
     }));
 
     res.json({
@@ -2185,20 +2640,44 @@ router.post('/:id/evidence/files', authenticate, upload.single('file'), async (r
 });
 
 // ── DOWNLOAD EVIDENCE FILE ──
-router.get('/:id/evidence/files/:fileId/download', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/evidence/files/:fileId/download', async (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
 
     const evidenceFile = await prisma.evidenceFile.findUnique({ where: { id: String(fileId) } });
     if (!evidenceFile) return res.status(404).json({ status: 'error', message: 'File not found' });
-    if (!fs.existsSync(evidenceFile.fileUrl)) {
-      return res.status(404).json({ status: 'error', message: 'Physical file not found' });
+
+    const rawPath = evidenceFile.fileUrl || '';
+    const cleanPath = rawPath.replace(/^\/+/, '');
+    const filename = path.basename(cleanPath);
+
+    const candidates = [
+      rawPath,
+      path.resolve(process.cwd(), cleanPath),
+      path.resolve(process.cwd(), 'uploads', cleanPath.replace(/^uploads\//, '')),
+      path.resolve(process.cwd(), 'uploads', filename),
+      path.resolve(process.cwd(), 'uploads/public-submissions', filename),
+      path.resolve(process.cwd(), '../uploads', cleanPath.replace(/^uploads\//, '')),
+      path.resolve('/var/www/mui-dsn-naskah/backend/uploads', filename),
+      path.resolve('/var/www/mui-dsn-naskah/uploads', filename),
+    ];
+
+    let resolvedPath: string | null = null;
+    for (const cand of candidates) {
+      if (fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+        resolvedPath = cand;
+        break;
+      }
     }
 
-    res.setHeader('Content-Type', evidenceFile.mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${evidenceFile.name}"`);
+    if (!resolvedPath) {
+      return res.status(404).json({ status: 'error', message: 'Physical file not found on disk' });
+    }
 
-    const fileStream = fs.createReadStream(evidenceFile.fileUrl);
+    res.setHeader('Content-Type', evidenceFile.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(evidenceFile.name)}"`);
+
+    const fileStream = fs.createReadStream(resolvedPath);
     fileStream.pipe(res);
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });

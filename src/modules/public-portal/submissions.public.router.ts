@@ -8,6 +8,7 @@ import {
   authenticatePublic,
   type PublicAuthRequest,
 } from './middleware.public.js';
+import { sendSubmissionConfirmationEmail } from '../../lib/mailer.service.js';
 
 const router = Router();
 
@@ -40,6 +41,37 @@ const upload = multer({
       cb(new Error(`Tipe file ${ext} tidak diizinkan. Gunakan format PDF, DOCX, XLSX, atau Gambar (JPG/PNG).`));
     }
   },
+});
+
+// ── GENERIC SINGLE FILE UPLOAD ──────────────────────────────────────────────
+router.post('/upload-file', authenticatePublic, upload.single('file'), async (req: PublicAuthRequest, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Berkas wajib diunggah.',
+      });
+    }
+
+    const relativeUrl = `/uploads/public-submissions/${file.filename}`;
+    return res.json({
+      status: 'success',
+      message: 'Berkas berhasil diunggah.',
+      data: {
+        fileName: file.originalname,
+        fileUrl: relativeUrl,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Gagal mengunggah berkas.',
+      error: error.message,
+    });
+  }
 });
 
 // Helper to generate unique submission number
@@ -753,6 +785,27 @@ router.post('/:id/submit', authenticatePublic, async (req: PublicAuthRequest, re
       return { updatedSubmission, erpDoc };
     });
 
+    // Send confirmation email asynchronously
+    const applicantEmail = req.publicUser?.email;
+    const applicantName = req.publicUser?.fullName || 'Narahubung Perusahaan';
+    const compName = submission.company.name;
+    const candidateNames = Array.isArray(submission.candidates)
+      ? (submission.candidates as any[]).map((c) => c.name).filter(Boolean)
+      : [];
+
+    if (applicantEmail) {
+      sendSubmissionConfirmationEmail({
+        toEmail: applicantEmail,
+        recipientName: applicantName,
+        companyName: compName,
+        submissionNumber: result.updatedSubmission.submissionNumber,
+        submissionTitle: result.updatedSubmission.title,
+        serviceName: result.updatedSubmission.submissionTypeName,
+        candidateNames,
+        submissionId: result.updatedSubmission.id,
+      }).catch((err) => console.error('[Public Submissions] Failed to send async confirmation email:', err));
+    }
+
     return res.json({
       status: 'success',
       message: 'Permohonan kesesuaian syariah berhasil dikirim ke DSN-MUI!',
@@ -777,7 +830,7 @@ router.post('/:id/submit', authenticatePublic, async (req: PublicAuthRequest, re
 router.post('/:id/revision', authenticatePublic, async (req: PublicAuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { responseNotes } = req.body;
+    const { responseNotes, candidates, officialLetter, additionalDoc } = req.body;
     const companyId = req.publicUser!.companyId;
     const userId = req.publicUser!.id;
 
@@ -797,7 +850,7 @@ router.post('/:id/revision', authenticatePublic, async (req: PublicAuthRequest, 
       });
     }
 
-    // Update revision status and submission status back to processing
+    // Update revision status, submission documents, and submission status back to processing
     await prisma.$transaction(async (tx) => {
       // Mark latest revision as responded
       if (submission.revisions[0]) {
@@ -811,13 +864,63 @@ router.post('/:id/revision', authenticatePublic, async (req: PublicAuthRequest, 
         });
       }
 
-      // Update submission status back to SEDANG_DIPROSES
+      const updateData: any = {
+        status: 'SEDANG_DIPROSES',
+        dpsStage: 'VALIDASI_DOKUMEN',
+      };
+
+      if (candidates && Array.isArray(candidates)) {
+        updateData.candidates = candidates;
+      }
+
+      if (officialLetter && officialLetter.fileUrl) {
+        updateData.officialLetterUrl = officialLetter.fileUrl;
+        updateData.officialLetterName = officialLetter.fileName;
+        updateData.officialLetterSize = officialLetter.fileSize;
+      }
+
+      // Update submission
       await tx.publicSubmission.update({
         where: { id: submission.id },
-        data: {
-          status: 'SEDANG_DIPROSES',
-        },
+        data: updateData,
       });
+
+      if (additionalDoc && additionalDoc.fileUrl) {
+        const existingAddDoc = await tx.publicSubmissionDocument.findFirst({
+          where: {
+            submissionId: submission.id,
+            OR: [
+              { requirementName: { contains: 'Dokumen Lain', mode: 'insensitive' } },
+              { requirementName: { contains: 'Pendukung', mode: 'insensitive' } },
+            ],
+          },
+        });
+
+        if (existingAddDoc) {
+          await tx.publicSubmissionDocument.update({
+            where: { id: existingAddDoc.id },
+            data: {
+              fileName: additionalDoc.fileName,
+              fileUrl: additionalDoc.fileUrl,
+              fileSize: additionalDoc.fileSize || 0,
+              mimeType: additionalDoc.mimeType || 'application/pdf',
+            },
+          });
+        } else {
+          await tx.publicSubmissionDocument.create({
+            data: {
+              submissionId: submission.id,
+              requirementName: additionalDoc.requirementName || 'Dokumen Pendukung Tambahan (Revisi)',
+              fileName: additionalDoc.fileName,
+              fileUrl: additionalDoc.fileUrl,
+              fileSize: additionalDoc.fileSize || 0,
+              mimeType: additionalDoc.mimeType || 'application/pdf',
+              isMandatory: false,
+              status: 'VALID',
+            },
+          });
+        }
+      }
 
       // Add timeline activity
       await tx.publicSubmissionActivity.create({
@@ -830,6 +933,22 @@ router.post('/:id/revision', authenticatePublic, async (req: PublicAuthRequest, 
           performedByName: 'PIC Perusahaan',
         },
       });
+
+      // If tied to ERP document, create DisposisiLog
+      if (submission.erpDocumentId) {
+        await tx.disposisiLog.create({
+          data: {
+            documentId: submission.erpDocumentId,
+            action: 'REVISION_SUBMITTED',
+            description: `Pemohon telah menyampaikan perbaikan berkas lampiran. Catatan: "${responseNotes || 'Perbaikan berkas telah diunggah.'}"`,
+            metadata: {
+              responseNotes,
+              hasOfficialLetter: Boolean(officialLetter?.fileUrl),
+              hasAdditionalDoc: Boolean(additionalDoc?.fileUrl),
+            },
+          },
+        });
+      }
 
       // Notification
       await tx.publicNotification.create({
@@ -872,4 +991,425 @@ router.post('/:id/revision', authenticatePublic, async (req: PublicAuthRequest, 
   }
 });
 
+// ── SUBMIT PERMOHONAN REKOMENDASI DPS (MULTI-KANDIDAT & BRIDGING SURAT MASUK) ──
+router.post('/dps', authenticatePublic, async (req: PublicAuthRequest, res: Response) => {
+  try {
+    const companyId = req.publicUser!.companyId;
+    const userId = req.publicUser!.id;
+    const {
+      submissionId,
+      title = 'Permohonan Rekomendasi Dewan Pengawas Syariah',
+      companyLetterNumber,
+      companyLetterDate,
+      officialLetter, // { fileName, fileUrl, fileSize, mimeType }
+      candidates, // Array of Candidate objects
+      additionalDoc, // optional supporting document
+      agreedToTerms,
+    } = req.body;
+
+    if (!agreedToTerms) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Anda wajib menyetujui pernyataan integritas dan kebenaran dokumen persyaratan DSN-MUI.',
+      });
+    }
+
+    if (!officialLetter || !officialLetter.fileUrl) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Surat Permohonan / Pengantar dari Perusahaan wajib diunggah.',
+      });
+    }
+
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Minimal satu (1) nama calon DPS wajib diusulkan dalam permohonan.',
+      });
+    }
+
+    // Validasi setiap kandidat harus memiliki nama dan ke-5 berkas wajib
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      if (!c.name || !c.name.trim()) {
+        return res.status(400).json({
+          status: 'error',
+          message: `Nama lengkap calon DPS #${i + 1} wajib diisi.`,
+        });
+      }
+
+      const docs = c.documents || {};
+      const requiredKeys = [
+        { key: 'suratMui', label: 'Surat Pengantar dari MUI Setempat' },
+        { key: 'sertifikatPelatihan', label: 'Sertifikat Pelatihan Dasar Pengawas Syariah dari DSN-MUI' },
+        { key: 'sertifikatKompetensi', label: 'Sertifikat Kompetensi Pengawas Syariah dari LSP MUI' },
+        { key: 'profilCv', label: 'Profil Calon DPS (Daftar Riwayat Hidup dan KTP terbaru)' },
+        { key: 'suratPernyataanNonPegawai', label: 'Surat Keterangan Tidak Sedang Menjadi Pengurus/Pegawai Aktif LKS/LBS/LPS' },
+      ];
+
+      for (const reqDoc of requiredKeys) {
+        if (!docs[reqDoc.key] || !docs[reqDoc.key].fileUrl) {
+          return res.status(400).json({
+            status: 'error',
+            message: `Dokumen "${reqDoc.label}" untuk calon ${c.name} wajib diunggah.`,
+          });
+        }
+      }
+    }
+
+    // Ambil master jenis pengajuan REKOMENDASI_DPS
+    let dpsType = await prisma.submissionTypeMaster.findFirst({
+      where: { code: 'REKOMENDASI_DPS' },
+      include: { requirements: true },
+    });
+
+    if (!dpsType) {
+      dpsType = await prisma.submissionTypeMaster.findFirst({
+        where: { name: { contains: 'DPS', mode: 'insensitive' } },
+        include: { requirements: true },
+      });
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) {
+      return res.status(404).json({ status: 'error', message: 'Data profil perusahaan tidak ditemukan.' });
+    }
+
+    const applicantUser = await prisma.companyUser.findUnique({
+      where: { id: userId },
+    });
+
+    const parsedLetterDate = companyLetterDate ? new Date(companyLetterDate) : new Date();
+
+    // Jalankan Transaction: Buat Public Submission + Buat Dokumen Surat Masuk Internal
+    const result = await prisma.$transaction(async (tx) => {
+      let sub;
+
+      if (submissionId) {
+        sub = await tx.publicSubmission.findFirst({
+          where: { id: String(submissionId), companyId },
+        });
+      }
+
+      const subNumber = sub?.submissionNumber || (await generateSubmissionNumber());
+
+      const submissionPayload: any = {
+        companyId,
+        applicantUserId: userId,
+        submissionTypeId: dpsType?.id || null,
+        submissionTypeName: dpsType?.name || 'Permohonan Rekomendasi DPS',
+        title: title || `Permohonan Rekomendasi DPS - ${candidates.length} Calon`,
+        productOrServiceName: `Rekomendasi Penempatan DPS (${candidates.length} Calon)`,
+        description: `Pengajuan ${candidates.length} calon Dewan Pengawas Syariah: ${candidates.map((c: any) => c.name).join(', ')}`,
+        companyLetterNumber: companyLetterNumber || null,
+        companyLetterDate: parsedLetterDate,
+        officialLetterUrl: officialLetter.fileUrl,
+        officialLetterName: officialLetter.fileName,
+        officialLetterSize: officialLetter.fileSize,
+        status: 'PROSES_PENGAJUAN',
+        dpsStage: 'PROSES_PENGAJUAN',
+        stepCompleted: 5,
+        submittedAt: new Date(),
+        candidates,
+      };
+
+      if (sub) {
+        sub = await tx.publicSubmission.update({
+          where: { id: sub.id },
+          data: submissionPayload,
+        });
+      } else {
+        sub = await tx.publicSubmission.create({
+          data: {
+            ...submissionPayload,
+            submissionNumber: subNumber,
+          },
+        });
+      }
+
+      // Bersihkan dokumen lama jika sebelumnya draf
+      await tx.publicSubmissionDocument.deleteMany({
+        where: { submissionId: sub.id },
+      });
+
+      // Simpan surat pengantar perusahaan sebagai dokumen publik utama
+      await tx.publicSubmissionDocument.create({
+        data: {
+          submissionId: sub.id,
+          requirementName: 'Surat Permohonan / Pengantar Resmi dari Perusahaan',
+          fileName: officialLetter.fileName,
+          fileUrl: officialLetter.fileUrl,
+          fileSize: officialLetter.fileSize,
+          mimeType: officialLetter.mimeType || 'application/pdf',
+          isMandatory: true,
+          status: 'VALID',
+        },
+      });
+
+      // Simpan Dokumen Lain jika diunggah oleh pemohon
+      if (additionalDoc && additionalDoc.fileUrl) {
+        await tx.publicSubmissionDocument.create({
+          data: {
+            submissionId: sub.id,
+            requirementName: 'Dokumen Lain (Pendukung Tambahan)',
+            fileName: additionalDoc.fileName,
+            fileUrl: additionalDoc.fileUrl,
+            fileSize: additionalDoc.fileSize || 1024,
+            mimeType: additionalDoc.mimeType || 'application/pdf',
+            isMandatory: false,
+            status: 'VALID',
+          },
+        });
+      }
+
+      // Simpan 5 dokumen dari masing-masing calon ke PublicSubmissionDocument
+      for (const c of candidates) {
+        const docs = c.documents || {};
+        const candidateDocs = [
+          { name: `[Calon: ${c.name}] Surat Pengantar dari MUI Setempat`, doc: docs.suratMui },
+          { name: `[Calon: ${c.name}] Sertifikat Pelatihan Dasar Pengawas Syariah dari DSN-MUI`, doc: docs.sertifikatPelatihan },
+          { name: `[Calon: ${c.name}] Sertifikat Kompetensi Pengawas Syariah dari LSP MUI`, doc: docs.sertifikatKompetensi },
+          { name: `[Calon: ${c.name}] Profil Calon DPS (Daftar Riwayat Hidup dan KTP terbaru)`, doc: docs.profilCv },
+          { name: `[Calon: ${c.name}] Surat Keterangan Tidak Sedang Menjadi Pengurus/Pegawai Aktif LKS/LBS/LPS`, doc: docs.suratPernyataanNonPegawai },
+          { name: `[Calon: ${c.name}] Dokumen Lain Calon`, doc: docs.dokumenLain },
+        ];
+
+        for (const cd of candidateDocs) {
+          if (cd.doc && cd.doc.fileUrl) {
+            await tx.publicSubmissionDocument.create({
+              data: {
+                submissionId: sub.id,
+                requirementName: cd.name,
+                fileName: cd.doc.fileName,
+                fileUrl: cd.doc.fileUrl,
+                fileSize: cd.doc.fileSize || 1024,
+                mimeType: cd.doc.mimeType || 'application/pdf',
+                isMandatory: true,
+                status: 'VALID',
+              },
+            });
+          }
+        }
+      }
+
+      // ── BRIDGING KE SISTEM SURAT MASUK INTERNAL AMANAH ────────────
+      let org = await tx.organization.findFirst({
+        where: { name: { contains: 'Dewan Syariah', mode: 'insensitive' } },
+      });
+      if (!org) {
+        org = await tx.organization.findFirst();
+      }
+      const organizationId = org ? org.id : 'org-mui-001';
+
+      let category = await tx.documentCategory.findFirst({
+        where: { name: { contains: 'Masuk', mode: 'insensitive' } },
+      });
+      if (!category) {
+        category = await tx.documentCategory.create({
+          data: { name: 'Surat Masuk Permohonan Syariah' },
+        });
+      }
+
+      let classification = await tx.documentClassification.findFirst({
+        where: { level: 'BIASA' },
+      });
+      if (!classification) {
+        classification = await tx.documentClassification.findFirst();
+      }
+      if (!classification) {
+        classification = await tx.documentClassification.create({
+          data: { level: 'BIASA', name: 'Biasa' },
+        });
+      }
+
+      let internalUser = await tx.user.findFirst({
+        where: { isActive: true },
+      });
+      const creatorId = internalUser ? internalUser.id : userId;
+
+      // Buat dokumen Surat Masuk
+      const erpDoc = await tx.document.create({
+        data: {
+          title: `[Permohonan Rekomendasi DPS] ${company.name} - ${candidates.length} Calon DPS`,
+          documentNumber: companyLetterNumber || sub.submissionNumber,
+          organizationId,
+          categoryId: category.id,
+          subCategory: 'Permohonan Rekomendasi DPS',
+          classificationId: classification.id,
+          creatorId,
+          documentType: 'INCOMING',
+          approvalFlowType: 'SEQUENTIAL',
+          status: 'BARU',
+          disposisiStatus: 'BARU',
+          documentDate: parsedLetterDate,
+          receivedDate: new Date(),
+          versions: {
+            create: {
+              versionNum: 1,
+              fileUrl: officialLetter.fileUrl,
+              fileName: officialLetter.fileName,
+              fileSize: officialLetter.fileSize,
+              mimeType: officialLetter.mimeType || 'application/pdf',
+              createdBy: creatorId,
+              changeNotes: `Permohonan Rekomendasi DPS dari ${company.name} (${candidates.length} calon diusulkan, Tiket: ${sub.submissionNumber})`,
+            },
+          },
+        },
+      });
+
+      // Tautkan erpDocumentId ke publicSubmission
+      await tx.publicSubmission.update({
+        where: { id: sub.id },
+        data: { erpDocumentId: erpDoc.id },
+      });
+
+      // Buat Evidence Folder untuk masing-masing calon dan lampirkan ke dokumen
+      const mainFolder = await tx.evidenceFolder.create({
+        data: {
+          name: `Berkas Usulan DPS ${company.name} (${candidates.length} Calon)`,
+          documentId: erpDoc.id,
+        },
+      });
+
+      // Tambahkan surat pengantar perusahaan ke folder lampiran
+      await tx.evidenceFile.create({
+        data: {
+          name: `Surat Pengantar Perusahaan - ${officialLetter.fileName}`,
+          fileUrl: officialLetter.fileUrl,
+          fileSize: officialLetter.fileSize,
+          mimeType: officialLetter.mimeType || 'application/pdf',
+          folderId: mainFolder.id,
+          documentId: erpDoc.id,
+        },
+      });
+
+      // Tambahkan Dokumen Lain ke evidence folder jika ada
+      if (additionalDoc && additionalDoc.fileUrl) {
+        await tx.evidenceFile.create({
+          data: {
+            name: `Dokumen Pendukung Lainnya - ${additionalDoc.fileName}`,
+            fileUrl: additionalDoc.fileUrl,
+            fileSize: additionalDoc.fileSize || 1024,
+            mimeType: additionalDoc.mimeType || 'application/pdf',
+            folderId: mainFolder.id,
+            documentId: erpDoc.id,
+          },
+        });
+      }
+
+      for (const c of candidates) {
+        const docs = c.documents || {};
+        const candidateFiles = [
+          { title: 'Surat Pengantar MUI Setempat', doc: docs.suratMui },
+          { title: 'Sertifikat Pelatihan Dasar DPS', doc: docs.sertifikatPelatihan },
+          { title: 'Sertifikat Kompetensi LSP MUI', doc: docs.sertifikatKompetensi },
+          { title: 'Profil Calon DPS dan KTP', doc: docs.profilCv },
+          { title: 'Surat Keterangan Non Pegawai Aktif', doc: docs.suratPernyataanNonPegawai },
+          { title: 'Dokumen Lain Calon', doc: docs.dokumenLain },
+        ];
+
+        for (const cf of candidateFiles) {
+          if (cf.doc && cf.doc.fileUrl) {
+            await tx.evidenceFile.create({
+              data: {
+                name: `[${c.name}] ${cf.title} - ${cf.doc.fileName}`,
+                fileUrl: cf.doc.fileUrl,
+                fileSize: cf.doc.fileSize || 1024,
+                mimeType: cf.doc.mimeType || 'application/pdf',
+                folderId: mainFolder.id,
+                documentId: erpDoc.id,
+              },
+            });
+          }
+        }
+      }
+
+      // Catat Aktivitas Timeline
+      await tx.publicSubmissionActivity.create({
+        data: {
+          submissionId: sub.id,
+          title: 'Permohonan Rekomendasi DPS Berhasil Diajukan',
+          description: `Permohonan rekomendasi penempatan DPS untuk ${candidates.length} calon dari ${company.name} telah diterima dan masuk ke menu Surat Masuk DSN-MUI.`,
+          publicStatus: 'Proses Pengajuan',
+          visibility: 'PUBLIC',
+          performedByName: applicantUser?.fullName || 'PIC Perusahaan',
+        },
+      });
+
+      // Notifikasi di portal
+      await tx.publicNotification.create({
+        data: {
+          companyId,
+          userId,
+          title: `Pengajuan Rekomendasi DPS: ${sub.submissionNumber}`,
+          message: `Permohonan rekomendasi ${candidates.length} calon DPS telah berhasil dikirim ke DSN-MUI. Pantau tahapan status secara berkala.`,
+          type: 'SUCCESS',
+          link: `/submissions/${sub.id}`,
+        },
+      });
+
+      // Audit Log
+      await tx.publicAuditLog.create({
+        data: {
+          action: 'DPS_SUBMISSION_SUBMITTED',
+          resource: 'PublicSubmission',
+          resourceId: sub.id,
+          companyId,
+          userId,
+          ipAddress: (req.ip || req.socket.remoteAddress) ?? null,
+          userAgent: req.get('user-agent') ?? null,
+          metadata: {
+            submissionNumber: sub.submissionNumber,
+            erpDocumentId: erpDoc.id,
+            candidateCount: candidates.length,
+          },
+        },
+      });
+
+      return { sub, erpDoc };
+    });
+
+    // Kirim Email Konfirmasi secara Asinkron
+    const candidateNames = candidates.map((c: any) => c.name).filter(Boolean);
+    const picEmail = applicantUser?.email || req.publicUser?.email;
+
+    if (picEmail) {
+      sendSubmissionConfirmationEmail({
+        toEmail: picEmail,
+        recipientName: applicantUser?.fullName || 'Narahubung Perusahaan',
+        companyName: company.name,
+        submissionNumber: result.sub.submissionNumber,
+        submissionTitle: result.sub.title,
+        serviceName: 'Permohonan Rekomendasi DPS',
+        candidateNames,
+        submissionId: result.sub.id,
+      }).catch((err) => console.error('[DPS Submission] Gagal mengirim email konfirmasi:', err));
+    }
+
+    return res.json({
+      status: 'success',
+      message: 'Permohonan Rekomendasi DPS berhasil diajukan dan terdaftar dalam Surat Masuk DSN-MUI!',
+      data: {
+        id: result.sub.id,
+        submissionNumber: result.sub.submissionNumber,
+        status: result.sub.status,
+        dpsStage: result.sub.dpsStage,
+        submittedAt: result.sub.submittedAt,
+        candidateCount: candidates.length,
+        erpDocumentId: result.erpDoc.id,
+      },
+    });
+  } catch (error: any) {
+    console.error('[Public Submissions] Error submitting DPS application:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Gagal mengajukan Permohonan Rekomendasi DPS.',
+      error: error.message,
+    });
+  }
+});
+
 export default router;
+

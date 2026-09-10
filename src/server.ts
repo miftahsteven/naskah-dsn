@@ -201,6 +201,7 @@ app.use('/api/dps', dpsRouter);
 app.use('/api/disposisi', disposisiRouter);
 app.use('/api/fatwa', fatwaRouter);
 app.use('/api/meeting', meetingRouter);
+app.use('/api/meetings', meetingRouter);
 app.use('/api/notula', notulaRouter);
 app.use('/api/letter-templates', letterTemplateRouter);
 app.use('/api/public', publicRouter);
