@@ -9,9 +9,9 @@ const globalForPrisma = global as unknown as { prisma?: PrismaClient; pool?: Poo
 
 const pool = globalForPrisma.pool || new Pool({ 
   connectionString: process.env.DATABASE_URL,
-  max: 20, // Max concurrent connections
+  max: parseInt(process.env.DB_POOL_MAX || '50', 10), // Configurable pool size (default 50 for high concurrency)
   idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 5000, // Fail fast after 5s
+  connectionTimeoutMillis: 10000, // Wait up to 10s queue time under heavy request spikes
   allowExitOnIdle: true,
 });
 
