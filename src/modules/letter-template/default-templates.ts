@@ -25,6 +25,8 @@ export const FOOTER_HTML = `<table class="amanah-letter-footer" style="width: 10
 export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
+
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
     <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
@@ -114,6 +116,8 @@ export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-s
 
     \${FOOTER_HTML}
   </div>
+
+  </div>
 </div>`;
 
 export const FULL_VARS_PKS = [
@@ -139,6 +143,8 @@ export const FULL_VARS_PKS = [
 
 export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -235,6 +241,8 @@ export const FULL_HTML_OPINI = `<div style="font-family: Arial, sans-serif; font
 
     \${FOOTER_HTML}
   </div>
+
+  </div>
 </div>`;
 
 export const FULL_VARS_OPINI = [
@@ -263,6 +271,8 @@ export const FULL_VARS_OPINI = [
 
 export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -398,6 +408,8 @@ export const FULL_HTML_UNDANGAN_FATWA = `<div style="font-family: Arial, sans-se
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_UNDANGAN_FATWA = [
@@ -469,6 +481,8 @@ export const DEFAULT_AGENDA_DETAIL_BPH = `<div style="font-size: 10.5pt; line-he
 
 export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -602,6 +616,8 @@ export const FULL_HTML_UNDANGAN_BPH = `<div style="font-family: Arial, sans-seri
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_UNDANGAN_BPH = [
@@ -642,6 +658,8 @@ export const DEFAULT_AGENDA_DETAIL_KESEKRETARISAN = `<ol style="margin-top: 0; m
 
 export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -775,6 +793,8 @@ export const FULL_HTML_UNDANGAN_KESEKRETARISAN = `<div style="font-family: Arial
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_UNDANGAN_KESEKRETARISAN = [
@@ -801,6 +821,8 @@ export const FULL_VARS_UNDANGAN_KESEKRETARISAN = [
 
 export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -944,6 +966,8 @@ export const FULL_HTML_UNDANGAN_LAYANAN = `<div style="font-family: Arial, sans-
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_UNDANGAN_LAYANAN = [
@@ -970,6 +994,8 @@ export const FULL_VARS_UNDANGAN_LAYANAN = [
 
 export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -1095,6 +1121,8 @@ export const FULL_HTML_U0000 = `<div style="font-family: Arial, sans-serif; font
 
     \${FOOTER_HTML}
   </div>
+
+  </div>
 </div>`;
 
 export const FULL_VARS_U0000 = [
@@ -1122,6 +1150,8 @@ export const FULL_VARS_U0000 = [
 
 export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- JUDUL SURAT & NOMOR -->
   <div style="text-align: center; margin-top: 6px; margin-bottom: 12px;">
@@ -1240,6 +1270,8 @@ export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif
   </table>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_SURAT_TUGAS = [
@@ -1300,6 +1332,8 @@ export const DEFAULT_ISI_PERMOHONAN_PKL = `<ol style="margin-top: 4px; margin-bo
 
 export const FULL_HTML_PERMOHONAN_PKL = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -1408,6 +1442,8 @@ export const FULL_HTML_PERMOHONAN_PKL = `<div style="font-family: Arial, sans-se
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_PERMOHONAN_PKL = [
@@ -1578,6 +1614,8 @@ export const DEFAULT_LAMPIRAN_INFORMASI_PELATIHAN = `<div style="text-align: cen
 export const FULL_HTML_INFORMASI_PELATIHAN = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
+
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
     <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
@@ -1682,6 +1720,8 @@ export const FULL_HTML_INFORMASI_PELATIHAN = `<div style="font-family: Arial, sa
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_INFORMASI_PELATIHAN = [
@@ -1707,6 +1747,8 @@ export const DEFAULT_ISI_KETERANGAN_WAWANCARA = `<p style="text-align: justify; 
 export const FULL_HTML_KETERANGAN_WAWANCARA = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
+
   <!-- JUDUL SURAT KETERANGAN -->
   <div style="text-align: center; margin-top: 10px; margin-bottom: 22px;">
     <div style="font-weight: bold; font-size: 12pt; letter-spacing: 2px; text-decoration: underline; text-underline-offset: 3px; margin-bottom: 4px;">
@@ -1793,6 +1835,8 @@ export const FULL_HTML_KETERANGAN_WAWANCARA = `<div style="font-family: Arial, s
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_KETERANGAN_WAWANCARA = [
@@ -1814,6 +1858,8 @@ export const DEFAULT_ISI_KETERANGAN_PELATIHAN = `<p style="text-align: justify; 
 export const FULL_HTML_KETERANGAN_PELATIHAN = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
+
   <!-- JUDUL SURAT KETERANGAN -->
   <div style="text-align: center; margin-top: 10px; margin-bottom: 22px;">
     <div style="font-weight: bold; font-size: 12pt; letter-spacing: 2px; text-decoration: underline; text-underline-offset: 3px; margin-bottom: 4px;">
@@ -1900,6 +1946,8 @@ export const FULL_HTML_KETERANGAN_PELATIHAN = `<div style="font-family: Arial, s
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_KETERANGAN_PELATIHAN = [
@@ -1969,6 +2017,8 @@ export const DEFAULT_KETERANGAN_SURAT_TUGAS_TIM = `<div style="line-height: 1.25
 
 export const FULL_HTML_SURAT_TUGAS_TIM = `<div style="font-family: Arial, sans-serif; font-size: 9.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- JUDUL SURAT TUGAS -->
   <div style="text-align: center; margin-top: 4px; margin-bottom: 10px;">
@@ -2089,6 +2139,8 @@ export const FULL_HTML_SURAT_TUGAS_TIM = `<div style="font-family: Arial, sans-s
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_SURAT_TUGAS_TIM = [
@@ -2124,6 +2176,8 @@ export const DEFAULT_ISI_KONTRIBUSI_DPS = `<ol style="margin-top: 0; margin-bott
 
 export const FULL_HTML_KONTRIBUSI_DPS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
 
   <!-- TANGGAL SURAT -->
   <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
@@ -2217,6 +2271,8 @@ export const FULL_HTML_KONTRIBUSI_DPS = `<div style="font-family: Arial, sans-se
   </div>
 
   \${FOOTER_HTML}
+
+  </div>
 </div>`;
 
 export const FULL_VARS_KONTRIBUSI_DPS = [
@@ -2235,6 +2291,371 @@ export const FULL_VARS_KONTRIBUSI_DPS = [
   { key: 'jabatanKanan', label: 'Jabatan Kanan (e.g. Sekretaris)', type: 'text', required: true, placeholder: 'Sekretaris', defaultValue: 'Sekretaris' },
   { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.', defaultValue: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
   { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' }
+];
+
+export const FULL_HTML_SERTIFIKAT_KS_RS = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Sertifikat Kesesuaian Syariah Rumah Sakit</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 297mm;
+      height: 210mm;
+      overflow: hidden;
+      background-color: transparent;
+    }
+    .cert-page {
+      position: relative;
+      width: 297mm;
+      height: 210mm;
+      max-width: 297mm;
+      max-height: 210mm;
+      background-image: url('/images/cert-ks-rs-bg.jpg');
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      overflow: hidden;
+      font-family: 'Times New Roman', Times, serif;
+      color: #000;
+      margin: 0 auto;
+    }
+    .bismillah-img {
+      position: absolute;
+      top: 25.8mm;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 10.6mm;
+      width: auto;
+      object-fit: contain;
+    }
+    .logo-img {
+      position: absolute;
+      top: 41.5mm;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 19.2mm;
+      width: auto;
+      object-fit: contain;
+    }
+    .header-text-1 {
+      position: absolute;
+      top: 65.5mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: 800;
+      font-size: 11.5pt;
+      letter-spacing: 0.1px;
+      color: #050505;
+      text-transform: uppercase;
+    }
+    .header-text-2 {
+      position: absolute;
+      top: 70.3mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 9.6pt;
+      font-style: italic;
+      color: #111;
+    }
+    .cert-title {
+      position: absolute;
+      top: 75.65mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-weight: bold;
+      font-size: 32pt;
+      color: #1a1a1a;
+      letter-spacing: 0.2px;
+    }
+    .preamble-1 {
+      position: absolute;
+      top: 96.5mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+      font-size: 10.4pt;
+      color: #000;
+      line-height: 1;
+    }
+    .preamble-2 {
+      position: absolute;
+      top: 101.4mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+      font-size: 10.4pt;
+      color: #000;
+      line-height: 1;
+    }
+    .hospital-table {
+      position: absolute;
+      top: 106.6mm;
+      left: 114.5mm;
+      width: 155mm;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 10.5pt;
+      line-height: 1;
+    }
+    .hospital-table td {
+      padding: 0;
+      height: 5.28mm;
+      vertical-align: middle;
+    }
+    .table-label {
+      font-style: italic;
+      width: 25.0mm;
+      white-space: nowrap;
+    }
+    .table-colon {
+      width: 4.8mm;
+      text-align: left;
+    }
+    .table-val {
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .status-line-1 {
+      position: absolute;
+      top: 135.65mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+      font-size: 14.8pt;
+      color: #000;
+      line-height: 1;
+    }
+    .status-line-2 {
+      position: absolute;
+      top: 142.15mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+      font-size: 10.6pt;
+      color: #000;
+      line-height: 1;
+    }
+    .status-line-3 {
+      position: absolute;
+      top: 148.4mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+      font-size: 10.6pt;
+      color: #000;
+      line-height: 1;
+    }
+    .signer-heading-1 {
+      position: absolute;
+      top: 154.5mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Times New Roman', Times, serif;
+      font-weight: bold;
+      font-size: 12.0pt;
+      text-transform: uppercase;
+      color: #000;
+      line-height: 1;
+    }
+    .signer-heading-2 {
+      position: absolute;
+      top: 159.7mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Times New Roman', Times, serif;
+      font-weight: bold;
+      font-size: 12.0pt;
+      text-transform: uppercase;
+      color: #000;
+      line-height: 1;
+    }
+    .signers-container {
+      position: absolute;
+      top: 163.5mm;
+      left: 55mm;
+      right: 55mm;
+      height: 25mm;
+    }
+    .signer-box-left {
+      position: absolute;
+      left: 0;
+      width: 75mm;
+      text-align: center;
+    }
+    .signer-box-right {
+      position: absolute;
+      right: 0;
+      width: 80mm;
+      text-align: center;
+    }
+    .tte-box {
+      height: 14.5mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tte-badge {
+      display: inline-block;
+      padding: 1.5px 7px;
+      border: 1px dashed #15803d;
+      border-radius: 4px;
+      background: rgba(240, 253, 244, 0.75);
+    }
+    .tte-title {
+      font-family: Arial, sans-serif;
+      font-size: 7.2pt;
+      color: #166534;
+      font-weight: bold;
+      display: block;
+      line-height: 1.1;
+    }
+    .tte-sub {
+      font-family: Arial, sans-serif;
+      font-size: 6.2pt;
+      color: #15803d;
+      display: block;
+      line-height: 1.1;
+    }
+    .signer-name {
+      font-family: 'Times New Roman', Times, serif;
+      font-weight: bold;
+      font-size: 12.4pt;
+      text-decoration: underline;
+      color: #000;
+      white-space: nowrap;
+      line-height: 1.1;
+    }
+    .signer-title {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 11.0pt;
+      color: #000;
+      margin-top: 1.5mm;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body class="certificate-body">
+  <div class="cert-page">
+    <img src="/images/bismillah-cert.png" class="bismillah-img" alt="Bismillah" />
+    <img src="/images/logo-dsn-cert.png" class="logo-img" alt="Logo DSN-MUI" />
+
+    <div class="header-text-1">DEWAN SYARIAH NASIONAL - MAJELIS ULAMA INDONESIA</div>
+    <div class="header-text-2">National Sharia Board - Indonesian Council of Ulama</div>
+
+    <div class="cert-title">Sertifikat</div>
+
+    <div class="preamble-1">
+      Dengan memanjatkan puji syukur ke hadirat Allah Subhanahu wa Ta'ala. Setelah mempelajari, mengkaji, meninjau dan memeriksa,
+    </div>
+    <div class="preamble-2">
+      Dewan Syariah Nasional-Majelis Ulama Indonesia menyatakan bahwa:
+    </div>
+
+    <table class="hospital-table">
+      <tr>
+        <td class="table-label">Nama (Tipe)</td>
+        <td class="table-colon">:</td>
+        <td class="table-val">{{namaDanTipeRs}}</td>
+      </tr>
+      <tr>
+        <td class="table-label">Kelompok</td>
+        <td class="table-colon">:</td>
+        <td class="table-val">{{kelompok}}</td>
+      </tr>
+      <tr>
+        <td class="table-label">Alamat</td>
+        <td class="table-colon">:</td>
+        <td class="table-val">{{alamatRsLine1}}</td>
+      </tr>
+      <tr>
+        <td class="table-label"></td>
+        <td class="table-colon"></td>
+        <td class="table-val">{{alamatRsLine2}}</td>
+      </tr>
+      <tr>
+        <td class="table-label">Produk</td>
+        <td class="table-colon">:</td>
+        <td class="table-val">{{produk}}</td>
+      </tr>
+    </table>
+
+    <div class="status-line-1">telah memenuhi prinsip syariah</div>
+    <div class="status-line-2">berdasarkan SK No. {{nomorSk}}. Sertifikat ini berlaku sampai tanggal {{masaBerlaku}}.</div>
+    <div class="status-line-3">{{tempatPenetapan}}, {{tanggalMasehi}} / {{tanggalHijriah}}</div>
+
+    <div class="signer-heading-1">BADAN PENGURUS</div>
+    <div class="signer-heading-2">DEWAN SYARIAH NASIONAL-MAJELIS ULAMA INDONESIA</div>
+
+
+    <div class="signers-container">
+      <div class="signer-box-left">
+        <div class="tte-box">
+          <!-- QR_CODE_TTE_PLACEHOLDER -->
+          <div style="height: 14.5mm;"></div>
+        </div>
+        <div class="signer-name">{{namaKetua}}</div>
+        <div class="signer-title">{{jabatanKiri}}</div>
+      </div>
+
+      <div class="signer-box-right">
+        <div class="tte-box">
+          <!-- QR_CODE_TTE_PLACEHOLDER -->
+          <div style="height: 14.5mm;"></div>
+        </div>
+        <div class="signer-name">{{namaSekretaris}}</div>
+        <div class="signer-title">{{jabatanKanan}}</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+export const FULL_VARS_SERTIFIKAT_KS_RS = [
+  { key: 'namaDanTipeRs', label: 'Nama (Tipe) Rumah Sakit', type: 'text', required: true, placeholder: 'Rumah Sakit Islam Sari Asih Ar-Rahmah (C)', defaultValue: 'Rumah Sakit Islam Sari Asih Ar-Rahmah (C)' },
+  { key: 'kelompok', label: 'Kelompok', type: 'text', required: true, placeholder: 'Rumah Sakit Syariah', defaultValue: 'Rumah Sakit Syariah' },
+  { key: 'alamatRsLine1', label: 'Alamat Baris 1 (Jalan, No, Kelurahan)', type: 'text', required: true, placeholder: 'Jl. KS Tubun No. 44 Kel. Koang Jaya', defaultValue: 'Jl. KS Tubun No. 44 Kel. Koang Jaya' },
+  { key: 'alamatRsLine2', label: 'Alamat Baris 2 (Kecamatan, Kota/Kabupaten)', type: 'text', required: false, placeholder: 'Kec. Karawaci, Kota Tangerang', defaultValue: 'Kec. Karawaci, Kota Tangerang' },
+  { key: 'produk', label: 'Produk', type: 'text', required: true, placeholder: 'Layanan dan Manajemen', defaultValue: 'Layanan dan Manajemen' },
+  { key: 'nomorSk', label: 'Nomor SK DSN-MUI', type: 'text', required: true, placeholder: '018.227.08/DSN-MUI/VI/2026', defaultValue: '018.227.08/DSN-MUI/VI/2026' },
+  { key: 'masaBerlaku', label: 'Masa Berlaku Sampai', type: 'text', required: true, placeholder: '7 Juni 2030', defaultValue: '7 Juni 2030' },
+  { key: 'tempatPenetapan', label: 'Tempat Penetapan', type: 'text', required: true, placeholder: 'Jakarta', defaultValue: 'Jakarta' },
+  { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '8 Juni 2026 M', defaultValue: '8 Juni 2026 M' },
+  { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '22 Dzulhijjah 1447 H', defaultValue: '22 Dzulhijjah 1447 H' },
+  { key: 'jabatanKiri', label: 'Jabatan Kiri', type: 'text', required: true, placeholder: 'Ketua', defaultValue: 'Ketua' },
+  { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.', defaultValue: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
+  { key: 'jabatanKanan', label: 'Jabatan Kanan', type: 'text', required: true, placeholder: 'Sekretaris', defaultValue: 'Sekretaris' },
+  { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
 ];
 
 export const DEFAULT_TEMPLATES = [
@@ -2357,6 +2778,14 @@ export const DEFAULT_TEMPLATES = [
     description: 'Template resmi Surat Edaran Iuran Bulanan / Kontribusi Dewan Pengawas Syariah (DPS) Dewan Syariah Nasional - Majelis Ulama Indonesia (DSN-MUI).',
     htmlContent: FULL_HTML_KONTRIBUSI_DPS,
     variables: FULL_VARS_KONTRIBUSI_DPS,
+  },
+  {
+    name: 'Sertifikat Kesesuaian Syariah Rumah Sakit',
+    code: 'SERTIFIKAT-KS-RS',
+    category: 'Sertifikat Kesesuaian Syariah',
+    description: 'Template resmi Sertifikat Pernyataan Kesesuaian Syariah Rumah Sakit Dewan Syariah Nasional - Majelis Ulama Indonesia (DSN-MUI).',
+    htmlContent: FULL_HTML_SERTIFIKAT_KS_RS,
+    variables: FULL_VARS_SERTIFIKAT_KS_RS,
   },
 ];
 

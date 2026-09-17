@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { authenticate } from '../../middleware/auth.js';
 import type { AuthRequest } from '../../middleware/auth.js';
-import { getKopSuratBase64, getBismillahBase64, getLogoDsnBase64, getWqaUkasBase64 } from '../documents/documents.router.js';
+import { getKopSuratBase64, getBismillahBase64, getLogoDsnBase64, getWqaUkasBase64, getCertKsRsBgBase64, getStempelDsnBase64, getBismillahCertBase64, getLogoDsnCertBase64 } from '../documents/documents.router.js';
 import { DEFAULT_TEMPLATES, HEADER_HTML, FOOTER_HTML } from './default-templates.js';
 
 const router = Router();
@@ -46,6 +46,10 @@ function sanitizeTemplateHtml(html: string): string {
   const bismillahBase64 = getBismillahBase64();
   const logoBase64 = getLogoDsnBase64();
   const wqaBase64 = getWqaUkasBase64();
+  const certBgBase64 = getCertKsRsBgBase64();
+  const stempelBase64 = getStempelDsnBase64();
+  const bismillahCertBase64 = getBismillahCertBase64();
+  const logoCertBase64 = getLogoDsnCertBase64();
 
   let out = html;
   const kopPlaceholderRegex = /(\\?\${HEADER_HTML}|\${HEADER_HTML})/g;
@@ -64,6 +68,15 @@ function sanitizeTemplateHtml(html: string): string {
   if (footerPlaceholderRegex.test(out)) {
     out = out.replace(footerPlaceholderRegex, FOOTER_HTML);
   }
+
+  // Replace certificate background & stamp placeholders
+  out = out.replace(/(\\?\${CERT_KS_RS_BG}|\${CERT_KS_RS_BG})/g, certBgBase64);
+  out = out.replace(/(\\?\${STEMPEL_DSN}|\${STEMPEL_DSN})/g, stempelBase64);
+  out = out.replace(/src=["'][^"']*cert-ks-rs-bg\.jpg["']/gi, `src="${certBgBase64}"`);
+  out = out.replace(/src=["'][^"']*stempel-dsn\.png["']/gi, `src="${stempelBase64}"`);
+  out = out.replace(/src=["'][^"']*bismillah-cert\.png["']/gi, `src="${bismillahCertBase64}"`);
+  out = out.replace(/src=["'][^"']*logo-dsn-cert\.png["']/gi, `src="${logoCertBase64}"`);
+
   out = out.replace(/src=["'][^"']*kop-surat\.png["']/gi, `src="${kopBase64}" class="kop-surat-img"`);
   out = out.replace(/src=["'][^"']*bismillah\.svg["']/gi, `src="${bismillahBase64}"`);
   out = out.replace(/src=["']data:image\/svg\+xml;base64,[^"']*["']/gi, `src="${bismillahBase64}"`);
@@ -73,7 +86,23 @@ function sanitizeTemplateHtml(html: string): string {
     let cleanStyle = p2.replace(/height:\s*[^;]+;?/gi, '').replace(/max-height:\s*[^;]+;?/gi, '').replace(/width:\s*[^;]+;?/gi, '').replace(/max-width:\s*[^;]+;?/gi, '').trim();
     return `${p1}${cleanStyle ? cleanStyle + '; ' : ''}width: 260px; max-width: 45%; height: auto; max-height: 48px; object-fit: contain; filter: brightness(0); display: block; margin: 8px auto 14px auto;${p3}`;
   });
-  out = out.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
+
+  const isCert = out.includes('certificate-sheet') || out.includes('cert-page');
+  if (!isCert) {
+    out = out.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
+  }
+
+  if (!out.includes('letter-body-wrapper') && !isCert) {
+    const bismillahEndRegex = /(<img[^>]*(?:bismillah|Bismillah)[^>]*>[\s\S]*?<\/div>)/i;
+    const bismillahMatch = bismillahEndRegex.exec(out);
+    if (bismillahMatch) {
+      const cutIndex = bismillahMatch.index + bismillahMatch[0].length;
+      const headerPart = out.substring(0, cutIndex);
+      const restPart = out.substring(cutIndex);
+      out = `${headerPart}\n<div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">\n${restPart}\n</div>`;
+    }
+  }
+
   return out;
 }
 

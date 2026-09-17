@@ -83,6 +83,22 @@ export function getWqaUkasBase64(): string {
   return getStaticImageBase64('wqa-ukas.png', 'image/png');
 }
 
+export function getCertKsRsBgBase64(): string {
+  return getStaticImageBase64('cert-ks-rs-bg.jpg', 'image/jpeg');
+}
+
+export function getStempelDsnBase64(): string {
+  return getStaticImageBase64('stempel-dsn.png', 'image/png');
+}
+
+export function getBismillahCertBase64(): string {
+  return getStaticImageBase64('bismillah-cert.png', 'image/png');
+}
+
+export function getLogoDsnCertBase64(): string {
+  return getStaticImageBase64('logo-dsn-cert.png', 'image/png');
+}
+
 export async function mergePdfWithEvidence(
   mainPdfBuffer: Buffer,
   evidenceFiles: { id: string; name: string; fileUrl: string; mimeType: string }[]
@@ -229,6 +245,45 @@ router.get('/generate-number', authenticate, async (req: AuthRequest, res: Respo
         year: currentYear,
         totalThisYear: docCount,
       },
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── HOSPITAL SUBMISSIONS ENDPOINT (for Surat Keluar auto-fill) ──
+router.get('/hospital-submissions', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const submissions = await prisma.publicSubmission.findMany({
+      where: {
+        OR: [
+          { submissionTypeName: { contains: 'Rumah Sakit', mode: 'insensitive' } },
+          { title: { contains: 'Rumah Sakit', mode: 'insensitive' } },
+          { title: { contains: 'RS', mode: 'insensitive' } },
+          { erpDocument: { subCategory: { contains: 'Rumah Sakit', mode: 'insensitive' } } },
+        ],
+      },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            city: true,
+            province: true,
+            npwp: true,
+            phone: true,
+            email: true,
+          }
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    res.json({
+      status: 'success',
+      data: submissions,
     });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -1041,10 +1096,46 @@ router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('fil
 
     const existingDoc = await prisma.document.findUnique({
       where: { id: String(id) },
-      include: { versions: { orderBy: { versionNum: 'desc' }, take: 1 } }
+      include: {
+        versions: { orderBy: { versionNum: 'desc' }, take: 1 },
+        signatures: true,
+        workflowInstances: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            steps: { orderBy: { stepNumber: 'asc' } }
+          }
+        }
+      }
     });
 
     if (!existingDoc) return res.status(404).json({ status: 'error', message: 'Document not found' });
+
+    // Validate whether document has already been signed by the final signatory
+    const isSignedByFinalSignatory = (() => {
+      if (existingDoc.status === 'SIGNED' || existingDoc.status === 'COMPLETED') return true;
+      const wf = existingDoc.workflowInstances?.[0];
+      if (!wf || !wf.steps || wf.steps.length === 0) return false;
+      const steps = [...wf.steps].sort((a: any, b: any) => a.stepNumber - b.stepNumber);
+      const signatorySteps = steps.filter((s: any) => s.roleId === 'PENANDATANGAN');
+      const finalSignatoryStep = signatorySteps.length > 0
+        ? signatorySteps[signatorySteps.length - 1]
+        : steps.filter((s: any) => s.roleId !== 'PEMPARAF' && s.roleId !== 'APPROVER').pop() || steps[steps.length - 1];
+
+      if (!finalSignatoryStep) return false;
+      if (finalSignatoryStep.status === 'APPROVED') return true;
+      if (finalSignatoryStep.userId && existingDoc.signatures && existingDoc.signatures.length > 0) {
+        return existingDoc.signatures.some((sig: any) => sig.userId === finalSignatoryStep.userId && sig.signedAt);
+      }
+      return false;
+    })();
+
+    if (isSignedByFinalSignatory) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Surat keluar ini sudah ditandatangani oleh penandatangan akhir dan tidak dapat diedit.'
+      });
+    }
 
     // Check if document number is being changed to an already existing one
     if (documentNumber && String(documentNumber).trim() && String(documentNumber).trim() !== existingDoc.documentNumber) {
@@ -1364,7 +1455,45 @@ function resolveExistingFilePath(fileUrl: string): string | null {
 }
 
 async function ensureExistingFilePath(fileUrl: string, _docId?: string, _authHeader?: string): Promise<string | null> {
-  return resolveExistingFilePath(fileUrl);
+  const local = resolveExistingFilePath(fileUrl);
+  if (local) return local;
+
+  if (!fileUrl) return null;
+
+  try {
+    const cleanPath = fileUrl.replace(/^\/+/, '');
+    const filename = path.basename(cleanPath);
+    const targetDir = path.resolve(process.cwd(), 'uploads');
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const targetPath = path.join(targetDir, filename);
+
+    const remoteBases = [
+      process.env.REMOTE_UPLOADS_BASE_URL,
+      'https://amanah.dsnmui.or.id',
+      'https://mui.mscode.id'
+    ].filter(Boolean) as string[];
+
+    for (const base of remoteBases) {
+      const url = `${base.replace(/\/+$/, '')}/${cleanPath}`;
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const buffer = Buffer.from(await response.arrayBuffer());
+          await fs.promises.writeFile(targetPath, buffer);
+          console.log(`[ensureExistingFilePath] Downloaded remote file ${url} -> ${targetPath}`);
+          return targetPath;
+        }
+      } catch {
+        // continue
+      }
+    }
+  } catch (err: any) {
+    console.error('[ensureExistingFilePath] Error syncing remote file:', err.message);
+  }
+
+  return null;
 }
 
 function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: string): { html: string; injected: boolean } {
@@ -1470,8 +1599,11 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
       return { html: htmlContent, injected: true };
     }
 
-    if (/(<div[^>]*style="[^"]*height:\s*\d+px[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
-      const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:\s*\d+px[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+    if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->\s*<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>/gi.test(lastSlice)) {
+      const updatedSlice = lastSlice.replace(/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->\s*<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>/gi, qrImageHtml);
+      return { html: prefixBase + updatedSlice + suffix, injected: true };
+    } else if (/(<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
+      const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
       return { html: prefixBase + updatedSlice + suffix, injected: true };
     } else if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi.test(lastSlice)) {
       const updatedSlice = lastSlice.replace(/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi, qrImageHtml);
@@ -1752,6 +1884,29 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     '$1Wassalamu’alaikum Warahmatullah Wabarakatuh.$3'
   );
 
+  // Check if document is a landscape certificate
+  const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
+  if (isLandscape) {
+    const certBgBase64 = getCertKsRsBgBase64();
+    const stempelBase64 = getStempelDsnBase64();
+    const bismillahCertBase64 = getBismillahCertBase64();
+    const logoCertBase64 = getLogoDsnCertBase64();
+
+    htmlContent = htmlContent
+      .replace(/(\\?\${CERT_KS_RS_BG}|\${CERT_KS_RS_BG})/g, certBgBase64)
+      .replace(/(\\?\${STEMPEL_DSN}|\${STEMPEL_DSN})/g, stempelBase64)
+      .replace(/url\(['"]?[^'"]*cert-ks-rs-bg\.jpg['"]?\)/gi, `url('${certBgBase64}')`)
+      .replace(/src=["'][^"']*cert-ks-rs-bg\.jpg["']/gi, `src="${certBgBase64}"`)
+      .replace(/src=["'][^"']*stempel-dsn\.png["']/gi, `src="${stempelBase64}"`)
+      .replace(/src=["'][^"']*bismillah-cert\.png["']/gi, `src="${bismillahCertBase64}"`)
+      .replace(/src=["'][^"']*logo-dsn-cert\.png["']/gi, `src="${logoCertBase64}"`);
+
+    if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
+      htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
+    }
+    return htmlContent;
+  }
+
   // Extract body content and wrap in master-page-table with tfoot spacer
   let headPart = '';
   let bodyInner = htmlContent;
@@ -1767,6 +1922,18 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     bodyInner = bodyInner
       .replace(/<table class="master-page-table"[\s\S]*?<tbody>\s*<tr>\s*<td>/gi, '')
       .replace(/<\/td>\s*<\/tr>\s*<\/tbody>\s*<tfoot>[\s\S]*?<\/tfoot>\s*<\/table>/gi, '');
+  }
+
+  // Auto-wrap body in letter-body-wrapper if not already present
+  if (!bodyInner.includes('letter-body-wrapper')) {
+    const bismillahEndRegex = /(<img[^>]*(?:bismillah|Bismillah)[^>]*>[\s\S]*?<\/div>)/i;
+    const bismillahMatch = bismillahEndRegex.exec(bodyInner);
+    if (bismillahMatch) {
+      const cutIndex = bismillahMatch.index + bismillahMatch[0].length;
+      const headerPart = bodyInner.substring(0, cutIndex);
+      const restPart = bodyInner.substring(cutIndex);
+      bodyInner = `${headerPart}\n<div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">\n${restPart}\n</div>`;
+    }
   }
 
   const wrappedBody = `
@@ -1804,10 +1971,10 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     <style id="amanah-kop-styles">
       @page {
         size: A4;
-        margin-top: 20mm !important;
+        margin-top: 10mm !important;
         margin-bottom: 12mm !important;
-        margin-left: 25mm !important;
-        margin-right: 20mm !important;
+        margin-left: 10mm !important;
+        margin-right: 10mm !important;
       }
       body {
         margin: 0 !important;
@@ -1818,6 +1985,12 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
         color: #111827 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      }
+
+      /* Wrapper to keep 25mm left & 20mm right body margins while Kop Surat uses full 190mm */
+      .letter-body-wrapper {
+        margin-left: 15mm !important;
+        margin-right: 10mm !important;
       }
 
       /* Master Print Layout Table */
@@ -1852,7 +2025,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
           max-width: 794px !important;
           width: 100% !important;
           margin: 0 auto !important;
-          padding: 32px 42px !important;
+          padding: 10mm 10mm 12mm 10mm !important;
           background: #ffffff !important;
           box-shadow: 0 4px 20px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05) !important;
           border-radius: 4px !important;
@@ -1865,7 +2038,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
           width: 100% !important;
           max-width: 794px !important;
           margin: 16px auto 24px auto !important;
-          padding: 0 42px !important;
+          padding: 0 10mm !important;
           box-sizing: border-box !important;
         }
         /* Clear Visual Page Break Divider on Screen Preview */
@@ -2094,14 +2267,18 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
       }
     </style>
   `;
-  if (htmlContent.includes('id="amanah-kop-styles"')) {
+  if (htmlContent.includes('certificate-sheet')) {
+    // Certificate document has its own self-contained layout & styles, do not inject standard letter styles
+  } else if (htmlContent.includes('id="amanah-kop-styles"')) {
     htmlContent = htmlContent.replace(/<style id="amanah-kop-styles">[\s\S]*?<\/style>/i, imageStyle);
   } else {
     htmlContent = htmlContent.replace('</head>', `${imageStyle}\n</head>`);
   }
 
-  // Convert any 11pt or 12pt font sizes in existing HTML letters to standard 10.5pt
-  htmlContent = htmlContent.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
+  // Convert any 11pt or 12pt font sizes in existing HTML letters to standard 10.5pt (skip for certificates)
+  if (!htmlContent.includes('certificate-sheet')) {
+    htmlContent = htmlContent.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
+  }
 
   if (signatureRows.length > 0) {
     signatureRows.forEach(row => {
@@ -2327,17 +2504,23 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
           return res.end(htmlContent);
         }
 
+        const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
         const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
-        await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
+        await page.setViewport(isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 });
         await page.emulateMediaType('print');
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const rawPdfBuffer = await page.pdf({
+        const pdfOptions: any = {
           format: 'A4',
-          printBackground: true
-        });
+          landscape: isLandscape,
+          printBackground: true,
+        };
+        if (isLandscape) {
+          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+        }
+        const rawPdfBuffer = await page.pdf(pdfOptions);
         await browser.close();
 
         // Merge supporting documents / evidence files if any
@@ -2451,14 +2634,20 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
           return res.end(htmlContent);
         }
 
+        const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
         const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
-        await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
+        await page.setViewport(isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 1200, height: 1600, deviceScaleFactor: 2 });
         await page.emulateMediaType('screen');
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const rawPdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
+        const rawPdfBuffer = await page.pdf({
+          format: 'A4',
+          landscape: isLandscape,
+          printBackground: true,
+          margin: isLandscape ? { top: 0, bottom: 0, left: 0, right: 0 } : { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
+        });
         await browser.close();
 
         // Merge supporting documents / evidence files if any

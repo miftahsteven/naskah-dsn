@@ -31,7 +31,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB limit
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit per user requirement
   fileFilter: (_req, file, cb) => {
     const allowedExtensions = ['.pdf', '.docx', '.xlsx', '.jpg', '.jpeg', '.png'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -1406,6 +1406,434 @@ router.post('/dps', authenticatePublic, async (req: PublicAuthRequest, res: Resp
     return res.status(500).json({
       status: 'error',
       message: 'Gagal mengajukan Permohonan Rekomendasi DPS.',
+      error: error.message,
+    });
+  }
+});
+
+// ── SUBMIT PERMOHONAN SERTIFIKASI KESESUAIAN SYARIAH RUMAH SAKIT ──
+router.post('/kesesuaian-syariah-rs', authenticatePublic, async (req: PublicAuthRequest, res: Response) => {
+  try {
+    const companyId = req.publicUser!.companyId;
+    const userId = req.publicUser!.id;
+    const {
+      submissionId,
+      hospitalName,
+      companyLetterNumber,
+      companyLetterDate,
+      directorName,
+      picName,
+      picPhone,
+      picEmail,
+      legalDocs, // { aktaPendirian, izinPendirian, izinOperasional, tdpNib, domisili, skRups, profilPerusahaan }
+      applicationDocs, // { suratPermohonan, komitmenDireksi, buktiTransfer, rekeningLks }
+      hospitalDocs, // { sertifikatMukisi, sertifikatHalal, akreditasiRs }
+      candidates, // Array of Candidate objects
+      agreedToTerms,
+    } = req.body;
+
+    if (!agreedToTerms) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Anda wajib menyetujui pernyataan integritas dan kebenaran dokumen persyaratan DSN-MUI.',
+      });
+    }
+
+    if (!companyLetterNumber || !companyLetterNumber.trim()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Nomor Surat Permohonan Resmi Rumah Sakit wajib diisi.',
+      });
+    }
+
+    if (!applicationDocs?.suratPermohonan?.fileUrl) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Surat Permohonan Sertifikasi Syariah Resmi wajib diunggah.',
+      });
+    }
+
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Minimal satu (1) nama calon DPS wajib diusulkan dalam permohonan sertifikasi syariah rumah sakit.',
+      });
+    }
+
+    // Validasi calon DPS
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      if (!c.name || !c.name.trim()) {
+        return res.status(400).json({
+          status: 'error',
+          message: `Nama lengkap calon DPS #${i + 1} wajib diisi.`,
+        });
+      }
+    }
+
+    // Cari submissionType KESESUAIAN_SYARIAH atau KESESUAIAN_SYARIAH_RS
+    let subType = await prisma.submissionTypeMaster.findFirst({
+      where: {
+        OR: [
+          { code: 'KESESUAIAN_SYARIAH_RS' },
+          { code: 'KESESUAIAN_SYARIAH' },
+          { code: 'SERTIFIKASI_KESESUAIAN_SYARIAH' },
+          { code: 'BISNIS_DAN_WISATA_HALAL' },
+        ],
+      },
+    });
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) {
+      return res.status(404).json({ status: 'error', message: 'Data profil instansi/perusahaan tidak ditemukan.' });
+    }
+
+    const applicantUser = await prisma.companyUser.findUnique({
+      where: { id: userId },
+    });
+
+    const parsedLetterDate = companyLetterDate ? new Date(companyLetterDate) : new Date();
+    const resolvedHospitalName = hospitalName?.trim() || company.name;
+
+    // Transaksi database: PublicSubmission + PublicSubmissionDocument + Dokumen Internal Surat Masuk + Evidence
+    const result = await prisma.$transaction(async (tx) => {
+      let sub;
+
+      if (submissionId) {
+        sub = await tx.publicSubmission.findFirst({
+          where: { id: String(submissionId), companyId },
+        });
+      }
+
+      const subNumber = sub?.submissionNumber || (await generateSubmissionNumber());
+
+      const submissionPayload: any = {
+        companyId,
+        applicantUserId: userId,
+        submissionTypeId: subType?.id || null,
+        submissionTypeName: 'Permohonan Sertifikasi Kesesuaian Syariah Rumah Sakit',
+        title: `[Kesesuaian Syariah RS] ${resolvedHospitalName}`,
+        productOrServiceName: 'Sertifikasi Syariah Rumah Sakit',
+        description: `Pengajuan sertifikasi kesesuaian syariah rumah sakit (${resolvedHospitalName}) bersama MUKISI dan DSN-MUI, dengan ${candidates.length} calon DPS. Direktur: ${directorName || '-'}, Narahubung: ${picName || '-'} (${picPhone || '-'}).`,
+        companyLetterNumber: companyLetterNumber.trim(),
+        companyLetterDate: parsedLetterDate,
+        officialLetterUrl: applicationDocs.suratPermohonan.fileUrl,
+        officialLetterName: applicationDocs.suratPermohonan.fileName,
+        officialLetterSize: applicationDocs.suratPermohonan.fileSize,
+        status: 'PROSES_PENGAJUAN',
+        dpsStage: 'PROSES_PENGAJUAN',
+        stepCompleted: 5,
+        submittedAt: new Date(),
+        candidates,
+      };
+
+      if (sub) {
+        sub = await tx.publicSubmission.update({
+          where: { id: sub.id },
+          data: submissionPayload,
+        });
+      } else {
+        sub = await tx.publicSubmission.create({
+          data: {
+            ...submissionPayload,
+            submissionNumber: subNumber,
+          },
+        });
+      }
+
+      // Bersihkan dokumen lama jika draf
+      await tx.publicSubmissionDocument.deleteMany({
+        where: { submissionId: sub.id },
+      });
+
+      // Kumpulkan seluruh berkas untuk disimpan ke PublicSubmissionDocument & EvidenceFile
+      const allSubmissionDocs: Array<{
+        name: string;
+        doc: { fileName: string; fileUrl: string; fileSize?: number; mimeType?: string };
+        isMandatory: boolean;
+      }> = [];
+
+      // 1. Dokumen Permohonan
+      if (applicationDocs?.suratPermohonan?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Surat Permohonan Sertifikasi Syariah Resmi',
+          doc: applicationDocs.suratPermohonan,
+          isMandatory: true,
+        });
+      }
+      if (applicationDocs?.komitmenDireksi?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Surat Pernyataan Komitmen Direksi Sesuai Syariah',
+          doc: applicationDocs.komitmenDireksi,
+          isMandatory: true,
+        });
+      }
+      if (applicationDocs?.buktiTransfer?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Bukti Transfer Biaya Pendaftaran Sertifikasi Syariah',
+          doc: applicationDocs.buktiTransfer,
+          isMandatory: true,
+        });
+      }
+      if (applicationDocs?.rekeningLks?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Bukti Kepemilikan Rekening di Lembaga Keuangan Syariah (LKS)',
+          doc: applicationDocs.rekeningLks,
+          isMandatory: true,
+        });
+      }
+
+      // 2. Dokumen Legalitas Hukum RS
+      if (legalDocs?.aktaPendirian?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Akta Pendirian Perusahaan & Pengesahan Kemenkumham Beserta Perubahannya',
+          doc: legalDocs.aktaPendirian,
+          isMandatory: true,
+        });
+      }
+      if (legalDocs?.izinPendirian?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Surat Izin Pendirian Rumah Sakit dari Berwenang',
+          doc: legalDocs.izinPendirian,
+          isMandatory: true,
+        });
+      }
+      if (legalDocs?.izinOperasional?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Surat Izin Operasional Rumah Sakit dari Berwenang',
+          doc: legalDocs.izinOperasional,
+          isMandatory: true,
+        });
+      }
+      if (legalDocs?.tdpNib?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Tanda Daftar Perusahaan (TDP) / NIB Berbasis Risiko',
+          doc: legalDocs.tdpNib,
+          isMandatory: true,
+        });
+      }
+      if (legalDocs?.domisili?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Surat Keterangan Domisili Perusahaan / Rumah Sakit',
+          doc: legalDocs.domisili,
+          isMandatory: true,
+        });
+      }
+      if (legalDocs?.skRups?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'SK RUPS / Notulensi Rapat Keputusan Berusaha Berdasarkan Prinsip Syariah',
+          doc: legalDocs.skRups,
+          isMandatory: true,
+        });
+      }
+      if (legalDocs?.profilPerusahaan?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Profil Perusahaan / Rumah Sakit & Laporan Keuangan',
+          doc: legalDocs.profilPerusahaan,
+          isMandatory: true,
+        });
+      }
+
+      // 3. Dokumen Khusus Rumah Sakit
+      if (hospitalDocs?.sertifikatMukisi?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Sertifikat Keanggotaan / Rekomendasi MUKISI',
+          doc: hospitalDocs.sertifikatMukisi,
+          isMandatory: true,
+        });
+      }
+      if (hospitalDocs?.sertifikatHalal?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Sertifikat Halal BPJPH / LPPOM-MUI',
+          doc: hospitalDocs.sertifikatHalal,
+          isMandatory: true,
+        });
+      }
+      if (hospitalDocs?.akreditasiRs?.fileUrl) {
+        allSubmissionDocs.push({
+          name: 'Sertifikat Kelulusan Akreditasi Rumah Sakit (Pemerintah/KARS)',
+          doc: hospitalDocs.akreditasiRs,
+          isMandatory: true,
+        });
+      }
+
+      // 4. Dokumen Calon DPS
+      for (const c of candidates) {
+        const docs = c.documents || {};
+        if (docs.suratMui?.fileUrl) {
+          allSubmissionDocs.push({
+            name: `[Calon DPS: ${c.name}] Surat Pengantar dari MUI Setempat`,
+            doc: docs.suratMui,
+            isMandatory: true,
+          });
+        }
+        if (docs.sertifikatPelatihan?.fileUrl) {
+          allSubmissionDocs.push({
+            name: `[Calon DPS: ${c.name}] Sertifikat Pelatihan Dasar Pengawas Syariah DSN-MUI`,
+            doc: docs.sertifikatPelatihan,
+            isMandatory: true,
+          });
+        }
+        if (docs.sertifikatKompetensi?.fileUrl) {
+          allSubmissionDocs.push({
+            name: `[Calon DPS: ${c.name}] Sertifikat Kompetensi Pengawas Syariah LSP MUI`,
+            doc: docs.sertifikatKompetensi,
+            isMandatory: true,
+          });
+        }
+        if (docs.profilCv?.fileUrl) {
+          allSubmissionDocs.push({
+            name: `[Calon DPS: ${c.name}] Profil Calon DPS (CV & KTP Terbaru)`,
+            doc: docs.profilCv,
+            isMandatory: true,
+          });
+        }
+      }
+
+      // Simpan seluruh dokumen ke PublicSubmissionDocument
+      for (const item of allSubmissionDocs) {
+        await tx.publicSubmissionDocument.create({
+          data: {
+            submissionId: sub.id,
+            requirementName: item.name,
+            fileName: item.doc.fileName,
+            fileUrl: item.doc.fileUrl,
+            fileSize: item.doc.fileSize || 1024,
+            mimeType: item.doc.mimeType || 'application/pdf',
+            isMandatory: item.isMandatory,
+            status: 'VALID',
+          },
+        });
+      }
+
+      // ── BRIDGING KE SURAT MASUK INTERNAL AMANAH ────────────
+      let org = await tx.organization.findFirst({
+        where: { name: { contains: 'Dewan Syariah', mode: 'insensitive' } },
+      });
+      if (!org) {
+        org = await tx.organization.findFirst();
+      }
+      const organizationId = org ? org.id : 'org-mui-001';
+
+      let category = await tx.documentCategory.findFirst({
+        where: { name: { contains: 'Masuk', mode: 'insensitive' } },
+      });
+      if (!category) {
+        category = await tx.documentCategory.create({
+          data: { name: 'Surat Masuk Permohonan Syariah' },
+        });
+      }
+
+      let classification = await tx.documentClassification.findFirst({
+        where: { level: 'BIASA' },
+      });
+      if (!classification) {
+        classification = await tx.documentClassification.findFirst();
+      }
+      if (!classification) {
+        classification = await tx.documentClassification.create({
+          data: { level: 'BIASA', name: 'Biasa' },
+        });
+      }
+
+      let internalUser = await tx.user.findFirst({
+        where: { isActive: true },
+      });
+      const creatorId = internalUser ? internalUser.id : userId;
+
+      // Buat Dokumen Surat Masuk
+      const erpDoc = await tx.document.create({
+        data: {
+          title: `[Kesesuaian Syariah RS] ${resolvedHospitalName} - Permohonan Sertifikasi Syariah Rumah Sakit`,
+          documentNumber: companyLetterNumber.trim() || sub.submissionNumber,
+          organizationId,
+          categoryId: category.id,
+          subCategory: 'Kesesuaian Syariah Rumah Sakit',
+          classificationId: classification.id,
+          creatorId,
+          documentType: 'INCOMING',
+          approvalFlowType: 'SEQUENTIAL',
+          status: 'BARU',
+          disposisiStatus: 'BARU',
+          documentDate: parsedLetterDate,
+          receivedDate: new Date(),
+          versions: {
+            create: {
+              versionNum: 1,
+              fileUrl: applicationDocs.suratPermohonan.fileUrl,
+              fileName: applicationDocs.suratPermohonan.fileName,
+              fileSize: applicationDocs.suratPermohonan.fileSize,
+              mimeType: applicationDocs.suratPermohonan.mimeType || 'application/pdf',
+              createdBy: creatorId,
+              changeNotes: `Permohonan Sertifikasi Kesesuaian Syariah RS dari ${resolvedHospitalName} (${candidates.length} calon DPS, Tiket: ${sub.submissionNumber})`,
+            },
+          },
+        },
+      });
+
+      // Tautkan erpDocumentId ke publicSubmission
+      await tx.publicSubmission.update({
+        where: { id: sub.id },
+        data: { erpDocumentId: erpDoc.id },
+      });
+
+      // Buat Evidence Folder untuk seluruh berkas pengajuan RS
+      const mainFolder = await tx.evidenceFolder.create({
+        data: {
+          name: `Berkas Pengajuan Kesesuaian Syariah RS - ${resolvedHospitalName}`,
+          documentId: erpDoc.id,
+        },
+      });
+
+      // Simpan semua dokumen ke evidence files
+      for (const item of allSubmissionDocs) {
+        await tx.evidenceFile.create({
+          data: {
+            name: `${item.name} - ${item.doc.fileName}`,
+            fileUrl: item.doc.fileUrl,
+            fileSize: item.doc.fileSize || 1024,
+            mimeType: item.doc.mimeType || 'application/pdf',
+            folderId: mainFolder.id,
+            documentId: erpDoc.id,
+          },
+        });
+      }
+
+      // Catat Aktivitas Timeline
+      await tx.publicSubmissionActivity.create({
+        data: {
+          submissionId: sub.id,
+          title: 'Permohonan Sertifikasi Syariah Rumah Sakit Berhasil Diajukan',
+          description: `Permohonan Sertifikasi Kesesuaian Syariah Rumah Sakit (${resolvedHospitalName}) beserta seluruh dokumen legalitas hukum, dokumen khusus RS (MUKISI, Halal BPJPH, Akreditasi), dan ${candidates.length} calon DPS telah diterima dalam antrean Surat Masuk DSN-MUI.`,
+          publicStatus: 'Proses Pengajuan',
+          visibility: 'PUBLIC',
+          performedByName: applicantUser?.fullName || req.publicUser?.fullName || 'PIC Rumah Sakit',
+        },
+      });
+
+      return { sub, erpDoc };
+    });
+
+    return res.json({
+      status: 'success',
+      message: 'Permohonan Sertifikasi Kesesuaian Syariah Rumah Sakit berhasil diajukan dan terdaftar dalam Surat Masuk DSN-MUI!',
+      data: {
+        id: result.sub.id,
+        submissionNumber: result.sub.submissionNumber,
+        status: result.sub.status,
+        dpsStage: result.sub.dpsStage,
+        submittedAt: result.sub.submittedAt,
+        candidateCount: candidates.length,
+        erpDocumentId: result.erpDoc.id,
+      },
+    });
+  } catch (error: any) {
+    console.error('[Kesesuaian Syariah RS] Error submitting hospital compliance:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Gagal mengajukan Permohonan Sertifikasi Kesesuaian Syariah Rumah Sakit.',
       error: error.message,
     });
   }
