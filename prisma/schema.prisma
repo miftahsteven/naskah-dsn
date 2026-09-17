@@ -564,7 +564,9 @@ model PublicSubmission {
   candidates            Json?                      // Array of DPS candidates with their 5 documents
   dpsStage              String?                    // PROSES_PENGAJUAN, VALIDASI_DOKUMEN, WAWANCARA, PROSES_INTERNAL, LULUS, TIDAK_LULUS
   validationType        String?                    // BARU, PAW, PENETAPAN_KEBERLANJUTAN
-  interviewInvitation   Json?                      // Details of interview invitation (number, date, time, venue, etc.)
+  interviewInvitation   Json?                      // Details of latest interview invitation
+  interviewHistory      Json?                      // Array of interview rounds with schedule, assessment & outcome
+  completedAt           DateTime?                  // Recorded when status reaches SELESAI / SERTIFIKAT_DITERBITKAN
   timeline              PublicSubmissionActivity[]
   revisions             PublicSubmissionRevision[]
   certificate           ShariaCertificate?

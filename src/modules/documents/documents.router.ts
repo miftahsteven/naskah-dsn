@@ -14,6 +14,7 @@ import type { AuthRequest } from '../../middleware/auth.js';
 import { PushService } from '../../lib/push.js';
 import { sendNotification } from '../notifications/notifications.router.js';
 import { triggerQueueUpdate } from '../../lib/firebase.js';
+import { calculateSlaStatus } from '../../lib/business-days.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -567,6 +568,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
             applicantUser: { select: { fullName: true, email: true, phone: true, position: true } },
             documents: true,
             timeline: { orderBy: { createdAt: 'desc' } },
+            certificate: true,
           },
         },
         disposisiLogs: {
@@ -620,6 +622,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         }))
       })),
       publicSubmissions: document.publicSubmissions || [],
+      shariaCertificate: document.publicSubmissions?.[0]?.certificate || null,
     };
     
     console.log('✅ Document returned with fileUrl:', transformedDocument.fileUrl);
@@ -918,11 +921,12 @@ router.post('/:id/reject-submission', authenticate, async (req: AuthRequest, res
   }
 });
 
-// ── BUAT UNDANGAN WAWANCARA DPS (AGENDA WAWANCARA DILUAR AGENDA RAPAT) ──
+// ── BUAT UNDANGAN WAWANCARA (MULTI-PUTARAN, RS & DPS, TERINTEGRASI AGENDA RAPAT) ──
 router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const {
+      round,
       invitationNumber,
       invitationDate,
       interviewDayDate,
@@ -940,6 +944,7 @@ router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, 
       notes,
       signatoryName,
       signatoryRole,
+      syncMeetingAgenda = true,
     } = req.body;
 
     if (!invitationNumber || !interviewDayDate || !interviewTime || !venue) {
@@ -967,7 +972,34 @@ router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, 
       return res.status(404).json({ status: 'error', message: 'Pengajuan publik terkait tidak ditemukan.' });
     }
 
+    const isHospital =
+      pubSub.submissionTypeName?.toLowerCase().includes('rumah sakit') ||
+      pubSub.title?.toLowerCase().includes('rumah sakit') ||
+      document.title?.toLowerCase().includes('rumah sakit');
+
+    // Parse existing interview history
+    let existingHistory: any[] = [];
+    if (pubSub.interviewHistory) {
+      if (Array.isArray(pubSub.interviewHistory)) {
+        existingHistory = pubSub.interviewHistory;
+      } else {
+        try {
+          existingHistory = JSON.parse(pubSub.interviewHistory as any);
+        } catch {
+          existingHistory = [];
+        }
+      }
+    }
+
+    // Determine round number
+    const activeRound = Number(round) || (existingHistory.length > 0 ? existingHistory.length + 1 : 1);
+
+    const defaultSubject = isHospital
+      ? `Undangan Wawancara & Asesmen Sertifikasi Syariah Rumah Sakit (Putaran Ke-${activeRound}) Terkait Surat No. ${pubSub.companyLetterNumber || document.documentNumber}`
+      : `Undangan Wawancara Uji Kepatutan dan Kelayakan Calon Anggota DPS (Putaran Ke-${activeRound}) Terkait Surat No. ${pubSub.companyLetterNumber || document.documentNumber}`;
+
     const invitationData = {
+      round: activeRound,
       invitationNumber,
       invitationDate: invitationDate || new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
       interviewDayDate,
@@ -977,16 +1009,67 @@ router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, 
       zoomUrl: zoomUrl || null,
       zoomMeetingId: zoomMeetingId || null,
       zoomPasscode: zoomPasscode || null,
-      subject: subject || `Undangan Wawancara Uji Kepatutan dan Kelayakan Calon Anggota DPS Terkait Surat No. ${pubSub.companyLetterNumber || document.documentNumber}`,
-      candidates: Array.isArray(candidates) && candidates.length > 0 ? candidates : ['Calon Anggota Dewan Pengawas Syariah'],
+      subject: subject || defaultSubject,
+      candidates: Array.isArray(candidates) && candidates.length > 0
+        ? candidates
+        : isHospital
+        ? ['Direksi & Manajemen Rumah Sakit', 'Calon Dewan Pengawas Syariah Rumah Sakit']
+        : ['Calon Anggota Dewan Pengawas Syariah'],
       dresscode: dresscode || 'Pakaian Sipil Lengkap / Batik Lengan Panjang / Jas Resmi',
-      requirements: requirements || 'Membawa berkas fisik asli, portofolio riwayat hidup, serta bahan pemaparan kesiapan kepengawasan syariah.',
+      requirements: requirements || (isHospital
+        ? 'Membawa berkas fisik legalitas RS, sertifikat MUKISI, kesiapan pelayanan syariah, serta dokumen calon DPS.'
+        : 'Membawa berkas fisik asli, portofolio riwayat hidup, serta bahan pemaparan kesiapan kepengawasan syariah.'),
       contactPerson: contactPerson || 'Sekretariat DSN-MUI (021-3904141 / wa.me/6281234567890)',
       notes: notes || null,
       signatoryName: signatoryName || 'Prof. Dr. KH. Hasanuddin, M.Ag',
       signatoryRole: signatoryRole || 'Ketua Bidang Pengawasan Syariah DSN-MUI',
+      status: 'SCHEDULED', // SCHEDULED, PASSED, FAILED
+      assessment: null,
       createdAt: new Date().toISOString(),
     };
+
+    // Update or append to history
+    const existingIndex = existingHistory.findIndex((h: any) => h.round === activeRound);
+    if (existingIndex >= 0) {
+      existingHistory[existingIndex] = invitationData;
+    } else {
+      existingHistory.push(invitationData);
+    }
+
+    // Optional: Synchronize into internal Amanah Meeting agenda
+    if (syncMeetingAgenda) {
+      try {
+        const meetingTitle = `[Wawancara Putaran ${activeRound}] ${isHospital ? 'Asesmen Syariah RS' : 'Wawancara DPS'} - ${pubSub.company?.name || document.title}`;
+        await prisma.meeting.create({
+          data: {
+            title: meetingTitle,
+            agendaNumber: `${invitationNumber}-R${activeRound}`,
+            dateTime: new Date(),
+            location: venue,
+            description: `${invitationData.subject}. Format: ${format}. Pelaksanaan: ${interviewDayDate} ${interviewTime}. Peserta: ${(invitationData.candidates || []).join(', ')}.`,
+            targetType: 'ALL_BOARD',
+            status: 'DRAFT',
+            invitationSent: true,
+            documentId: document.id,
+            attendees: [
+              {
+                name: signatoryName || 'Prof. Dr. KH. Hasanuddin, M.Ag',
+                jabatan: signatoryRole || 'Ketua Bidang Pengawasan Syariah DSN-MUI',
+                status: 'INVITED',
+              },
+              ...invitationData.candidates.map((cName: string) => ({
+                name: cName,
+                jabatan: 'Peserta Wawancara / Pemohon',
+                isExternal: true,
+                status: 'INVITED',
+              })),
+            ],
+          },
+        });
+      } catch (mErr) {
+        console.warn('[Interview Invitation] Could not create linked Meeting agenda:', mErr);
+      }
+    }
 
     // Saat mulai membuat agenda wawancara, tahapan beralih ke WAWANCARA
     const updatedSub = await prisma.publicSubmission.update({
@@ -995,6 +1078,7 @@ router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, 
         dpsStage: 'WAWANCARA',
         status: 'DALAM_PEMBAHASAN',
         interviewInvitation: invitationData,
+        interviewHistory: existingHistory,
       },
     });
 
@@ -1002,8 +1086,8 @@ router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, 
     await prisma.publicSubmissionActivity.create({
       data: {
         submissionId: pubSub.id,
-        title: `Surat Undangan Wawancara Diterbitkan (${invitationNumber})`,
-        description: `DSN-MUI telah menerbitkan Surat Undangan Wawancara Calon DPS No. ${invitationNumber}. Jadwal: ${interviewDayDate} pukul ${interviewTime} WIB berlokasi di ${venue}.`,
+        title: `Surat Undangan Wawancara Putaran ${activeRound} Diterbitkan (${invitationNumber})`,
+        description: `DSN-MUI telah menerbitkan Surat Undangan Wawancara No. ${invitationNumber} (Putaran Ke-${activeRound}). Jadwal: ${interviewDayDate} pukul ${interviewTime} WIB berlokasi di ${venue}.`,
         publicStatus: 'Wawancara',
         visibility: 'PUBLIC',
         performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
@@ -1015,8 +1099,8 @@ router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, 
       data: {
         companyId: pubSub.companyId,
         userId: pubSub.applicantUserId,
-        title: `Undangan Wawancara Calon DPS Diterbitkan`,
-        message: `Surat Undangan Wawancara No. ${invitationNumber} telah diterbitkan untuk ${invitationData.candidates.join(', ')}. Pelaksanaan: ${interviewDayDate} pukul ${interviewTime}. Silakan unduh/lihat surat undangan di dashboard.`,
+        title: `Undangan Wawancara (Putaran Ke-${activeRound}) Diterbitkan`,
+        message: `Surat Undangan Wawancara No. ${invitationNumber} telah diterbitkan untuk ${invitationData.candidates.join(', ')}. Pelaksanaan: ${interviewDayDate} pukul ${interviewTime}. Silakan tinjau jadwal di dashboard pengajuan.`,
         type: 'INFO',
         link: `/submissions/${pubSub.id}`,
       },
@@ -1028,21 +1112,355 @@ router.post('/:id/interview-invitation', authenticate, async (req: AuthRequest, 
         documentId: document.id,
         userId: req.user!.id,
         action: 'TERBIT_UNDANGAN_WAWANCARA',
-        description: `Surat Undangan Wawancara No. ${invitationNumber} diterbitkan untuk pelaksanaan ${interviewDayDate} pukul ${interviewTime}. Tahapan resmi beralih ke WAWANCARA.`,
+        description: `Surat Undangan Wawancara Putaran Ke-${activeRound} No. ${invitationNumber} diterbitkan untuk pelaksanaan ${interviewDayDate} pukul ${interviewTime}.`,
         metadata: invitationData,
       },
     });
 
     return res.json({
       status: 'success',
-      message: `Surat Undangan Wawancara (${invitationNumber}) berhasil diterbitkan dan tahapan pengajuan resmi beralih ke Wawancara.`,
+      message: `Surat Undangan Wawancara Putaran Ke-${activeRound} (${invitationNumber}) berhasil diterbitkan.`,
       data: {
         submission: updatedSub,
         invitation: invitationData,
+        history: existingHistory,
       },
     });
   } catch (error: any) {
     console.error('Error in interview-invitation:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── INPUT PENILAIAN WAWANCARA (ASESMEN, DITERIMA / PERLU ULANG TANPA BATAS) ──
+router.post('/:id/interview-assessment', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      round,
+      assessedByName,
+      score,
+      decision, // 'DITERIMA' | 'DITOLAK'
+      notes,
+      improvementNotes,
+    } = req.body;
+
+    if (!decision || !['DITERIMA', 'DITOLAK'].includes(decision)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Keputusan hasil wawancara wajib dipilih (DITERIMA atau DITOLAK).',
+      });
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        publicSubmissions: {
+          include: { company: true },
+        },
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Dokumen Surat Masuk tidak ditemukan.' });
+    }
+
+    const pubSub = document.publicSubmissions?.[0];
+    if (!pubSub) {
+      return res.status(404).json({ status: 'error', message: 'Pengajuan publik terkait tidak ditemukan.' });
+    }
+
+    // Parse existing interview history
+    let existingHistory: any[] = [];
+    if (pubSub.interviewHistory) {
+      if (Array.isArray(pubSub.interviewHistory)) {
+        existingHistory = pubSub.interviewHistory;
+      } else {
+        try {
+          existingHistory = JSON.parse(pubSub.interviewHistory as any);
+        } catch {
+          existingHistory = [];
+        }
+      }
+    }
+
+    const targetRound = Number(round) || (existingHistory.length > 0 ? existingHistory[existingHistory.length - 1].round : 1);
+    const roundIdx = existingHistory.findIndex((h: any) => h.round === targetRound);
+
+    const assessmentPayload = {
+      assessedByName: assessedByName || req.user?.fullName || 'Tim Penguji & Asesor DSN-MUI',
+      assessedAt: new Date().toISOString(),
+      score: score ? Number(score) : (decision === 'DITERIMA' ? 85 : 55),
+      decision,
+      notes: notes || (decision === 'DITERIMA' ? 'Memenuhi kualifikasi dan standar syariah yang ditetapkan.' : 'Belum memenuhi kriteria kelulusan minimal.'),
+      improvementNotes: improvementNotes || null,
+    };
+
+    const isPassed = decision === 'DITERIMA';
+
+    if (roundIdx >= 0) {
+      existingHistory[roundIdx].status = isPassed ? 'PASSED' : 'FAILED';
+      existingHistory[roundIdx].assessment = assessmentPayload;
+    } else {
+      existingHistory.push({
+        round: targetRound,
+        status: isPassed ? 'PASSED' : 'FAILED',
+        assessment: assessmentPayload,
+      });
+    }
+
+    const updatedInvitation = pubSub.interviewInvitation
+      ? {
+          ...(pubSub.interviewInvitation as any),
+          status: isPassed ? 'PASSED' : 'FAILED',
+          assessment: assessmentPayload,
+        }
+      : null;
+
+    // Determine next stage
+    // If DITERIMA -> stage beralih ke PROSES_INTERNAL (siap upload sertifikat / rekomendasi)
+    // If DITOLAK -> stage tetap di WAWANCARA, status DALAM_PEMBAHASAN (menunggu DSN jadwalkan putaran berikutnya)
+    const nextStage = isPassed ? 'PROSES_INTERNAL' : 'WAWANCARA';
+    const nextStatus = isPassed ? 'PROSES_KEPUTUSAN' : 'DALAM_PEMBAHASAN';
+
+    const updatedSub = await prisma.publicSubmission.update({
+      where: { id: pubSub.id },
+      data: {
+        dpsStage: nextStage,
+        status: nextStatus,
+        interviewInvitation: updatedInvitation,
+        interviewHistory: existingHistory,
+      },
+    });
+
+    // Public activity log
+    await prisma.publicSubmissionActivity.create({
+      data: {
+        submissionId: pubSub.id,
+        title: isPassed
+          ? `Wawancara Putaran Ke-${targetRound} Dinyatakan LULUS / DITERIMA`
+          : `Wawancara Putaran Ke-${targetRound} Belum Memenuhi Standar (Perlu Wawancara Ulang)`,
+        description: isPassed
+          ? `Hasil evaluasi wawancara putaran ke-${targetRound} oleh ${assessmentPayload.assessedByName} dinyatakan DITERIMA dengan nilai ${assessmentPayload.score}. Pengajuan melangkah ke tahap Proses Internal & Persiapan Penerbitan Sertifikat.`
+          : `Hasil evaluasi wawancara putaran ke-${targetRound} belum memenuhi kriteria kelulusan (Nilai: ${assessmentPayload.score}). DSN-MUI akan mengagendakan jadwal wawancara ulang. Catatan: ${assessmentPayload.notes}`,
+        publicStatus: isPassed ? 'Proses Internal' : 'Wawancara',
+        visibility: 'PUBLIC',
+        performedByName: assessmentPayload.assessedByName,
+      },
+    });
+
+    // Notification to user
+    await prisma.publicNotification.create({
+      data: {
+        companyId: pubSub.companyId,
+        userId: pubSub.applicantUserId,
+        title: isPassed
+          ? `Hasil Wawancara Dinyatakan LULUS / DITERIMA`
+          : `Hasil Wawancara Putaran Ke-${targetRound} Perlu Diulang`,
+        message: isPassed
+          ? `Selamat! Hasil wawancara putaran ke-${targetRound} telah disetujui (Nilai: ${assessmentPayload.score}). Permohonan Anda saat ini dalam proses akhir penerbitan sertifikat/rekomendasi.`
+          : `Hasil wawancara putaran ke-${targetRound} belum memenuhi kriteria. Tim DSN-MUI akan mengagendakan jadwal wawancara ulang. Silakan periksa catatan evaluasi pada dashboard.`,
+        type: isPassed ? 'SUCCESS' : 'WARNING',
+        link: `/submissions/${pubSub.id}`,
+      },
+    });
+
+    // Internal disposisi log
+    await prisma.disposisiLog.create({
+      data: {
+        documentId: document.id,
+        userId: req.user!.id,
+        action: isPassed ? 'WAWANCARA_LULUS' : 'WAWANCARA_PERLU_ULANG',
+        description: `Penilaian wawancara putaran ke-${targetRound} diinput oleh ${assessmentPayload.assessedByName}: Keputusan ${decision} (Skor: ${assessmentPayload.score}).`,
+        metadata: assessmentPayload,
+      },
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Penilaian wawancara putaran ke-${targetRound} berhasil disimpan (${decision}).`,
+      data: {
+        submission: updatedSub,
+        assessment: assessmentPayload,
+        history: existingHistory,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error in interview-assessment:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── UPLOAD SERTIFIKAT YANG SUDAH SIAP (PENYELESAIAN PROSES PENGAJUAN & HITUNG SLA) ──
+router.post('/:id/upload-certificate', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      certificateNumber,
+      title,
+      issueDate,
+      validUntil,
+      notes,
+    } = req.body;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Berkas PDF sertifikat resmi yang sudah ditandatangani wajib diunggah.',
+      });
+    }
+
+    if (!certificateNumber || !title || !issueDate || !validUntil) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      return res.status(400).json({
+        status: 'error',
+        message: 'Nomor sertifikat, judul sertifikat, tanggal terbit, dan masa berlaku wajib diisi.',
+      });
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        publicSubmissions: {
+          include: { company: true },
+        },
+      },
+    });
+
+    if (!document) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      return res.status(404).json({ status: 'error', message: 'Dokumen Surat Masuk tidak ditemukan.' });
+    }
+
+    const pubSub = document.publicSubmissions?.[0];
+    if (!pubSub) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      return res.status(404).json({ status: 'error', message: 'Pengajuan publik terkait tidak ditemukan.' });
+    }
+
+    const relativeUrl = `/uploads/${file.filename}`;
+    const parsedIssueDate = new Date(issueDate);
+    const parsedValidUntil = new Date(validUntil);
+    const completedAt = new Date();
+
+    // Hitung SLA Realisasi Hari Kerja
+    const slaStatus = calculateSlaStatus(pubSub.submittedAt, completedAt, 14);
+
+    // Upsert ShariaCertificate record
+    const certificate = await prisma.shariaCertificate.upsert({
+      where: { submissionId: pubSub.id },
+      create: {
+        submissionId: pubSub.id,
+        companyId: pubSub.companyId,
+        certificateNumber: certificateNumber.trim(),
+        title: title.trim(),
+        issueDate: parsedIssueDate,
+        validUntil: parsedValidUntil,
+        fileUrl: relativeUrl,
+        fileName: file.originalname,
+        fileSize: file.size,
+        digitalSignatureInfo: {
+          uploadedBy: req.user?.fullName || 'Sekretariat DSN-MUI',
+          uploadedAt: completedAt.toISOString(),
+          signedOutOfBand: true,
+          notes: notes || null,
+        },
+      },
+      update: {
+        certificateNumber: certificateNumber.trim(),
+        title: title.trim(),
+        issueDate: parsedIssueDate,
+        validUntil: parsedValidUntil,
+        fileUrl: relativeUrl,
+        fileName: file.originalname,
+        fileSize: file.size,
+        digitalSignatureInfo: {
+          uploadedBy: req.user?.fullName || 'Sekretariat DSN-MUI',
+          uploadedAt: completedAt.toISOString(),
+          signedOutOfBand: true,
+          notes: notes || null,
+        },
+      },
+    });
+
+    // Update PublicSubmission -> SELESAI & LULUS & completedAt
+    const updatedSub = await prisma.publicSubmission.update({
+      where: { id: pubSub.id },
+      data: {
+        status: 'SELESAI',
+        dpsStage: 'LULUS',
+        stepCompleted: 5,
+        completedAt,
+      },
+      include: {
+        certificate: true,
+        company: true,
+      },
+    });
+
+    // Update internal Document
+    await prisma.document.update({
+      where: { id: document.id },
+      data: {
+        status: 'SELESAI',
+        disposisiStatus: 'SELESAI',
+        certificateUrl: relativeUrl,
+      },
+    });
+
+    // Public activity log
+    await prisma.publicSubmissionActivity.create({
+      data: {
+        submissionId: pubSub.id,
+        title: 'Sertifikat Kesesuaian Syariah Resmi Diterbitkan',
+        description: `Sertifikat Resmi No. ${certificateNumber} telah diterbitkan dan diunggah oleh DSN-MUI. Seluruh rangkaian proses permohonan selesai dalam ${slaStatus.workingDaysElapsed} hari kerja (${slaStatus.isOverdue ? `melebihi target SLA (${slaStatus.overdueDays} hari)` : 'memenuhi target SLA 14 hari kerja'}). Berkas sertifikat sah dapat diunduh langsung.`,
+        publicStatus: 'Selesai',
+        visibility: 'PUBLIC',
+        performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
+      },
+    });
+
+    // Notification to applicant company
+    await prisma.publicNotification.create({
+      data: {
+        companyId: pubSub.companyId,
+        userId: pubSub.applicantUserId,
+        title: 'Sertifikat Kesesuaian Syariah Resmi Telah Terbit',
+        message: `Alhamdulillah! Sertifikat Resmi No. ${certificateNumber} telah diterbitkan oleh DSN-MUI. Anda dapat melihat dan mengunduh berkas sertifikat asli melalui dashboard portal permohonan.`,
+        type: 'SUCCESS',
+        link: `/submissions/${pubSub.id}`,
+      },
+    });
+
+    // Internal disposisi log
+    await prisma.disposisiLog.create({
+      data: {
+        documentId: document.id,
+        userId: req.user!.id,
+        action: 'TERBIT_SERTIFIKAT_RESMI',
+        description: `Sertifikat Resmi No. ${certificateNumber} diunggah. Pengajuan SELESAI dengan capaian SLA: ${slaStatus.workingDaysElapsed} hari kerja.`,
+        metadata: {
+          certificateNumber,
+          title,
+          fileUrl: relativeUrl,
+          workingDaysElapsed: slaStatus.workingDaysElapsed,
+          isWithinSla: !slaStatus.isOverdue,
+        },
+      },
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Sertifikat Resmi (${certificateNumber}) berhasil diunggah dan pengajuan resmi dinyatakan SELESAI.`,
+      data: {
+        submission: updatedSub,
+        certificate,
+        sla: slaStatus,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error in upload-certificate:', error);
     return res.status(500).json({ status: 'error', message: error.message });
   }
 });
