@@ -407,9 +407,21 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         },
         evidenceFiles: {
           select: { id: true }
+        },
+        publicSubmissions: {
+          select: {
+            id: true,
+            submissionNumber: true,
+            company: { select: { id: true, name: true } },
+          }
         }
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: req.query.documentType === 'INCOMING'
+        ? [
+            { receivedDate: 'desc' },
+            { createdAt: 'desc' },
+          ]
+        : { updatedAt: 'desc' },
     });
 
     // Transform fileUrl to HTTP/HTTPS download URL for consistency & mobile compatibility

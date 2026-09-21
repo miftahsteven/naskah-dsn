@@ -39,6 +39,16 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(403).json({ status: 'error', message: 'Akun Anda telah dinonaktifkan' });
     }
 
+    // ── CASE 0: Universal OTP enabled for this user (Google Play Review / Test Account) ──
+    if (AuthService.isUniversalOtpEnabledForUser(user.email)) {
+      return res.json({
+        status: 'success',
+        message: '2FA required',
+        requires2FA: true,
+        userId: user.id,
+      });
+    }
+
     // ── CASE 1: User belum pernah setup 2FA sama sekali ──
     if (!user.twoFactorSecret) {
       return res.json({
@@ -117,11 +127,17 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
       },
     });
 
-    if (!user || !user.twoFactorSecret) {
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User tidak ditemukan' });
+    }
+
+    const isUniversal = AuthService.isUniversalOtpValid(token, user.email);
+
+    if (!user.twoFactorSecret && !isUniversal) {
       return res.status(400).json({ status: 'error', message: '2FA not set up for this user' });
     }
 
-    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret);
+    const isValid = isUniversal || (user.twoFactorSecret ? AuthService.verify2FAToken(token, user.twoFactorSecret, user.email) : false);
 
     if (!isValid) {
       console.warn(`[2FA] Invalid token attempted for user ${userId}. Potential time drift or incorrect code.`);
@@ -206,7 +222,7 @@ router.post('/enable-2fa', authenticate, async (req: AuthRequest, res: Response)
       return res.status(400).json({ status: 'error', message: '2FA secret tidak ditemukan' });
     }
 
-    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret);
+    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret, user.email);
     if (!isValid) {
       return res.status(401).json({ status: 'error', message: 'Kode verifikasi tidak valid' });
     }
@@ -243,7 +259,7 @@ router.post('/enable-2fa-public', async (req: Request, res: Response) => {
       return res.status(400).json({ status: 'error', message: '2FA belum dikonfigurasi untuk user ini' });
     }
 
-    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret);
+    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret, user.email);
     if (!isValid) {
       console.warn(`[2FA] Setup verification failed for user ${userId}. Secret: ${user.twoFactorSecret}`);
       return res.status(401).json({ status: 'error', message: 'Kode OTP tidak valid. Pastikan waktu di perangkat Anda sudah sinkron.' });

@@ -11,6 +11,7 @@ import {
   sendOtpEmail,
   sendRegistrationSuccessEmail,
 } from '../../lib/mailer.service.js';
+import { AuthService } from '../auth/auth.service.js';
 
 const router = Router();
 
@@ -239,74 +240,81 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     const normalizedEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
 
-    // Find the latest valid OTP record (dengan toleransi transit 15 detik)
-    const graceThreshold = new Date(Date.now() - 15 * 1000);
-    const otpRecord = await prisma.publicOtp.findFirst({
-      where: {
-        email: normalizedEmail,
-        isUsed: false,
-        expiresAt: { gt: graceThreshold },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Universal OTP bypass for authorized test accounts (e.g. Google Play Review)
+    const isUniversal = AuthService.isUniversalOtpValid(cleanOtp, normalizedEmail);
 
-    if (!otpRecord) {
-      // Check if there was an OTP that expired
-      const expiredOtp = await prisma.publicOtp.findFirst({
+    if (!isUniversal) {
+      // Find the latest valid OTP record (dengan toleransi transit 15 detik)
+      const graceThreshold = new Date(Date.now() - 15 * 1000);
+      const otpRecord = await prisma.publicOtp.findFirst({
         where: {
           email: normalizedEmail,
           isUsed: false,
-          expiresAt: { lte: graceThreshold },
+          expiresAt: { gt: graceThreshold },
         },
         orderBy: { createdAt: 'desc' },
       });
 
-      if (expiredOtp) {
+      if (!otpRecord) {
+        // Check if there was an OTP that expired
+        const expiredOtp = await prisma.publicOtp.findFirst({
+          where: {
+            email: normalizedEmail,
+            isUsed: false,
+            expiresAt: { lte: graceThreshold },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (expiredOtp) {
+          return res.status(400).json({
+            status: 'error',
+            code: 'OTP_EXPIRED',
+            message: 'Kode OTP telah kedaluwarsa (masa berlaku 45 detik). Silakan klik "Kirim Ulang Kode OTP".',
+          });
+        }
+
         return res.status(400).json({
           status: 'error',
-          code: 'OTP_EXPIRED',
-          message: 'Kode OTP telah kedaluwarsa (masa berlaku 45 detik). Silakan klik "Kirim Ulang Kode OTP".',
+          code: 'OTP_INVALID',
+          message: 'Kode OTP tidak valid atau belum diminta. Silakan minta kode baru.',
         });
       }
 
-      return res.status(400).json({
-        status: 'error',
-        code: 'OTP_INVALID',
-        message: 'Kode OTP tidak valid atau belum diminta. Silakan minta kode baru.',
-      });
-    }
+      // Check attempts
+      if (otpRecord.attempts >= 5) {
+        await prisma.publicOtp.update({
+          where: { id: otpRecord.id },
+          data: { isUsed: true },
+        });
+        return res.status(429).json({
+          status: 'error',
+          message: 'Batas percobaan OTP telah terlampaui. Silakan minta kode OTP baru.',
+        });
+      }
 
-    // Check attempts
-    if (otpRecord.attempts >= 5) {
+      // Verify OTP hash
+      const isValid = await bcrypt.compare(cleanOtp, otpRecord.otpHash);
+
+      if (!isValid) {
+        await prisma.publicOtp.update({
+          where: { id: otpRecord.id },
+          data: { attempts: { increment: 1 } },
+        });
+        return res.status(400).json({
+          status: 'error',
+          message: 'Kode OTP yang Anda masukkan salah. Silakan periksa kembali.',
+        });
+      }
+
+      // Mark OTP as used
       await prisma.publicOtp.update({
         where: { id: otpRecord.id },
         data: { isUsed: true },
       });
-      return res.status(429).json({
-        status: 'error',
-        message: 'Batas percobaan OTP telah terlampaui. Silakan minta kode OTP baru.',
-      });
+    } else {
+      console.log(`[Public OTP] Universal OTP accepted for ${normalizedEmail}`);
     }
-
-    // Verify OTP hash
-    const isValid = await bcrypt.compare(cleanOtp, otpRecord.otpHash);
-
-    if (!isValid) {
-      await prisma.publicOtp.update({
-        where: { id: otpRecord.id },
-        data: { attempts: { increment: 1 } },
-      });
-      return res.status(400).json({
-        status: 'error',
-        message: 'Kode OTP yang Anda masukkan salah. Silakan periksa kembali.',
-      });
-    }
-
-    // Mark OTP as used
-    await prisma.publicOtp.update({
-      where: { id: otpRecord.id },
-      data: { isUsed: true },
-    });
 
     // Check if user and company already exist
     const user = await prisma.companyUser.findFirst({
