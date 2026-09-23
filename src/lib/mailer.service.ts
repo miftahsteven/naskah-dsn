@@ -787,3 +787,246 @@ Email: sekretariat@dsnmui.or.id | WA: +62 822-6000-4146
   }
 }
 
+/**
+ * 4. SEND DOCUMENT INVITATION EMAIL (Surat Keluar / Agenda Rapat)
+ * Sends individualized email to each attendee with dynamic body and PDF attachment.
+ */
+export interface SendDocumentInvitationEmailParams {
+  toEmail: string;
+  recipientName: string;
+  invitationTitle: string;
+  documentTitle: string;
+  documentNumber?: string | undefined;
+  pdfBuffer: Buffer;
+  pdfFileName: string;
+  meetingDetails?: {
+    dateTime?: string | Date | undefined;
+    location?: string | undefined;
+  } | undefined;
+}
+
+export async function sendDocumentInvitationEmail({
+  toEmail,
+  recipientName,
+  invitationTitle,
+  documentTitle,
+  documentNumber,
+  pdfBuffer,
+  pdfFileName,
+  meetingDetails,
+}: SendDocumentInvitationEmailParams): Promise<SendEmailResult> {
+  try {
+    const transporter = await getTransporter();
+    const docDisplayTitle = documentTitle || invitationTitle || 'Surat Keluar';
+    const effectiveTitle = invitationTitle || documentTitle || 'Undangan';
+    const subjectTitle = `Penyampaian ${effectiveTitle}${documentNumber ? ` (${documentNumber})` : ''}`;
+
+    let meetingInfoText = '';
+    let meetingInfoHtml = '';
+
+    if (meetingDetails?.dateTime || meetingDetails?.location) {
+      const formattedDate = meetingDetails.dateTime
+        ? new Date(meetingDetails.dateTime).toLocaleString('id-ID', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }) + ' WIB'
+        : '';
+
+      meetingInfoText = `
+Informasi Pelaksanaan Agenda:
+${formattedDate ? `• Waktu: ${formattedDate}\n` : ''}${meetingDetails.location ? `• Tempat: ${meetingDetails.location}\n` : ''}`;
+
+      meetingInfoHtml = `
+      <div style="margin: 20px 0; padding: 14px 18px; background-color: #F0FDF4; border: 1px solid #BBF7D0; border-left: 4px solid #006633; border-radius: 8px;">
+        <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold; color: #006633;">🗓 Informasi Agenda / Pelaksanaan:</p>
+        ${formattedDate ? `<p style="margin: 3px 0; font-size: 13px; color: #1e293b;"><strong>Waktu:</strong> ${formattedDate}</p>` : ''}
+        ${meetingDetails.location ? `<p style="margin: 3px 0; font-size: 13px; color: #1e293b;"><strong>Tempat / Media:</strong> ${meetingDetails.location}</p>` : ''}
+      </div>
+      `;
+    }
+
+    const textContent = `
+Penyampaian ${effectiveTitle}
+
+Kepada Yth.
+${recipientName}
+
+di TEMPAT
+
+Assalamu'alaykum Wr. Wb.,
+
+Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan softcopy (dalam format .pdf) ${docDisplayTitle}, sebagaimana terlampir.
+Silakan diterima dengan baik.
+${meetingInfoText}
+Demikian kami sampaikan.
+Wassalamu'alaykum Wr. Wb.
+
+Ttd,
+Sekretariat DSN-MUI
+Dewan Syariah Nasional - Majelis Ulama Indonesia
+Jl. Dempo No.19, Pegangsaan, Kec. Menteng, Kota Jakarta Pusat, DKI Jakarta 10320
+`;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>${subjectTitle}</title>
+</head>
+<body style="margin: 0; padding: 24px 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td align="center" style="padding: 12px;">
+        <table width="620" border="0" cellspacing="0" cellpadding="0" style="max-width: 620px; width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          <!-- Top Header Ribbon -->
+          <tr>
+            <td style="background-color: #006633; padding: 20px 28px; border-bottom: 3px solid #D4AF37;">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <h2 style="margin: 0; color: #ffffff; font-size: 17px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+                      Dewan Syariah Nasional
+                    </h2>
+                    <p style="margin: 2px 0 0 0; color: #e2e8f0; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">
+                      Majelis Ulama Indonesia
+                    </p>
+                  </td>
+                  <td align="right">
+                    <span style="display: inline-block; padding: 4px 10px; background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px;">
+                      SURAT RESMI
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Email Content Body -->
+          <tr>
+            <td style="padding: 32px 28px;">
+              <div style="font-size: 15px; font-weight: 800; color: #006633; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
+                Penyampaian ${effectiveTitle}
+              </div>
+
+              <div style="margin-bottom: 20px; font-size: 14px; color: #334155;">
+                <p style="margin: 0; font-weight: 600;">Kepada Yth.</p>
+                <p style="margin: 4px 0 0 0; font-size: 15px; font-weight: 800; color: #0f172a;">${recipientName}</p>
+                <p style="margin: 4px 0 0 0; font-style: italic; color: #64748b;">di TEMPAT</p>
+              </div>
+
+              <p style="margin: 16px 0; font-size: 14px; color: #334155;">
+                <em>Assalamu'alaykum Wr. Wb.,</em>
+              </p>
+
+              <p style="margin: 16px 0; font-size: 14px; color: #334155; line-height: 1.7;">
+                Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan <em>softcopy</em> (dalam format .pdf) <strong>${docDisplayTitle}</strong>, sebagaimana terlampir.
+              </p>
+              <p style="margin: 16px 0; font-size: 14px; color: #334155;">
+                Silakan diterima dengan baik.
+              </p>
+
+              ${meetingInfoHtml}
+
+              <!-- Attachment Callout -->
+              <div style="margin: 24px 0; padding: 14px 18px; background-color: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="36" valign="middle" style="font-size: 24px;">📄</td>
+                    <td valign="middle">
+                      <div style="font-size: 13px; font-weight: bold; color: #0f172a;">Lampiran Berkas PDF Resmi:</div>
+                      <div style="font-size: 12px; color: #006633; font-weight: 600;">${pdfFileName}</div>
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="font-size: 11px; background-color: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; font-weight: 700;">PDF ATTACHED</span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <p style="margin: 20px 0 6px 0; font-size: 14px; color: #334155;">
+                Demikian kami sampaikan.
+              </p>
+              <p style="margin: 0; font-size: 14px; color: #334155;">
+                <em>Wassalamu'alaykum Wr. Wb.</em>
+              </p>
+
+              <!-- Signature Area -->
+              <div style="margin-top: 32px; padding-top: 18px; border-top: 1px solid #f1f5f9;">
+                <p style="margin: 0; font-size: 13px; font-weight: 600; color: #64748b;">Ttd,</p>
+                <p style="margin: 4px 0 0 0; font-size: 14px; font-weight: 800; color: #006633;">Sekretariat DSN-MUI</p>
+                <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">Dewan Syariah Nasional – Majelis Ulama Indonesia</p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f1f5f9; padding: 16px 28px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; font-size: 11px; color: #64748b; line-height: 1.5;">
+                Jl. Dempo No.19, Pegangsaan, Kec. Menteng, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10320<br/>
+                Email: sekretariat@dsnmui.or.id | Amanah DSN-MUI Digital e-Office
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const info = await transporter.sendMail({
+          from: getFromAddress(),
+          to: toEmail,
+          subject: subjectTitle,
+          text: textContent,
+          html: htmlContent,
+          attachments: [
+            {
+              filename: pdfFileName,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            },
+          ],
+        });
+
+        console.log(`[Mailer] Document invitation email sent to ${toEmail} for "${effectiveTitle}" (Attempt ${attempt}). MessageId: ${info.messageId}`);
+        return {
+          success: true,
+          messageId: info.messageId,
+        };
+      } catch (err: any) {
+        lastError = err;
+        console.error(`[Mailer] Invitation email send attempt ${attempt}/2 failed to ${toEmail}:`, err.message);
+        transporterInstance = null;
+        currentConfigKey = '';
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    }
+
+    return {
+      success: false,
+      error: lastError?.message || 'Gagal mengirim email undangan dokumen.',
+    };
+  } catch (error: any) {
+    console.error(`[Mailer] Failed to send document invitation email to ${toEmail}:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+

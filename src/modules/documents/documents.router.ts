@@ -15,6 +15,7 @@ import { PushService } from '../../lib/push.js';
 import { sendNotification } from '../notifications/notifications.router.js';
 import { triggerQueueUpdate } from '../../lib/firebase.js';
 import { calculateSlaStatus } from '../../lib/business-days.js';
+import { sendDocumentInvitationEmail } from '../../lib/mailer.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3480,5 +3481,417 @@ router.delete('/:id/meetings/:meetingId/link', authenticate, async (req: AuthReq
   }
 });
 
+// ── HELPER: GET DOCUMENT PDF BUFFER & METADATA ──
+export async function getDocumentPdfBuffer(
+  documentId: string,
+  req?: Request | AuthRequest
+): Promise<{ buffer: Buffer; fileName: string; title: string; documentNumber: string }> {
+  const document = await prisma.document.findUnique({
+    where: { id: String(documentId) },
+    include: {
+      versions: { orderBy: { versionNum: 'desc' } },
+      signatures: {
+        include: {
+          user: { select: { fullName: true, email: true, jobTitle: true } }
+        }
+      },
+      evidenceFiles: { orderBy: { createdAt: 'asc' } },
+      workflowInstances: {
+        include: {
+          steps: {
+            where: { status: 'APPROVED' },
+            include: {
+              user: { select: { fullName: true, email: true, jobTitle: true } }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!document) {
+    throw new Error('Dokumen tidak ditemukan');
+  }
+
+  const version = document.versions[0];
+  if (!version) {
+    throw new Error('Versi berkas dokumen tidak ditemukan');
+  }
+
+  const authHeader = req?.headers?.authorization;
+  const filePath = await ensureExistingFilePath(version.fileUrl, document.id, authHeader);
+  if (!filePath) {
+    throw new Error('Berkas fisik dokumen tidak ditemukan di server.');
+  }
+
+  const fileExtension = path.extname(filePath).toLowerCase();
+  const isHtml = version.mimeType === 'text/html' || fileExtension === '.html' || fileExtension === '.htm';
+
+  const cleanDocNum = (document.documentNumber || version.fileName || 'dokumen')
+    .replace(/[\/\\?%*:|"<>]/g, '_');
+  const safePdfFileName = `${cleanDocNum}.pdf`;
+
+  if (isHtml) {
+    const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+    const httpUrlBase = req ? (getApiBaseUrl(req) + '/') : 'http://localhost:4002/api/';
+    const baseUrl = httpUrlBase;
+
+    const allSignatures: any[] = [...(document.signatures || [])];
+    if (document.workflowInstances) {
+      document.workflowInstances.forEach((wf: any) => {
+        (wf.steps || []).forEach((st: any) => {
+          if (st.status === 'APPROVED' && st.userId) {
+            const exists = allSignatures.some((sig: any) => sig.userId === st.userId);
+            if (!exists) {
+              allSignatures.push({
+                id: st.id,
+                documentId: document.id,
+                userId: st.userId,
+                signedAt: st.actionedAt || st.updatedAt || new Date(),
+                user: st.user
+              });
+            }
+          }
+        });
+      });
+    }
+
+    const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
+    const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
+
+    const browser = await launchPuppeteerBrowser();
+    const page = await browser.newPage();
+    await page.setViewport(isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 });
+    await page.emulateMediaType('print');
+
+    await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
+
+    const pdfOptions: any = {
+      format: 'A4',
+      landscape: isLandscape,
+      printBackground: true,
+    };
+    if (isLandscape) {
+      pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+    }
+    const rawPdfBuffer = await page.pdf(pdfOptions);
+    await browser.close();
+
+    const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
+    return {
+      buffer: Buffer.from(pdfBuffer),
+      fileName: safePdfFileName,
+      title: document.title,
+      documentNumber: document.documentNumber || '',
+    };
+  }
+
+  // If already PDF
+  const rawFileBytes = await fs.promises.readFile(filePath);
+  let finalPdfBuffer: Buffer = Buffer.from(rawFileBytes);
+  if (document.evidenceFiles && document.evidenceFiles.length > 0) {
+    const merged = await mergePdfWithEvidence(rawFileBytes, document.evidenceFiles);
+    finalPdfBuffer = Buffer.from(merged);
+  }
+
+  return {
+    buffer: finalPdfBuffer,
+    fileName: safePdfFileName,
+    title: document.title,
+    documentNumber: document.documentNumber || '',
+  };
+}
+
+// ── GET INVITATIONS & LINKED MEETINGS FOR A DOCUMENT ──
+router.get('/:id/invitations', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const meetings = await prisma.meeting.findMany({
+      where: { documentId: String(id) },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ status: 'success', data: meetings });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── SEND OUTGOING DOCUMENT INVITATION VIA SMTP (WITH AUTO PDF ATTACHMENT & AGENDA SYNC) ──
+router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      invitationTitle,
+      meetingDate,
+      location,
+      syncAgenda = true,
+      recipients = [],
+      customNote,
+    } = req.body;
+
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Daftar penerima undangan (recipients) wajib dipilih minimal 1 orang.',
+      });
+    }
+
+    // 1. Fetch document and generate official PDF buffer
+    let pdfData: { buffer: Buffer; fileName: string; title: string; documentNumber: string };
+    try {
+      pdfData = await getDocumentPdfBuffer(String(id), req);
+    } catch (pdfErr: any) {
+      console.error(`[SendInvitation] Error generating PDF for doc ${id}:`, pdfErr);
+      return res.status(400).json({
+        status: 'error',
+        message: `Gagal memproses berkas PDF surat: ${pdfErr.message}`,
+      });
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: String(id) },
+      include: {
+        category: true,
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({ status: 'error', message: 'Dokumen tidak ditemukan' });
+    }
+
+    const effectiveTitle = invitationTitle || document.title;
+    const documentNumber = document.documentNumber || pdfData.documentNumber;
+
+    // 2. Manage Meeting / Agenda record
+    let linkedMeeting: any = null;
+    let meetingAttendees: any[] = [];
+
+    if (syncAgenda) {
+      // Check if a meeting is already linked to this document
+      linkedMeeting = await prisma.meeting.findFirst({
+        where: { documentId: String(id) },
+      });
+
+      // Prepare attendee objects
+      meetingAttendees = recipients.map((r: any) => ({
+        userId: r.userId || null,
+        name: r.name,
+        email: r.email,
+        phone: r.phone || '',
+        department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
+        jabatan: r.jabatan || '',
+        isExternal: !r.userId,
+        status: 'UNDANGAN',
+        invitationSent: false,
+      }));
+
+      const meetingDateTime = meetingDate ? new Date(meetingDate) : new Date();
+      const meetingLocation = location || 'Ruang Rapat Pleno DSN-MUI Lt. 3 / Zoom Cloud Meeting';
+
+      if (!linkedMeeting) {
+        // Auto-generate agendaNumber
+        const year = meetingDateTime.getFullYear();
+        const month = meetingDateTime.getMonth() + 1;
+        const romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+        const monthRoman = romanMonths[month - 1];
+
+        const startOfYear = new Date(year, 0, 1);
+        const endOfYear = new Date(year + 1, 0, 1);
+        const meetingCount = await prisma.meeting.count({
+          where: { createdAt: { gte: startOfYear, lt: endOfYear } },
+        });
+        const seqMeeting = (meetingCount + 1).toString().padStart(3, '0');
+
+        let docNumPart = '000';
+        if (documentNumber) {
+          const parts = documentNumber.split('/');
+          if (parts.length > 0) docNumPart = parts[0] || '000';
+        }
+
+        let agendaNumber = `${seqMeeting}/${monthRoman}/${year}/${docNumPart}`;
+        const existingAgenda = await prisma.meeting.findUnique({ where: { agendaNumber } });
+        if (existingAgenda) {
+          agendaNumber = `${seqMeeting}-${Date.now()}/${monthRoman}/${year}/${docNumPart}`;
+        }
+
+        linkedMeeting = await prisma.meeting.create({
+          data: {
+            title: effectiveTitle,
+            agendaNumber,
+            dateTime: meetingDateTime,
+            location: meetingLocation,
+            description: customNote || `Undangan resmi untuk surat keluar: ${document.title} (${documentNumber || '-'})`,
+            targetType: 'CROSS_INTERNAL',
+            status: 'AKTIF',
+            attendees: meetingAttendees,
+            documentId: String(id),
+            invitationSent: false,
+          },
+        });
+      } else {
+        // Merge attendees so existing attendees are preserved
+        const existingAttendees = (linkedMeeting.attendees as any[]) || [];
+        const mergedAttendees = [...existingAttendees];
+        for (const newAtt of meetingAttendees) {
+          const idx = mergedAttendees.findIndex(
+            (a: any) => a.email?.toLowerCase() === newAtt.email?.toLowerCase()
+          );
+          if (idx >= 0) {
+            mergedAttendees[idx] = { ...mergedAttendees[idx], ...newAtt };
+          } else {
+            mergedAttendees.push(newAtt);
+          }
+        }
+
+        linkedMeeting = await prisma.meeting.update({
+          where: { id: linkedMeeting.id },
+          data: {
+            title: effectiveTitle,
+            dateTime: meetingDateTime,
+            location: meetingLocation,
+            status: 'AKTIF',
+            attendees: mergedAttendees,
+          },
+        });
+      }
+    }
+
+    // 3. Send individualized emails to each recipient via SMTP
+    const results: Array<{
+      email: string;
+      name: string;
+      status: 'SUCCESS' | 'FAILED';
+      messageId?: string | undefined;
+      error?: string | undefined;
+      sentAt: string;
+    }> = [];
+
+    for (const recipient of recipients) {
+      const email = recipient.email?.trim();
+      const name = recipient.name?.trim() || email;
+
+      if (!email) {
+        results.push({
+          email: '',
+          name,
+          status: 'FAILED',
+          error: 'Email penerima tidak valid atau kosong',
+          sentAt: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      const sendRes = await sendDocumentInvitationEmail({
+        toEmail: email,
+        recipientName: name,
+        invitationTitle: effectiveTitle,
+        documentTitle: document.title,
+        documentNumber,
+        pdfBuffer: pdfData.buffer,
+        pdfFileName: pdfData.fileName,
+        meetingDetails:
+          meetingDate || location
+            ? {
+                dateTime: meetingDate,
+                location,
+              }
+            : undefined,
+      });
+
+      if (sendRes.success) {
+        results.push({
+          email,
+          name,
+          status: 'SUCCESS',
+          messageId: sendRes.messageId,
+          sentAt: new Date().toISOString(),
+        });
+      } else {
+        results.push({
+          email,
+          name,
+          status: 'FAILED',
+          error: sendRes.error,
+          sentAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // 4. Update Meeting attendees status with sent info
+    if (linkedMeeting) {
+      const currentList = (linkedMeeting.attendees as any[]) || [];
+      const updatedList = currentList.map((att: any) => {
+        const matchingResult = results.find(
+          (r) => r.email.toLowerCase() === att.email?.toLowerCase()
+        );
+        if (matchingResult) {
+          return {
+            ...att,
+            invitationSent: matchingResult.status === 'SUCCESS',
+            lastSentAt: matchingResult.sentAt,
+            sendError: matchingResult.error || null,
+          };
+        }
+        return att;
+      });
+
+      await prisma.meeting.update({
+        where: { id: linkedMeeting.id },
+        data: {
+          invitationSent: results.some((r) => r.status === 'SUCCESS'),
+          attendees: updatedList,
+        },
+      });
+
+      // Internal notifications
+      for (const resItem of results) {
+        if (resItem.status === 'SUCCESS') {
+          const rec = recipients.find(
+            (r: any) => r.email.toLowerCase() === resItem.email.toLowerCase()
+          );
+          if (rec?.userId) {
+            triggerQueueUpdate(rec.userId).catch(() => {});
+            PushService.sendNotification({
+              userId: rec.userId,
+              title: 'Undangan Resmi DSN-MUI',
+              body: `Anda menerima undangan: "${effectiveTitle}". Berkas surat keluar telah dikirimkan ke email Anda.`,
+              data: {
+                documentId: String(id),
+                meetingId: linkedMeeting.id,
+                type: 'DOCUMENT_INVITATION',
+              },
+            }).catch(() => {});
+            sendNotification({
+              userId: rec.userId,
+              type: 'DOCUMENT_INVITATION',
+              title: 'Undangan Resmi DSN-MUI',
+              message: `Anda menerima undangan: "${effectiveTitle}". Berkas surat keluar telah dikirimkan ke email Anda.`,
+              link: `/agenda`,
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    const sentCount = results.filter((r) => r.status === 'SUCCESS').length;
+    const failedCount = results.filter((r) => r.status === 'FAILED').length;
+
+    res.json({
+      status: 'success',
+      message: `Proses pengiriman selesai. ${sentCount} email berhasil terkirim, ${failedCount} gagal.`,
+      data: {
+        total: results.length,
+        sent: sentCount,
+        failed: failedCount,
+        results,
+        meetingId: linkedMeeting?.id || null,
+        agendaNumber: linkedMeeting?.agendaNumber || null,
+      },
+    });
+  } catch (error: any) {
+    console.error('[SendInvitation] Fatal error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
 
 export default router;

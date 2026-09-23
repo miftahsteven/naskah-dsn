@@ -21,6 +21,31 @@ router.get('/meta', authenticate, checkPermission('USER_ADD'), async (req: AuthR
   }
 });
 
+// ── GET USER DIRECTORY (Active users for selection/invitations) ──
+router.get('/directory', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        ...(req.user?.organizationId ? { organizationId: req.user.organizationId } : {}),
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        jobTitle: true,
+        department: { select: { id: true, name: true } },
+        jabatan: { select: { id: true, name: true } },
+        role: { select: { id: true, name: true } },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    res.json({ status: 'success', data: users });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // ── GET ALL USERS ──
 router.get('/', authenticate, checkPermission('USER_EDIT'), async (req: AuthRequest, res: Response) => {
   try {
