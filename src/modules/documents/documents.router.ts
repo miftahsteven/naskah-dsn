@@ -2212,8 +2212,11 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
 
   const signatureRows = await Promise.all(validSigners.map(async (v) => {
     const s = v.sig;
-    const frontendUrl = process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id';
-    const payload = `${frontendUrl}/verify/document/${s.documentId}`;
+    const rawFrontendUrl = (process.env.FRONTEND_URL || 'https://amanah.dsnmui.or.id').trim().replace(/\/+$/, '');
+    const officePath = process.env.FRONTEND_OFFICE_PATH !== undefined
+      ? process.env.FRONTEND_OFFICE_PATH
+      : (rawFrontendUrl.endsWith('/office') ? '' : '/office');
+    const payload = `${rawFrontendUrl}${officePath}/verify/document/${s.documentId}`;
     
     const qrDataUrl = await getCachedQrCode(payload);
 
