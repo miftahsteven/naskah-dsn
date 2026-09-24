@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma.js';
 export interface AuthRequest extends Request {
   user?: {
     id: string;
-    email: string;
+    email?: string | null;
     fullName: string; // ── NEW
     role: string;
     permissions: string[]; // ── NEW
@@ -54,7 +54,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
   req.user = {
     id: user.id,
-    email: user.email,
+    email: user.email || '',
     fullName: user.fullName, // ── NEW
     role: user.role.name,
     permissions: user.role.rolePermissions.map(rp => rp.permission.code),

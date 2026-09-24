@@ -3626,15 +3626,31 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
       location,
       syncAgenda = true,
       recipients = [],
+      cc = [],
+      bcc = [],
       customNote,
     } = req.body;
 
     if (!Array.isArray(recipients) || recipients.length === 0) {
       return res.status(400).json({
         status: 'error',
-        message: 'Daftar penerima undangan (recipients) wajib dipilih minimal 1 orang.',
+        message: 'Daftar penerima utama undangan (recipients/Kepada) wajib dipilih minimal 1 orang.',
       });
     }
+
+    const toRecipients: any[] = Array.isArray(recipients) ? recipients : [];
+    const ccRecipients: any[] = Array.isArray(cc) ? cc : [];
+    const bccRecipients: any[] = Array.isArray(bcc) ? bcc : [];
+
+    const ccEmails = ccRecipients
+      .map((c: any) => c.email?.trim())
+      .filter((e: string | undefined): e is string => !!e);
+    const bccEmails = bccRecipients
+      .map((b: any) => b.email?.trim())
+      .filter((e: string | undefined): e is string => !!e);
+    const ccNames = ccRecipients
+      .map((c: any) => (c.name?.trim() || c.email?.trim()))
+      .filter((n: string | undefined): n is string => !!n);
 
     // 1. Fetch document and generate official PDF buffer
     let pdfData: { buffer: Buffer; fileName: string; title: string; documentNumber: string };
@@ -3652,11 +3668,58 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
       where: { id: String(id) },
       include: {
         category: true,
+        workflowInstances: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            steps: true,
+          },
+        },
+        signatures: true,
       },
     });
 
     if (!document) {
       return res.status(404).json({ status: 'error', message: 'Dokumen tidak ditemukan' });
+    }
+
+    // Reject if document status is REJECTED, REVISION, CANCELLED, or DRAFT
+    if (['REJECTED', 'REVISION', 'CANCELLED', 'DRAFT'].includes(document.status)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Undangan hanya dapat dikirim jika dokumen telah selesai ditandatangani (progress 100%).',
+      });
+    }
+
+    // Validate that signing workflow progress is 100% complete
+    const wf = document.workflowInstances?.[0];
+    if (wf && wf.steps && wf.steps.length > 0) {
+      const totalSteps = wf.steps.length;
+      const approvedSteps = wf.steps.filter((s: any) => s.status === 'APPROVED').length;
+      const hasUnsignedSignatory = wf.steps.some((s: any) => {
+        const role = s.roleId;
+        return (role === 'PENANDATANGAN' || role === 'SIGNER' || !role) && s.status !== 'APPROVED';
+      });
+
+      if (approvedSteps < totalSteps || hasUnsignedSignatory) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Undangan belum dapat dikirim karena alur penandatanganan surat belum mencapai 100% (masih ada pihak yang belum menandatangani).',
+        });
+      }
+    } else if (document.signatures && document.signatures.length > 0) {
+      const allSigned = document.signatures.every((sig: any) => !!sig.signedAt);
+      if (!allSigned) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Undangan belum dapat dikirim karena tanda tangan dokumen belum lengkap.',
+        });
+      }
+    } else if (document.status !== 'SIGNED' && document.status !== 'COMPLETED') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Undangan belum dapat dikirim karena alur penandatanganan surat belum selesai.',
+      });
     }
 
     const effectiveTitle = invitationTitle || document.title;
@@ -3672,18 +3735,45 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
         where: { documentId: String(id) },
       });
 
-      // Prepare attendee objects
-      meetingAttendees = recipients.map((r: any) => ({
-        userId: r.userId || null,
-        name: r.name,
-        email: r.email,
-        phone: r.phone || '',
-        department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
-        jabatan: r.jabatan || '',
-        isExternal: !r.userId,
-        status: 'UNDANGAN',
-        invitationSent: false,
-      }));
+      // Prepare attendee objects for all roles (TO, CC, BCC)
+      meetingAttendees = [
+        ...toRecipients.map((r: any) => ({
+          userId: r.userId || null,
+          name: r.name,
+          email: r.email,
+          phone: r.phone || '',
+          department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
+          jabatan: r.jabatan || '',
+          isExternal: !r.userId,
+          role: 'TO',
+          status: 'UNDANGAN',
+          invitationSent: false,
+        })),
+        ...ccRecipients.map((r: any) => ({
+          userId: r.userId || null,
+          name: r.name,
+          email: r.email,
+          phone: r.phone || '',
+          department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
+          jabatan: r.jabatan || '',
+          isExternal: !r.userId,
+          role: 'CC',
+          status: 'UNDANGAN',
+          invitationSent: false,
+        })),
+        ...bccRecipients.map((r: any) => ({
+          userId: r.userId || null,
+          name: r.name,
+          email: r.email,
+          phone: r.phone || '',
+          department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
+          jabatan: r.jabatan || '',
+          isExternal: !r.userId,
+          role: 'BCC',
+          status: 'UNDANGAN',
+          invitationSent: false,
+        })),
+      ];
 
       const meetingDateTime = meetingDate ? new Date(meetingDate) : new Date();
       const meetingLocation = location || 'Ruang Rapat Pleno DSN-MUI Lt. 3 / Zoom Cloud Meeting';
@@ -3756,17 +3846,23 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
       }
     }
 
-    // 3. Send individualized emails to each recipient via SMTP
+    // 3. Send emails
     const results: Array<{
       email: string;
       name: string;
+      role: 'TO' | 'CC' | 'BCC' | 'SUMMARY_CC';
       status: 'SUCCESS' | 'FAILED';
       messageId?: string | undefined;
       error?: string | undefined;
       sentAt: string;
     }> = [];
 
-    for (const recipient of recipients) {
+    const isSingleRecipient = toRecipients.length === 1;
+
+    if (isSingleRecipient) {
+      // Scenario A: Exactly 1 primary recipient
+      // Attach CC and BCC directly to this 1 email so everyone receives exactly 1 email.
+      const recipient = toRecipients[0];
       const email = recipient.email?.trim();
       const name = recipient.name?.trim() || email;
 
@@ -3774,48 +3870,145 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
         results.push({
           email: '',
           name,
+          role: 'TO',
           status: 'FAILED',
-          error: 'Email penerima tidak valid atau kosong',
-          sentAt: new Date().toISOString(),
-        });
-        continue;
-      }
-
-      const sendRes = await sendDocumentInvitationEmail({
-        toEmail: email,
-        recipientName: name,
-        invitationTitle: effectiveTitle,
-        documentTitle: document.title,
-        documentNumber,
-        pdfBuffer: pdfData.buffer,
-        pdfFileName: pdfData.fileName,
-        meetingDetails:
-          meetingDate || location
-            ? {
-                dateTime: meetingDate,
-                location,
-              }
-            : undefined,
-      });
-
-      if (sendRes.success) {
-        results.push({
-          email,
-          name,
-          status: 'SUCCESS',
-          messageId: sendRes.messageId,
+          error: 'Email penerima utama tidak valid atau kosong',
           sentAt: new Date().toISOString(),
         });
       } else {
+        const sendRes = await sendDocumentInvitationEmail({
+          toEmail: email,
+          recipientName: name,
+          invitationTitle: effectiveTitle,
+          documentTitle: document.title,
+          documentNumber,
+          pdfBuffer: pdfData.buffer,
+          pdfFileName: pdfData.fileName,
+          ccEmails: ccEmails.length > 0 ? ccEmails : undefined,
+          bccEmails: bccEmails.length > 0 ? bccEmails : undefined,
+          ccNames: ccNames.length > 0 ? ccNames : undefined,
+          meetingDetails:
+            meetingDate || location
+              ? {
+                  dateTime: meetingDate,
+                  location,
+                }
+              : undefined,
+        });
+
         results.push({
           email,
           name,
-          status: 'FAILED',
+          role: 'TO',
+          status: sendRes.success ? 'SUCCESS' : 'FAILED',
+          messageId: sendRes.messageId,
           error: sendRes.error,
           sentAt: new Date().toISOString(),
         });
       }
+    } else {
+      // Scenario B: Multiple primary recipients (> 1 orang)
+      // Send individual emails to each primary recipient WITHOUT CC/BCC attached in SMTP envelope,
+      // so CC/BCC users are NOT spammed with multiple duplicate emails!
+      for (const recipient of toRecipients) {
+        const email = recipient.email?.trim();
+        const name = recipient.name?.trim() || email;
+
+        if (!email) {
+          results.push({
+            email: '',
+            name,
+            role: 'TO',
+            status: 'FAILED',
+            error: 'Email penerima tidak valid atau kosong',
+            sentAt: new Date().toISOString(),
+          });
+          continue;
+        }
+
+        const sendRes = await sendDocumentInvitationEmail({
+          toEmail: email,
+          recipientName: name,
+          invitationTitle: effectiveTitle,
+          documentTitle: document.title,
+          documentNumber,
+          pdfBuffer: pdfData.buffer,
+          pdfFileName: pdfData.fileName,
+          // DO NOT attach ccEmails or bccEmails here to avoid spamming CC/BCC!
+          ccNames: ccNames.length > 0 ? ccNames : undefined, // Still display Tembusan text in the official letter body!
+          meetingDetails:
+            meetingDate || location
+              ? {
+                  dateTime: meetingDate,
+                  location,
+                }
+              : undefined,
+        });
+
+        results.push({
+          email,
+          name,
+          role: 'TO',
+          status: sendRes.success ? 'SUCCESS' : 'FAILED',
+          messageId: sendRes.messageId,
+          error: sendRes.error,
+          sentAt: new Date().toISOString(),
+        });
+      }
+
+      // Send EXACTLY 1 DEDICATED EMAIL (Surat Khusus) for all CC and BCC recipients
+      if (ccEmails.length > 0 || bccEmails.length > 0) {
+        const toRecipientNames = toRecipients.map((r: any) => r.name || r.email);
+        
+        let primaryTargetEmail = '';
+        let restCcEmails: string[] = [];
+        let restBccEmails: string[] = [...bccEmails];
+
+        if (ccEmails.length > 0 && ccEmails[0]) {
+          primaryTargetEmail = ccEmails[0];
+          restCcEmails = ccEmails.slice(1);
+        } else if (bccEmails.length > 0 && bccEmails[0]) {
+          primaryTargetEmail = bccEmails[0];
+          restBccEmails = bccEmails.slice(1);
+        }
+
+        if (primaryTargetEmail) {
+
+        const ccSendRes = await sendDocumentInvitationEmail({
+          toEmail: primaryTargetEmail,
+          recipientName: ccNames.length > 0
+            ? `Bapak/Ibu Penerima Tembusan (${ccNames.join(', ')})`
+            : 'Bapak/Ibu Penerima Tembusan & Arsip',
+          invitationTitle: effectiveTitle,
+          documentTitle: document.title,
+          documentNumber,
+          pdfBuffer: pdfData.buffer,
+          pdfFileName: pdfData.fileName,
+          ccEmails: restCcEmails.length > 0 ? restCcEmails : undefined,
+          bccEmails: restBccEmails.length > 0 ? restBccEmails : undefined,
+          ccNames: ccNames.length > 0 ? ccNames : undefined,
+          invitedRecipientNames: toRecipientNames,
+          meetingDetails:
+            meetingDate || location
+              ? {
+                  dateTime: meetingDate,
+                  location,
+                }
+              : undefined,
+        });
+
+        results.push({
+          email: primaryTargetEmail,
+          name: ccNames.length > 0 ? `Tembusan (CC & BCC) - ${ccNames.join(', ')}` : 'Tembusan & BCC',
+          role: 'SUMMARY_CC',
+          status: ccSendRes.success ? 'SUCCESS' : 'FAILED',
+          messageId: ccSendRes.messageId,
+          error: ccSendRes.error,
+          sentAt: new Date().toISOString(),
+        });
+      }
     }
+  }
 
     // 4. Update Meeting attendees status with sent info
     if (linkedMeeting) {
@@ -3832,6 +4025,14 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
             sendError: matchingResult.error || null,
           };
         }
+        // If they are in CC or BCC and at least one primary email was sent successfully
+        if ((att.role === 'CC' || att.role === 'BCC') && results.some((r) => r.status === 'SUCCESS')) {
+          return {
+            ...att,
+            invitationSent: true,
+            lastSentAt: new Date().toISOString(),
+          };
+        }
         return att;
       });
 
@@ -3843,10 +4044,10 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
         },
       });
 
-      // Internal notifications
+      // Internal notifications for primary recipients
       for (const resItem of results) {
         if (resItem.status === 'SUCCESS') {
-          const rec = recipients.find(
+          const rec = toRecipients.find(
             (r: any) => r.email.toLowerCase() === resItem.email.toLowerCase()
           );
           if (rec?.userId) {
@@ -3869,6 +4070,30 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
               link: `/agenda`,
             }).catch(() => {});
           }
+        }
+      }
+
+      // Internal notifications for CC recipients
+      for (const ccItem of ccRecipients) {
+        if (ccItem.userId && results.some((r) => r.status === 'SUCCESS')) {
+          triggerQueueUpdate(ccItem.userId).catch(() => {});
+          PushService.sendNotification({
+            userId: ccItem.userId,
+            title: 'Tembusan Undangan Resmi DSN-MUI',
+            body: `Anda menerima tembusan (CC) undangan: "${effectiveTitle}". Berkas surat keluar telah dikirimkan ke email Anda.`,
+            data: {
+              documentId: String(id),
+              meetingId: linkedMeeting.id,
+              type: 'DOCUMENT_INVITATION',
+            },
+          }).catch(() => {});
+          sendNotification({
+            userId: ccItem.userId,
+            type: 'DOCUMENT_INVITATION',
+            title: 'Tembusan Undangan Resmi DSN-MUI',
+            message: `Anda menerima tembusan (CC) undangan: "${effectiveTitle}". Berkas surat keluar telah dikirimkan ke email Anda.`,
+            link: `/agenda`,
+          }).catch(() => {});
         }
       }
     }

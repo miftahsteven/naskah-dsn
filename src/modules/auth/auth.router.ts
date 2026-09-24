@@ -17,8 +17,13 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ status: 'error', message: 'Email dan password wajib diisi' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: email },
+          { email: { contains: email } },
+        ],
+      },
       include: { 
         role: {
           include: {
@@ -40,7 +45,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // ── CASE 0: Universal OTP enabled for this user (Google Play Review / Test Account) ──
-    if (AuthService.isUniversalOtpEnabledForUser(user.email)) {
+    if (AuthService.isUniversalOtpEnabledForUser(user.email || '')) {
       return res.json({
         status: 'success',
         message: '2FA required',
@@ -131,21 +136,21 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
       return res.status(404).json({ status: 'error', message: 'User tidak ditemukan' });
     }
 
-    const isUniversal = AuthService.isUniversalOtpValid(token, user.email);
+    const isUniversal = AuthService.isUniversalOtpValid(token, user.email || '');
 
     if (!user.twoFactorSecret && !isUniversal) {
       return res.status(400).json({ status: 'error', message: '2FA not set up for this user' });
     }
 
-    const isValid = isUniversal || (user.twoFactorSecret ? AuthService.verify2FAToken(token, user.twoFactorSecret, user.email) : false);
+    const isValid = isUniversal || (user.twoFactorSecret ? AuthService.verify2FAToken(token, user.twoFactorSecret, user.email || '') : false);
 
     if (!isValid) {
       console.warn(`[2FA] Invalid token attempted for user ${userId}. Potential time drift or incorrect code.`);
       return res.status(401).json({ status: 'error', message: 'Invalid 2FA token' });
     }
 
-    const accessToken = AuthService.generateAccessToken({ id: user.id, email: user.email });
-    const refreshToken = AuthService.generateRefreshToken({ id: user.id, email: user.email });
+    const accessToken = AuthService.generateAccessToken({ id: user.id, email: user.email || '' });
+    const refreshToken = AuthService.generateRefreshToken({ id: user.id, email: user.email || '' });
 
     res.json({
       status: 'success',
@@ -175,7 +180,7 @@ router.post('/setup-2fa', authenticate, async (req: AuthRequest, res: Response) 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ status: 'error', message: 'User not found' });
 
-    const { otpauth_url, base32 } = AuthService.generate2FASecret(user.email);
+    const { otpauth_url, base32 } = AuthService.generate2FASecret(user.email || '');
     const qrCode = await AuthService.generateQRCode(otpauth_url!);
     await prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: base32 } });
 
@@ -201,7 +206,7 @@ router.post('/setup-2fa-public', async (req: Request, res: Response) => {
       return res.status(400).json({ status: 'error', message: '2FA sudah aktif untuk user ini' });
     }
 
-    const { otpauth_url, base32 } = AuthService.generate2FASecret(user.email);
+    const { otpauth_url, base32 } = AuthService.generate2FASecret(user.email || '');
     const qrCode = await AuthService.generateQRCode(otpauth_url!);
     await prisma.user.update({ where: { id: user.id }, data: { twoFactorSecret: base32 } });
 
@@ -222,7 +227,7 @@ router.post('/enable-2fa', authenticate, async (req: AuthRequest, res: Response)
       return res.status(400).json({ status: 'error', message: '2FA secret tidak ditemukan' });
     }
 
-    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret, user.email);
+    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret, user.email || '');
     if (!isValid) {
       return res.status(401).json({ status: 'error', message: 'Kode verifikasi tidak valid' });
     }
@@ -259,7 +264,7 @@ router.post('/enable-2fa-public', async (req: Request, res: Response) => {
       return res.status(400).json({ status: 'error', message: '2FA belum dikonfigurasi untuk user ini' });
     }
 
-    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret, user.email);
+    const isValid = AuthService.verify2FAToken(token, user.twoFactorSecret, user.email || '');
     if (!isValid) {
       console.warn(`[2FA] Setup verification failed for user ${userId}. Secret: ${user.twoFactorSecret}`);
       return res.status(401).json({ status: 'error', message: 'Kode OTP tidak valid. Pastikan waktu di perangkat Anda sudah sinkron.' });
@@ -267,8 +272,8 @@ router.post('/enable-2fa-public', async (req: Request, res: Response) => {
 
     await prisma.user.update({ where: { id: user.id }, data: { twoFactorEnabled: true } });
 
-    const accessToken = AuthService.generateAccessToken({ id: user.id, email: user.email });
-    const refreshToken = AuthService.generateRefreshToken({ id: user.id, email: user.email });
+    const accessToken = AuthService.generateAccessToken({ id: user.id, email: user.email || '' });
+    const refreshToken = AuthService.generateRefreshToken({ id: user.id, email: user.email || '' });
 
     res.json({
       status: 'success',

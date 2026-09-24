@@ -803,6 +803,10 @@ export interface SendDocumentInvitationEmailParams {
     dateTime?: string | Date | undefined;
     location?: string | undefined;
   } | undefined;
+  ccEmails?: string[] | undefined;
+  bccEmails?: string[] | undefined;
+  ccNames?: string[] | undefined;
+  invitedRecipientNames?: string[] | undefined;
 }
 
 export async function sendDocumentInvitationEmail({
@@ -814,12 +818,27 @@ export async function sendDocumentInvitationEmail({
   pdfBuffer,
   pdfFileName,
   meetingDetails,
+  ccEmails,
+  bccEmails,
+  ccNames,
+  invitedRecipientNames,
 }: SendDocumentInvitationEmailParams): Promise<SendEmailResult> {
   try {
     const transporter = await getTransporter();
     const docDisplayTitle = documentTitle || invitationTitle || 'Surat Keluar';
     const effectiveTitle = invitationTitle || documentTitle || 'Undangan';
     const subjectTitle = `Penyampaian ${effectiveTitle}${documentNumber ? ` (${documentNumber})` : ''}`;
+
+    // Clean up CC and BCC emails
+    const cleanCcEmails = (ccEmails || [])
+      .map((e) => e.trim())
+      .filter((e) => e && e.toLowerCase() !== toEmail.toLowerCase());
+    const uniqueCcEmails = Array.from(new Set(cleanCcEmails));
+
+    const cleanBccEmails = (bccEmails || [])
+      .map((e) => e.trim())
+      .filter((e) => e && e.toLowerCase() !== toEmail.toLowerCase() && !uniqueCcEmails.some((cc) => cc.toLowerCase() === e.toLowerCase()));
+    const uniqueBccEmails = Array.from(new Set(cleanBccEmails));
 
     let meetingInfoText = '';
     let meetingInfoHtml = '';
@@ -849,6 +868,14 @@ ${formattedDate ? `• Waktu: ${formattedDate}\n` : ''}${meetingDetails.location
       `;
     }
 
+    const ccText = ccNames && ccNames.length > 0
+      ? `\nTembusan disampaikan kepada Yth.:\n${ccNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}\n`
+      : '';
+
+    const introText = invitedRecipientNames && invitedRecipientNames.length > 0
+      ? `Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan softcopy (dalam format .pdf) ${docDisplayTitle}, sebagaimana terlampir, yang disampaikan kepada para pihak terundang:\n${invitedRecipientNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}\n\nSilakan diterima dengan baik.`
+      : `Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan softcopy (dalam format .pdf) ${docDisplayTitle}, sebagaimana terlampir.\nSilakan diterima dengan baik.`;
+
     const textContent = `
 Penyampaian ${effectiveTitle}
 
@@ -859,8 +886,7 @@ di TEMPAT
 
 Assalamu'alaykum Wr. Wb.,
 
-Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan softcopy (dalam format .pdf) ${docDisplayTitle}, sebagaimana terlampir.
-Silakan diterima dengan baik.
+${introText}
 ${meetingInfoText}
 Demikian kami sampaikan.
 Wassalamu'alaykum Wr. Wb.
@@ -869,7 +895,42 @@ Ttd,
 Sekretariat DSN-MUI
 Dewan Syariah Nasional - Majelis Ulama Indonesia
 Jl. Dempo No.19, Pegangsaan, Kec. Menteng, Kota Jakarta Pusat, DKI Jakarta 10320
-`;
+${ccText}`;
+
+    const ccHtml = ccNames && ccNames.length > 0
+      ? `
+              <!-- CC Section -->
+              <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #475569;">
+                <p style="margin: 0 0 6px 0; font-weight: bold; color: #1e293b; font-size: 12px;">Tembusan disampaikan kepada Yth.:</p>
+                <ol style="margin: 0; padding-left: 18px; color: #475569; line-height: 1.6; font-size: 12px;">
+                  ${ccNames.map((name) => `<li style="margin-bottom: 2px;">${name}</li>`).join('')}
+                </ol>
+              </div>
+              `
+      : '';
+
+    const introHtml = invitedRecipientNames && invitedRecipientNames.length > 0
+      ? `
+              <p style="margin: 16px 0 8px 0; font-size: 14px; color: #334155; line-height: 1.7;">
+                Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan <em>softcopy</em> (dalam format .pdf) <strong>${docDisplayTitle}</strong>, sebagaimana terlampir, yang disampaikan kepada para pihak terundang:
+              </p>
+              <div style="margin: 8px 0 16px 0; padding: 10px 14px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <ol style="margin: 0; padding-left: 18px; color: #334155; font-size: 13px; line-height: 1.6;">
+                  ${invitedRecipientNames.map((name) => `<li style="margin-bottom: 2px;"><strong>${name}</strong></li>`).join('')}
+                </ol>
+              </div>
+              <p style="margin: 16px 0; font-size: 14px; color: #334155;">
+                Silakan diterima dengan baik.
+              </p>
+      `
+      : `
+              <p style="margin: 16px 0; font-size: 14px; color: #334155; line-height: 1.7;">
+                Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan <em>softcopy</em> (dalam format .pdf) <strong>${docDisplayTitle}</strong>, sebagaimana terlampir.
+              </p>
+              <p style="margin: 16px 0; font-size: 14px; color: #334155;">
+                Silakan diterima dengan baik.
+              </p>
+      `;
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -923,12 +984,7 @@ Jl. Dempo No.19, Pegangsaan, Kec. Menteng, Kota Jakarta Pusat, DKI Jakarta 10320
                 <em>Assalamu'alaykum Wr. Wb.,</em>
               </p>
 
-              <p style="margin: 16px 0; font-size: 14px; color: #334155; line-height: 1.7;">
-                Bersama ini Sekretariat Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) mengirimkan <em>softcopy</em> (dalam format .pdf) <strong>${docDisplayTitle}</strong>, sebagaimana terlampir.
-              </p>
-              <p style="margin: 16px 0; font-size: 14px; color: #334155;">
-                Silakan diterima dengan baik.
-              </p>
+              ${introHtml}
 
               ${meetingInfoHtml}
 
@@ -961,6 +1017,8 @@ Jl. Dempo No.19, Pegangsaan, Kec. Menteng, Kota Jakarta Pusat, DKI Jakarta 10320
                 <p style="margin: 4px 0 0 0; font-size: 14px; font-weight: 800; color: #006633;">Sekretariat DSN-MUI</p>
                 <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">Dewan Syariah Nasional – Majelis Ulama Indonesia</p>
               </div>
+
+              ${ccHtml}
             </td>
           </tr>
 
@@ -985,7 +1043,7 @@ Jl. Dempo No.19, Pegangsaan, Kec. Menteng, Kota Jakarta Pusat, DKI Jakarta 10320
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const info = await transporter.sendMail({
+        const mailOptions: any = {
           from: getFromAddress(),
           to: toEmail,
           subject: subjectTitle,
@@ -998,7 +1056,16 @@ Jl. Dempo No.19, Pegangsaan, Kec. Menteng, Kota Jakarta Pusat, DKI Jakarta 10320
               contentType: 'application/pdf',
             },
           ],
-        });
+        };
+
+        if (uniqueCcEmails.length > 0) {
+          mailOptions.cc = uniqueCcEmails;
+        }
+        if (uniqueBccEmails.length > 0) {
+          mailOptions.bcc = uniqueBccEmails;
+        }
+
+        const info = await transporter.sendMail(mailOptions);
 
         console.log(`[Mailer] Document invitation email sent to ${toEmail} for "${effectiveTitle}" (Attempt ${attempt}). MessageId: ${info.messageId}`);
         return {

@@ -88,20 +88,22 @@ router.post('/', authenticate, checkPermission('USER_ADD'), async (req: AuthRequ
   try {
     const { email, password, fullName, roleId, unitId, jobTitle, phone, departmentId, jabatanId } = req.body;
 
-    if (!email || !password || !fullName || !roleId) {
-      return res.status(400).json({ status: 'error', message: 'Email, password, nama lengkap, dan role wajib diisi' });
+    if (!password || !fullName || !roleId) {
+      return res.status(400).json({ status: 'error', message: 'Password, nama lengkap, dan role wajib diisi' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ status: 'error', message: 'Email sudah terdaftar' });
+    if (email) {
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(400).json({ status: 'error', message: 'Email sudah terdaftar' });
+      }
     }
 
     const passwordHash = await AuthService.hashPassword(password);
 
     const newUser = await prisma.user.create({
       data: {
-        email,
+        email: email || null,
         passwordHash,
         fullName,
         jobTitle: jobTitle || null,
@@ -125,11 +127,12 @@ router.post('/', authenticate, checkPermission('USER_ADD'), async (req: AuthRequ
 router.patch('/:id', authenticate, checkPermission('USER_EDIT'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { fullName, roleId, unitId, jobTitle, phone, departmentId, jabatanId, isActive } = req.body;
+    const { email, fullName, roleId, unitId, jobTitle, phone, departmentId, jabatanId, isActive } = req.body;
 
     const updatedUser = await prisma.user.update({
       where: { id: String(id) },
       data: {
+        ...(email !== undefined && { email: email || null }),
         ...(fullName && { fullName }),
         ...(roleId && { roleId }),
         ...(unitId !== undefined && { unitId: unitId || null }),
@@ -148,26 +151,65 @@ router.patch('/:id', authenticate, checkPermission('USER_EDIT'), async (req: Aut
   }
 });
 
-// ── DELETE USER (soft delete — set isActive = false) ──
+// ── DELETE USER (Smart Delete: hard delete if clean, soft delete if historical documents exist) ──
 router.delete('/:id', authenticate, checkPermission('USER_DELETE'), async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     // Prevent self-deletion
     if (req.user!.id === id) {
       return res.status(400).json({ status: 'error', message: 'Tidak dapat menghapus akun sendiri' });
     }
 
-    await prisma.user.update({
-      where: { id: String(id) },
-      data: {
-        isActive: false,
-        twoFactorEnabled: false,
-        twoFactorSecret: null,
-      },
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, fullName: true, email: true },
     });
 
-    res.json({ status: 'success', message: 'User berhasil dinonaktifkan' });
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User tidak ditemukan' });
+    }
+
+    // Check critical document dependencies (creator, signer, approver)
+    const [docCount, sigCount, stepCount] = await Promise.all([
+      prisma.document.count({ where: { creatorId: id } }),
+      prisma.documentSignature.count({ where: { userId: id } }),
+      prisma.documentWorkflowStep.count({ where: { userId: id } }),
+    ]);
+
+    if (docCount > 0 || sigCount > 0 || stepCount > 0) {
+      // Historical references exist: soft-delete to preserve legal audit trail
+      await prisma.user.update({
+        where: { id: String(id) },
+        data: {
+          isActive: false,
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+        },
+      });
+
+      return res.json({
+        status: 'success',
+        message: `Akun "${user.fullName}" berhasil dinonaktifkan. Karena pengguna memiliki ${docCount + sigCount + stepCount} riwayat dokumen/persetujuan resmi, data akun dialihkan ke status nonaktif demi menjaga integritas data arsip.`,
+        data: { action: 'DEACTIVATED' },
+      });
+    }
+
+    // No critical document dependencies: clean up ancillary records and permanently delete
+    await prisma.$transaction([
+      (prisma as any).userRole.deleteMany({ where: { userId: id } }),
+      prisma.notification.deleteMany({ where: { userId: id } }),
+      (prisma as any).userBiometric.deleteMany({ where: { userId: id } }),
+      prisma.auditLog.deleteMany({ where: { userId: id } }),
+      prisma.disposisiLog.updateMany({ where: { userId: id }, data: { userId: null } }),
+      prisma.user.delete({ where: { id: String(id) } }),
+    ]);
+
+    return res.json({
+      status: 'success',
+      message: `Akun "${user.fullName}" berhasil dihapus secara permanen dari sistem.`,
+      data: { action: 'DELETED' },
+    });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
