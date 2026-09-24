@@ -387,6 +387,94 @@ router.get('/:id', authenticatePublic, async (req: PublicAuthRequest, res: Respo
   }
 });
 
+// ── DOWNLOAD ATTACHED INTERVIEW INVITATION LETTER (Surat Keluar DSN-MUI) ──
+router.get('/:id/invitation-letter/download', authenticatePublic, async (req: PublicAuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.publicUser!.companyId;
+
+    const submission = await prisma.publicSubmission.findFirst({
+      where: { id: String(id), companyId },
+    });
+
+    if (!submission) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Pengajuan tidak ditemukan atau Anda tidak memiliki akses.',
+      });
+    }
+
+    const invitation = (submission.interviewInvitation as any) || null;
+    if (!invitation || (!invitation.outgoingLetterId && !invitation.outgoingLetterFileUrl)) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Surat undangan resmi belum dilampirkan pada wawancara ini.',
+      });
+    }
+
+    let filePath: string | null = null;
+    let fileName =
+      invitation.outgoingLetterFileName ||
+      `Surat_Undangan_${(invitation.invitationNumber || 'DSN_MUI').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+    if (invitation.outgoingLetterId) {
+      const doc = await prisma.document.findUnique({
+        where: { id: String(invitation.outgoingLetterId) },
+        include: { versions: { orderBy: { versionNum: 'desc' }, take: 1 } },
+      });
+      if (doc?.versions?.[0]) {
+        const v = doc.versions[0];
+        fileName = v.fileName || fileName;
+        filePath = path.resolve(process.cwd(), v.fileUrl.startsWith('/') ? v.fileUrl.slice(1) : v.fileUrl);
+        if (!fs.existsSync(filePath)) {
+          const uploadsCandidate = path.resolve(process.cwd(), 'uploads', path.basename(v.fileUrl));
+          if (fs.existsSync(uploadsCandidate)) {
+            filePath = uploadsCandidate;
+          }
+        }
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      if (invitation.outgoingLetterFileUrl) {
+        const raw = invitation.outgoingLetterFileUrl;
+        const candidate = path.resolve(process.cwd(), raw.startsWith('/') ? raw.slice(1) : raw);
+        if (fs.existsSync(candidate)) {
+          filePath = candidate;
+        } else {
+          const uploadsCandidate = path.resolve(process.cwd(), 'uploads', path.basename(raw));
+          if (fs.existsSync(uploadsCandidate)) {
+            filePath = uploadsCandidate;
+          }
+        }
+      }
+    }
+
+    if (filePath && fs.existsSync(filePath)) {
+      const ext = path.extname(fileName).toLowerCase();
+      if (ext === '.pdf') {
+        res.setHeader('Content-Type', 'application/pdf');
+      } else if (ext === '.html') {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      }
+      res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+      return res.sendFile(filePath);
+    }
+
+    return res.status(404).json({
+      status: 'error',
+      message: 'Berkas fisik surat undangan tidak ditemukan di server.',
+    });
+  } catch (error: any) {
+    console.error('[Public Submissions] Error downloading invitation letter:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Gagal mengunduh surat undangan.',
+      error: error.message,
+    });
+  }
+});
+
 // ── UPLOAD OFFICIAL LETTER (Step 2) ─────────────────────────────────────────
 router.post('/:id/upload-letter', authenticatePublic, upload.single('file'), async (req: PublicAuthRequest, res: Response) => {
   try {

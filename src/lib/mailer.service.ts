@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import dns from 'dns';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -1095,5 +1096,517 @@ ${ccText}`;
     };
   }
 }
+
+/**
+ * 5. SEND PRESENTATION INVITATION EMAIL (UNDANGAN PRESENTASI LEMBAGA PEMOHON)
+ */
+export interface SendPresentationInvitationEmailParams {
+  toEmail: string;
+  recipientName?: string;
+  companyName?: string;
+  submissionNumber?: string;
+  title?: string;
+  invitationNumber?: string;
+  presentationDate?: string;
+  presentationTime?: string;
+  format?: 'ONLINE' | 'OFFLINE' | string;
+  venueOrLink?: string;
+  notes?: string;
+}
+
+export async function sendPresentationInvitationEmail({
+  toEmail,
+  recipientName = 'Pimpinan Lembaga Pemohon',
+  companyName = 'Lembaga / Perusahaan Pemohon',
+  submissionNumber = '',
+  title = '',
+  invitationNumber = '',
+  presentationDate = '',
+  presentationTime = '',
+  format = 'OFFLINE',
+  venueOrLink = '',
+  notes = '',
+}: SendPresentationInvitationEmailParams): Promise<SendEmailResult> {
+  try {
+    const transporter = await getTransporter();
+    const portalUrl = getPortalUrl();
+    const subject = `Undangan Presentasi Pemohon DSN-MUI: ${companyName}${submissionNumber ? ` [${submissionNumber}]` : ''}`;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px 0; }
+    .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #006633 0%, #10b981 100%); color: #ffffff; padding: 32px 28px; text-align: center; }
+    .badge { display: inline-block; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+    .content { padding: 32px 28px; line-height: 1.6; }
+    .info-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 18px 20px; margin: 20px 0; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-label { color: #64748b; font-weight: 600; }
+    .info-val { color: #0f172a; font-weight: 700; text-align: right; }
+    .btn { display: inline-block; background: #006633; color: #ffffff !important; font-weight: 700; font-size: 13px; text-decoration: none; padding: 12px 28px; border-radius: 12px; margin: 16px 0; }
+    .footer { text-align: center; padding: 20px 28px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="badge">Dewan Syariah Nasional MUI</span>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 800;">Undangan Presentasi Pemohon</h1>
+      <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 13px;">Tahap Verifikasi & Pendalaman Permohonan</p>
+    </div>
+    <div class="content">
+      <p>Kepada Yth.<br><strong>${recipientName}</strong><br>${companyName}</p>
+      <p>Sehubungan dengan permohonan yang telah diajukan melalui sistem Amanah DSN-MUI:</p>
+      
+      <div class="info-box">
+        <div class="info-row"><span class="info-label">Nomor Pengajuan:</span><span class="info-val">${submissionNumber || '—'}</span></div>
+        <div class="info-row"><span class="info-label">Perihal Dokumen:</span><span class="info-val">${title || 'Permohonan Kesesuaian Syariah'}</span></div>
+        ${invitationNumber ? `<div class="info-row"><span class="info-label">No. Surat Undangan:</span><span class="info-val">${invitationNumber}</span></div>` : ''}
+        <div class="info-row"><span class="info-label">Hari & Tanggal:</span><span class="info-val">${presentationDate || 'Sesuai Jadwal'}</span></div>
+        <div class="info-row"><span class="info-label">Waktu Pelaksanaan:</span><span class="info-val">${presentationTime || '09:00 WIB'}</span></div>
+        <div class="info-row"><span class="info-label">Format:</span><span class="info-val">${format === 'ONLINE' ? 'Daring (Online Meeting)' : 'Tatap Muka (Offline)'}</span></div>
+        <div class="info-row"><span class="info-label">Lokasi / Tautan:</span><span class="info-val">${venueOrLink || 'Kantor DSN MUI Jl. Dempo No. 19 Pegangsaan, Menteng, Jakarta Pusat 10320'}</span></div>
+      </div>
+
+      ${notes ? `<p><strong>Catatan Tambahan:</strong><br><span style="background: #f8fafc; padding: 10px 14px; border-radius: 8px; display: block; border: 1px solid #e2e8f0; font-size: 13px; color: #475569;">${notes}</span></p>` : ''}
+
+      <p>Mohon agar tim perwakilan dapat hadir tepat waktu serta mempersiapkan bahan paparan dan dokumen penunjang.</p>
+
+      <div style="text-align: center; margin-top: 24px;">
+        <a href="${portalUrl}" class="btn">Pantau Status di Portal Publik Amanah</a>
+      </div>
+    </div>
+    <div class="footer">
+      Email ini dikirim otomatis oleh Sistem Persuratan Digital DSN-MUI (Amanah).<br>
+      © ${new Date().getFullYear()} Dewan Syariah Nasional - Majelis Ulama Indonesia.
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    const info = await transporter.sendMail({
+      from: getFromAddress(),
+      to: toEmail,
+      subject,
+      html: htmlContent,
+      text: `Undangan Presentasi DSN-MUI untuk ${companyName}. Tanggal: ${presentationDate}, Pukul: ${presentationTime}. Lokasi: ${venueOrLink}.`,
+    });
+
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error(`[Mailer] Failed to send presentation invitation email to ${toEmail}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 6. SEND APPLICANT REMINDER EMAIL (PENGINGAT TINDAK LANJUT PEMOHON)
+ */
+export interface SendApplicantReminderEmailParams {
+  toEmail: string;
+  recipientName?: string;
+  companyName?: string;
+  submissionNumber?: string;
+  title?: string;
+  message: string;
+  dueDate?: string | null;
+}
+
+export async function sendApplicantReminderEmail({
+  toEmail,
+  recipientName = 'Pimpinan Lembaga Pemohon',
+  companyName = 'Lembaga / Perusahaan Pemohon',
+  submissionNumber = '',
+  title = '',
+  message,
+  dueDate = null,
+}: SendApplicantReminderEmailParams): Promise<SendEmailResult> {
+  try {
+    const transporter = await getTransporter();
+    const portalUrl = getPortalUrl();
+    const subject = `[PENGINGAT RESMI DSN-MUI] Tindak Lanjut Permohonan: ${companyName}${submissionNumber ? ` [${submissionNumber}]` : ''}`;
+
+    const formattedDueDate = dueDate ? new Date(dueDate).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }) : null;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px 0; }
+    .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; padding: 32px 28px; text-align: center; }
+    .badge { display: inline-block; background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+    .content { padding: 32px 28px; line-height: 1.6; }
+    .due-alert { background: #fef2f2; border: 2px solid #fecaca; border-radius: 14px; padding: 16px 20px; margin: 20px 0; text-align: center; }
+    .due-title { color: #dc2626; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+    .due-date { color: #991b1b; font-size: 17px; font-weight: 800; margin-top: 4px; }
+    .message-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin: 18px 0; font-size: 13.5px; color: #334155; }
+    .btn { display: inline-block; background: #006633; color: #ffffff !important; font-weight: 700; font-size: 13px; text-decoration: none; padding: 12px 28px; border-radius: 12px; margin: 16px 0; }
+    .footer { text-align: center; padding: 20px 28px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="badge">Dewan Syariah Nasional MUI</span>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 800;">Pengingat Tindak Lanjut Permohonan</h1>
+      <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 13px;">Sekretariat DSN-MUI Digital (Amanah)</p>
+    </div>
+    <div class="content">
+      <p>Kepada Yth.<br><strong>${recipientName}</strong><br>${companyName}</p>
+      
+      <p>Bersama ini kami mengingatkan bahwa terdapat tindak lanjut / feedback yang membutuhkan respons dari pihak Bapak/Ibu terkait permohonan <strong>${submissionNumber || title || 'Kesesuaian Syariah'}</strong>.</p>
+
+      ${formattedDueDate ? `
+      <div class="due-alert">
+        <div class="due-title">⚠️ Batas Waktu Respon (Due Date)</div>
+        <div class="due-date">${formattedDueDate}</div>
+        <p style="font-size: 12px; color: #7f1d1d; margin: 6px 0 0 0;">Mohon memberikan tanggapan sebelum atau maksimal pada tanggal di atas.</p>
+      </div>
+      ` : ''}
+
+      <div class="message-box">
+        <strong>Pesan & Arahan dari Tim Sekretariat DSN-MUI:</strong>
+        <p style="margin: 8px 0 0 0; white-space: pre-wrap;">${message}</p>
+      </div>
+
+      <p>Silakan masuk ke Portal Publik Amanah untuk memperbarui dokumen atau memberikan tanggapan resmi.</p>
+
+      <div style="text-align: center; margin-top: 24px;">
+        <a href="${portalUrl}" class="btn">Buka Portal Pengajuan Amanah</a>
+      </div>
+    </div>
+    <div class="footer">
+      Email ini dikirim resmi oleh Sistem Digital DSN-MUI Amanah.<br>
+      © ${new Date().getFullYear()} Dewan Syariah Nasional - Majelis Ulama Indonesia.
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    const info = await transporter.sendMail({
+      from: getFromAddress(),
+      to: toEmail,
+      subject,
+      html: htmlContent,
+      text: `Pengingat DSN-MUI untuk ${companyName}.\n${formattedDueDate ? `Batas Waktu Respon: ${formattedDueDate}\n\n` : ''}${message}`,
+    });
+
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error(`[Mailer] Failed to send reminder email to ${toEmail}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 7. SEND REPLY EMAIL WITH ATTACHMENTS (BALAS SURAT MASUK DENGAN EMAIL & LAMPIRAN)
+ */
+export interface SendReplyEmailWithAttachmentsParams {
+  toEmail: string;
+  subject: string;
+  message: string;
+  senderName?: string;
+  attachments?: Array<{
+    filename: string;
+    path?: string;
+    content?: Buffer;
+    contentType?: string;
+  }>;
+}
+
+export async function sendReplyEmailWithAttachments({
+  toEmail,
+  subject,
+  message,
+  senderName = 'Sekretariat DSN-MUI',
+  attachments = [],
+}: SendReplyEmailWithAttachmentsParams): Promise<SendEmailResult> {
+  try {
+    const transporter = await getTransporter();
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px 0; }
+    .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .header { background: #006633; color: #ffffff; padding: 28px 24px; }
+    .content { padding: 32px 28px; line-height: 1.6; font-size: 14px; }
+    .body-text { white-space: pre-wrap; margin: 20px 0; }
+    .attach-badge { display: inline-block; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: #475569; margin-top: 12px; }
+    .footer { text-align: center; padding: 20px 28px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 800;">Dewan Syariah Nasional - Majelis Ulama Indonesia</h2>
+      <p style="margin: 4px 0 0 0; opacity: 0.85; font-size: 12px;">Tanggapan & Komunikasi Resmi Persuratan</p>
+    </div>
+    <div class="content">
+      <p>Assalamu’alaikum Warahmatullah Wabarakatuh,</p>
+      <div class="body-text">${message}</div>
+      <p>Wassalamu’alaikum Warahmatullah Wabarakatuh,<br><br><strong>${senderName}</strong><br>Dewan Syariah Nasional - Majelis Ulama Indonesia</p>
+      ${attachments && attachments.length > 0 ? `<div class="attach-badge">📎 Terdapat ${attachments.length} Berkas Lampiran Tersemat</div>` : ''}
+    </div>
+    <div class="footer">
+      Surat/Email ini dikirim resmi melalui Sistem Administrasi Persuratan Amanah DSN-MUI.<br>
+      © ${new Date().getFullYear()} DSN-MUI Pusat.
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    const mailOptions: any = {
+      from: getFromAddress(),
+      to: toEmail,
+      subject,
+      html: htmlContent,
+      text: message,
+    };
+
+    if (attachments && attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error(`[Mailer] Failed to send reply email to ${toEmail}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 8. SEND INTERVIEW INVITATION EMAIL (UNDANGAN WAWANCARA UJI KEPATUTAN & KELAYAKAN DPS / RS)
+ */
+export interface SendInterviewInvitationEmailParams {
+  toEmail: string;
+  ccEmail?: string | undefined;
+  recipientName?: string | undefined;
+  companyName?: string | undefined;
+  submissionId?: string | undefined;
+  submissionNumber?: string | undefined;
+  title?: string | undefined;
+  invitationNumber: string;
+  round?: number | undefined;
+  interviewDate: string;
+  interviewTime: string;
+  format?: 'OFFLINE' | 'ONLINE' | 'HYBRID' | string | undefined;
+  venue?: string | undefined;
+  zoomUrl?: string | null | undefined;
+  zoomMeetingId?: string | null | undefined;
+  zoomPasscode?: string | null | undefined;
+  candidates?: string[] | undefined;
+  dresscode?: string | undefined;
+  requirements?: string | undefined;
+  contactPerson?: string | undefined;
+  notes?: string | null | undefined;
+  signatoryName?: string | undefined;
+  signatoryRole?: string | undefined;
+  outgoingLetterNumber?: string | null | undefined;
+  outgoingLetterTitle?: string | null | undefined;
+  outgoingLetterPath?: string | null | undefined;
+  outgoingLetterFileName?: string | null | undefined;
+}
+
+export async function sendInterviewInvitationEmail({
+  toEmail,
+  ccEmail,
+  recipientName = 'Pimpinan Lembaga Pemohon',
+  companyName = 'Lembaga / Perusahaan Pemohon',
+  submissionId = '',
+  submissionNumber = '',
+  title = '',
+  invitationNumber,
+  round = 1,
+  interviewDate,
+  interviewTime,
+  format = 'OFFLINE',
+  venue = 'Kantor DSN MUI Jl. Dempo No. 19 Pegangsaan, Menteng, Jakarta Pusat 10320',
+  zoomUrl,
+  zoomMeetingId,
+  zoomPasscode,
+  candidates = ['Calon Anggota Dewan Pengawas Syariah'],
+  dresscode = 'Pakaian Sipil Lengkap / Batik Lengan Panjang / Jas Rapi',
+  requirements = 'Membawa berkas fisik asli, portofolio riwayat hidup, serta bahan pemaparan.',
+  contactPerson = 'Sekretariat DSN-MUI (021-3904141 / wa.me/6281234567890)',
+  notes = '',
+  signatoryName = 'K.H. M. Cholil Nafis, Lc., Ph.D.',
+  signatoryRole = 'Ketua DSN MUI',
+  outgoingLetterNumber,
+  outgoingLetterTitle,
+  outgoingLetterPath,
+  outgoingLetterFileName,
+}: SendInterviewInvitationEmailParams): Promise<SendEmailResult> {
+  try {
+    const transporter = await getTransporter();
+    const portalUrl = getPortalUrl();
+    const targetDashboardUrl = submissionId ? `${portalUrl}/submissions/${submissionId}` : portalUrl;
+    const formatLabel =
+      format === 'ONLINE'
+        ? 'Daring (Zoom Meeting DSN-MUI)'
+        : format === 'HYBRID'
+        ? 'Hybrid (Tatap Muka & Daring)'
+        : 'Tatap Muka (Offline)';
+
+    const subject = `Undangan Wawancara Uji Kepatutan & Kelayakan DSN-MUI (Putaran Ke-${round}) - ${companyName}${
+      invitationNumber ? ` [${invitationNumber}]` : ''
+    }`;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px 0; }
+    .card { max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.07); border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #006633 0%, #0d9488 100%); color: #ffffff; padding: 32px 28px; text-align: center; }
+    .badge { display: inline-block; background: rgba(255,255,255,0.22); padding: 5px 14px; border-radius: 9999px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 10px; }
+    .content { padding: 32px 28px; line-height: 1.6; }
+    .greeting { font-size: 14px; margin-bottom: 16px; }
+    .info-box { background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 16px; padding: 20px; margin: 20px 0; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 13px; gap: 12px; }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-label { color: #475569; font-weight: 600; flex-shrink: 0; }
+    .info-val { color: #0f172a; font-weight: 700; text-align: right; word-break: break-word; }
+    .attached-letter-box { background: #eff6ff; border: 1.5px solid #93c5fd; border-radius: 14px; padding: 16px 18px; margin: 18px 0; }
+    .btn { display: inline-block; background: #006633; color: #ffffff !important; font-weight: 800; font-size: 13px; text-decoration: none; padding: 14px 32px; border-radius: 14px; margin: 20px 0; box-shadow: 0 4px 14px rgba(0,102,51,0.25); }
+    .footer { text-align: center; padding: 22px 28px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="badge">Dewan Syariah Nasional - MUI</span>
+      <h1 style="margin: 0; font-size: 21px; font-weight: 800;">Undangan Wawancara Uji Kepatutan & Kelayakan</h1>
+      <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 13px;">Tahap Asesmen Rekomendasi Dewan Pengawas Syariah (Putaran Ke-${round})</p>
+    </div>
+    <div class="content">
+      <div class="greeting">
+        Kepada Yth.<br>
+        <strong>${recipientName}</strong><br>
+        ${companyName}
+      </div>
+
+      <p style="font-size: 13px; color: #334155;">
+        Sehubungan dengan permohonan rekomendasi Dewan Pengawas Syariah (DPS) melalui sistem persuratan DSN-MUI, bersama ini kami sampaikan <strong>Surat Undangan Wawancara Resmi</strong> untuk menghadiri tahapan Uji Kepatutan dan Kelayakan (<em>Fit and Proper Test</em>).
+      </p>
+
+      ${
+        outgoingLetterNumber
+          ? `<div class="attached-letter-box">
+              <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #1d4ed8; margin-bottom: 4px;">
+                📄 Surat Keluar DSN-MUI Terlampir
+              </div>
+              <div style="font-size: 13px; font-weight: 700; color: #1e3a8a;">
+                Nomor Surat: <span style="font-family: monospace;">${outgoingLetterNumber}</span>
+              </div>
+              ${outgoingLetterTitle ? `<div style="font-size: 12px; color: #3b82f6; margin-top: 2px;">Perihal: ${outgoingLetterTitle}</div>` : ''}
+              ${outgoingLetterPath ? `<div style="font-size: 11px; color: #059669; font-weight: 600; margin-top: 6px;">✓ Salinan PDF surat resmi tersemat sebagai lampiran email ini.</div>` : ''}
+            </div>`
+          : ''
+      }
+
+      <div class="info-box">
+        <div class="info-row"><span class="info-label">Nomor Pengajuan:</span><span class="info-val">${submissionNumber || '—'}</span></div>
+        <div class="info-row"><span class="info-label">Nomor Surat Undangan:</span><span class="info-val font-mono" style="font-family: monospace;">${invitationNumber}</span></div>
+        <div class="info-row"><span class="info-label">Hari & Tanggal:</span><span class="info-val">${interviewDate}</span></div>
+        <div class="info-row"><span class="info-label">Waktu Pelaksanaan:</span><span class="info-val">${interviewTime} WIB</span></div>
+        <div class="info-row"><span class="info-label">Format:</span><span class="info-val">${formatLabel}</span></div>
+        <div class="info-row"><span class="info-label">Lokasi:</span><span class="info-val">${venue}</span></div>
+        ${
+          zoomUrl
+            ? `<div class="info-row"><span class="info-label">Akses Zoom:</span><span class="info-val"><a href="${zoomUrl}" style="color: #2563eb; text-decoration: underline;">${zoomUrl}</a>${zoomMeetingId ? `<br><small style="color: #64748b;">ID: ${zoomMeetingId} | Passcode: ${zoomPasscode || '-'}</small>` : ''}</span></div>`
+            : ''
+        }
+        <div class="info-row"><span class="info-label">Peserta Diundang:</span><span class="info-val">${candidates.join(', ')}</span></div>
+        <div class="info-row"><span class="info-label">Ketentuan Busana:</span><span class="info-val">${dresscode}</span></div>
+        <div class="info-row"><span class="info-label">Pejabat Pengundang:</span><span class="info-val">${signatoryName} (${signatoryRole})</span></div>
+      </div>
+
+      ${
+        requirements
+          ? `<p style="font-size: 12.5px; color: #475569; margin: 12px 0;">
+              <strong>Ketentuan & Persyaratan:</strong><br>${requirements}
+            </p>`
+          : ''
+      }
+
+      ${
+        notes
+          ? `<p style="font-size: 12.5px; color: #475569; margin: 12px 0;">
+              <strong>Catatan:</strong><br>${notes}
+            </p>`
+          : ''
+      }
+
+      <div style="text-align: center; margin: 26px 0 16px 0;">
+        <a href="${targetDashboardUrl}" class="btn">Buka Dashboard & Lihat Surat Undangan</a>
+      </div>
+
+      <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 14px;">
+        Konfirmasi kehadiran & informasi: <strong>${contactPerson}</strong>
+      </p>
+    </div>
+    <div class="footer">
+      Email ini dikirim resmi oleh Sistem Persuratan Digital DSN-MUI (Amanah).<br>
+      © ${new Date().getFullYear()} Dewan Syariah Nasional - Majelis Ulama Indonesia.
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    const mailOptions: any = {
+      from: getFromAddress(),
+      to: toEmail,
+      subject,
+      html: htmlContent,
+      text: `Undangan Wawancara Uji Kepatutan & Kelayakan DSN-MUI (Putaran Ke-${round}) untuk ${companyName}.\nNo. Undangan: ${invitationNumber}\nTanggal: ${interviewDate}\nWaktu: ${interviewTime} WIB\nLokasi: ${venue}\nPeserta: ${candidates.join(', ')}\nLihat di Dashboard: ${targetDashboardUrl}`,
+    };
+
+    if (ccEmail && ccEmail !== toEmail) {
+      mailOptions.cc = ccEmail;
+    }
+
+    if (outgoingLetterPath && fs.existsSync(outgoingLetterPath)) {
+      mailOptions.attachments = [
+        {
+          filename: outgoingLetterFileName || 'Surat_Undangan_Resmi_DSN_MUI.pdf',
+          path: outgoingLetterPath,
+          contentType: 'application/pdf',
+        },
+      ];
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[Mailer] Interview invitation email sent to ${toEmail} (round ${round}, inv: ${invitationNumber}). MessageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error(`[Mailer] Failed to send interview invitation email to ${toEmail}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 
 

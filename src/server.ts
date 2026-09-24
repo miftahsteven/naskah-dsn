@@ -170,6 +170,46 @@ uploadsRouter.use(express.static(path.resolve(process.cwd(), '../uploads')));
 uploadsRouter.use(express.static('/var/www/mui-dsn-naskah/backend/uploads'));
 uploadsRouter.use(express.static('/var/www/mui-dsn-naskah/uploads'));
 
+// Fallback to fetch from remote production server if file not found locally
+uploadsRouter.use(async (req: Request, res: Response, next: NextFunction) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
+  const filename = path.basename(req.path);
+  if (!filename || filename === '.' || filename === '/') {
+    return next();
+  }
+  const cleanPath = req.path.replace(/^\/+/, '');
+  const targetDir = path.resolve(process.cwd(), 'uploads');
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  const targetPath = path.join(targetDir, filename);
+
+  const remoteBases = [
+    process.env.REMOTE_UPLOADS_BASE_URL,
+    'https://amanah.dsnmui.or.id',
+    'https://mui.mscode.id'
+  ].filter(Boolean) as string[];
+
+  for (const base of remoteBases) {
+    const url = `${base.replace(/\/+$/, '')}/uploads/${filename}`;
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const buffer = Buffer.from(await response.arrayBuffer());
+        await fs.promises.writeFile(targetPath, buffer);
+        const contentType = response.headers.get('content-type') || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        return res.sendFile(targetPath);
+      }
+    } catch {
+      // Continue to next base
+    }
+  }
+  next();
+});
+
 app.use('/uploads', uploadsRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/images', express.static(path.join(process.cwd(), 'public/images')));
