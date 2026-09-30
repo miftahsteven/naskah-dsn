@@ -380,6 +380,53 @@ router.get('/meta', authenticate, async (req: Request, res: Response) => {
   }
 });
 
+function computeDocumentDeliveryStatus(meetings: any[]) {
+  const list = Array.isArray(meetings) ? meetings : [];
+  let isSent = false;
+  let sentCount = 0;
+  let lastSentAt: string | null = null;
+  const sentRecipients: any[] = [];
+
+  for (const m of list) {
+    if (m.invitationSent) isSent = true;
+    const attendees = Array.isArray(m.attendees) ? m.attendees : [];
+    for (const att of attendees) {
+      if (att.invitationSent) {
+        sentCount++;
+        sentRecipients.push({
+          name: att.name,
+          email: att.email,
+          role: att.role,
+          lastSentAt: att.lastSentAt,
+        });
+        if (att.lastSentAt && (!lastSentAt || new Date(att.lastSentAt) > new Date(lastSentAt))) {
+          lastSentAt = att.lastSentAt;
+        }
+      }
+    }
+  }
+
+  // Fallback if invitationSent is true but individual attendee flags weren't marked
+  if (isSent && sentCount === 0) {
+    for (const m of list) {
+      if (m.invitationSent) {
+        const attendees = Array.isArray(m.attendees) ? m.attendees : [];
+        sentCount += attendees.length > 0 ? attendees.length : 1;
+        if (m.updatedAt || m.createdAt) {
+          lastSentAt = (m.updatedAt || m.createdAt).toISOString();
+        }
+      }
+    }
+  }
+
+  return {
+    isSent: isSent || sentCount > 0,
+    sentCount,
+    lastSentAt,
+    recipients: sentRecipients,
+  };
+}
+
 // ── GET DOCUMENTS (With Filter) ──
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -441,6 +488,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const transformedDocs = documents.map(doc => ({
       ...doc,
       fileUrl: `${baseUrl}/documents/${doc.id}/download`,
+      deliveryStatus: computeDocumentDeliveryStatus(doc.meetings),
       versions: doc.versions.map(v => ({
         ...v,
         fileUrl: `${baseUrl}/documents/${doc.id}/versions/${v.id}/download`
@@ -735,6 +783,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         };
       }),
       shariaCertificate: document.publicSubmissions?.[0]?.certificate || null,
+      deliveryStatus: computeDocumentDeliveryStatus(document.meetings),
     };
     
     console.log('✅ Document returned with fileUrl:', transformedDocument.fileUrl);
@@ -4492,125 +4541,123 @@ router.post('/:id/send-invitations', authenticate, async (req: AuthRequest, res:
     const effectiveTitle = invitationTitle || document.title;
     const documentNumber = document.documentNumber || pdfData.documentNumber;
 
-    // 2. Manage Meeting / Agenda record
+    // 2. Manage Meeting / Agenda & Delivery record
     let linkedMeeting: any = null;
     let meetingAttendees: any[] = [];
 
-    if (syncAgenda) {
-      // Check if a meeting is already linked to this document
-      linkedMeeting = await prisma.meeting.findFirst({
-        where: { documentId: String(id) },
+    // Check if a meeting is already linked to this document
+    linkedMeeting = await prisma.meeting.findFirst({
+      where: { documentId: String(id) },
+    });
+
+    // Prepare attendee objects for all roles (TO, CC, BCC)
+    meetingAttendees = [
+      ...toRecipients.map((r: any) => ({
+        userId: r.userId || null,
+        name: r.name,
+        email: r.email,
+        phone: r.phone || '',
+        department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
+        jabatan: r.jabatan || '',
+        isExternal: !r.userId,
+        role: 'TO',
+        status: 'UNDANGAN',
+        invitationSent: false,
+      })),
+      ...ccRecipients.map((r: any) => ({
+        userId: r.userId || null,
+        name: r.name,
+        email: r.email,
+        phone: r.phone || '',
+        department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
+        jabatan: r.jabatan || '',
+        isExternal: !r.userId,
+        role: 'CC',
+        status: 'UNDANGAN',
+        invitationSent: false,
+      })),
+      ...bccRecipients.map((r: any) => ({
+        userId: r.userId || null,
+        name: r.name,
+        email: r.email,
+        phone: r.phone || '',
+        department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
+        jabatan: r.jabatan || '',
+        isExternal: !r.userId,
+        role: 'BCC',
+        status: 'UNDANGAN',
+        invitationSent: false,
+      })),
+    ];
+
+    const meetingDateTime = meetingDate ? new Date(meetingDate) : new Date();
+    const meetingLocation = location || 'Ruang Rapat Pleno DSN-MUI Lt. 3 / Zoom Cloud Meeting';
+
+    if (!linkedMeeting) {
+      // Auto-generate agendaNumber
+      const year = meetingDateTime.getFullYear();
+      const month = meetingDateTime.getMonth() + 1;
+      const romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+      const monthRoman = romanMonths[month - 1];
+
+      const startOfYear = new Date(year, 0, 1);
+      const endOfYear = new Date(year + 1, 0, 1);
+      const meetingCount = await prisma.meeting.count({
+        where: { createdAt: { gte: startOfYear, lt: endOfYear } },
       });
+      const seqMeeting = (meetingCount + 1).toString().padStart(3, '0');
 
-      // Prepare attendee objects for all roles (TO, CC, BCC)
-      meetingAttendees = [
-        ...toRecipients.map((r: any) => ({
-          userId: r.userId || null,
-          name: r.name,
-          email: r.email,
-          phone: r.phone || '',
-          department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
-          jabatan: r.jabatan || '',
-          isExternal: !r.userId,
-          role: 'TO',
-          status: 'UNDANGAN',
-          invitationSent: false,
-        })),
-        ...ccRecipients.map((r: any) => ({
-          userId: r.userId || null,
-          name: r.name,
-          email: r.email,
-          phone: r.phone || '',
-          department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
-          jabatan: r.jabatan || '',
-          isExternal: !r.userId,
-          role: 'CC',
-          status: 'UNDANGAN',
-          invitationSent: false,
-        })),
-        ...bccRecipients.map((r: any) => ({
-          userId: r.userId || null,
-          name: r.name,
-          email: r.email,
-          phone: r.phone || '',
-          department: r.department || (r.userId ? 'Internal' : 'Eksternal'),
-          jabatan: r.jabatan || '',
-          isExternal: !r.userId,
-          role: 'BCC',
-          status: 'UNDANGAN',
-          invitationSent: false,
-        })),
-      ];
-
-      const meetingDateTime = meetingDate ? new Date(meetingDate) : new Date();
-      const meetingLocation = location || 'Ruang Rapat Pleno DSN-MUI Lt. 3 / Zoom Cloud Meeting';
-
-      if (!linkedMeeting) {
-        // Auto-generate agendaNumber
-        const year = meetingDateTime.getFullYear();
-        const month = meetingDateTime.getMonth() + 1;
-        const romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
-        const monthRoman = romanMonths[month - 1];
-
-        const startOfYear = new Date(year, 0, 1);
-        const endOfYear = new Date(year + 1, 0, 1);
-        const meetingCount = await prisma.meeting.count({
-          where: { createdAt: { gte: startOfYear, lt: endOfYear } },
-        });
-        const seqMeeting = (meetingCount + 1).toString().padStart(3, '0');
-
-        let docNumPart = '000';
-        if (documentNumber) {
-          const parts = documentNumber.split('/');
-          if (parts.length > 0) docNumPart = parts[0] || '000';
-        }
-
-        let agendaNumber = `${seqMeeting}/${monthRoman}/${year}/${docNumPart}`;
-        const existingAgenda = await prisma.meeting.findUnique({ where: { agendaNumber } });
-        if (existingAgenda) {
-          agendaNumber = `${seqMeeting}-${Date.now()}/${monthRoman}/${year}/${docNumPart}`;
-        }
-
-        linkedMeeting = await prisma.meeting.create({
-          data: {
-            title: effectiveTitle,
-            agendaNumber,
-            dateTime: meetingDateTime,
-            location: meetingLocation,
-            description: customNote || `Undangan resmi untuk surat keluar: ${document.title} (${documentNumber || '-'})`,
-            targetType: 'CROSS_INTERNAL',
-            status: 'AKTIF',
-            attendees: meetingAttendees,
-            documentId: String(id),
-            invitationSent: false,
-          },
-        });
-      } else {
-        // Merge attendees so existing attendees are preserved
-        const existingAttendees = (linkedMeeting.attendees as any[]) || [];
-        const mergedAttendees = [...existingAttendees];
-        for (const newAtt of meetingAttendees) {
-          const idx = mergedAttendees.findIndex(
-            (a: any) => a.email?.toLowerCase() === newAtt.email?.toLowerCase()
-          );
-          if (idx >= 0) {
-            mergedAttendees[idx] = { ...mergedAttendees[idx], ...newAtt };
-          } else {
-            mergedAttendees.push(newAtt);
-          }
-        }
-
-        linkedMeeting = await prisma.meeting.update({
-          where: { id: linkedMeeting.id },
-          data: {
-            title: effectiveTitle,
-            dateTime: meetingDateTime,
-            location: meetingLocation,
-            status: 'AKTIF',
-            attendees: mergedAttendees,
-          },
-        });
+      let docNumPart = '000';
+      if (documentNumber) {
+        const parts = documentNumber.split('/');
+        if (parts.length > 0) docNumPart = parts[0] || '000';
       }
+
+      let agendaNumber = `${seqMeeting}/${monthRoman}/${year}/${docNumPart}`;
+      const existingAgenda = await prisma.meeting.findUnique({ where: { agendaNumber } });
+      if (existingAgenda) {
+        agendaNumber = `${seqMeeting}-${Date.now()}/${monthRoman}/${year}/${docNumPart}`;
+      }
+
+      linkedMeeting = await prisma.meeting.create({
+        data: {
+          title: effectiveTitle,
+          agendaNumber,
+          dateTime: meetingDateTime,
+          location: meetingLocation,
+          description: customNote || `Pengiriman resmi surat keluar: ${document.title} (${documentNumber || '-'})`,
+          targetType: 'CROSS_INTERNAL',
+          status: syncAgenda ? 'AKTIF' : 'ARSIP',
+          attendees: meetingAttendees,
+          documentId: String(id),
+          invitationSent: false,
+        },
+      });
+    } else {
+      // Merge attendees so existing attendees are preserved
+      const existingAttendees = (linkedMeeting.attendees as any[]) || [];
+      const mergedAttendees = [...existingAttendees];
+      for (const newAtt of meetingAttendees) {
+        const idx = mergedAttendees.findIndex(
+          (a: any) => a.email?.toLowerCase() === newAtt.email?.toLowerCase()
+        );
+        if (idx >= 0) {
+          mergedAttendees[idx] = { ...mergedAttendees[idx], ...newAtt };
+        } else {
+          mergedAttendees.push(newAtt);
+        }
+      }
+
+      linkedMeeting = await prisma.meeting.update({
+        where: { id: linkedMeeting.id },
+        data: {
+          title: effectiveTitle,
+          dateTime: meetingDateTime,
+          location: meetingLocation,
+          status: syncAgenda ? 'AKTIF' : linkedMeeting.status,
+          attendees: mergedAttendees,
+        },
+      });
     }
 
     // 3. Send emails

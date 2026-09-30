@@ -301,28 +301,28 @@ model DpsMember {
   id                 String   @id @default(uuid())
   status             String   // 'Calon DPS' | 'Aktif' | 'Nonaktif'
   jenisPenugasan     String   // 'Penuh Waktu' | 'Paruh Waktu'
-  tanggalPengajuan   String
+  tanggalPengajuan   String?
   namaLengkap        String
   fotoUrl            String?
-  tempatLahir        String
-  tanggalLahir       String
-  jenisKelamin       String
-  kewarganegaraan    String
-  agama              String
-  npwp               String
-  alamatDomisili     String
-  rtRw               String
-  kelurahan          String
-  kecamatan          String
-  kotaKabupaten      String
-  provinsi           String
-  kodePos            String
-  noTelepon          String
-  noHp               String
-  email              String
-  pendidikanTerakhir String
-  perguruanTinggi    String
-  tahunLulus         String
+  tempatLahir        String?
+  tanggalLahir       String?
+  jenisKelamin       String?
+  kewarganegaraan    String?
+  agama              String?
+  npwp               String?
+  alamatDomisili     String?
+  rtRw               String?
+  kelurahan          String?
+  kecamatan          String?
+  kotaKabupaten      String?
+  provinsi           String?
+  kodePos            String?
+  noTelepon          String?
+  noHp               String?
+  email              String?
+  pendidikanTerakhir String?
+  perguruanTinggi    String?
+  tahunLulus         String?
 
   // Tab 2 fields
   lembagaPenempatan  String?
@@ -341,8 +341,28 @@ model DpsMember {
   // Tab 4 fields
   dokumenFiles       Json?    // Array of { tipe, namaFile }
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  // Additional fields from Excel migration
+  externalId                 String?
+  namaNonGelar               String?
+  statusDiMui                String?
+  nik                        String?
+  aspm                       String?
+  wajibIkutPelatihan         String?
+  nomorVirtualAccount        String?
+  nomorSertifikatPelatihan   String?
+  linkSertifikatPelatihan    String?
+  nomorSertifikatLsp         String?
+  linkSertifikatLsp          String?
+  tanggalPaktaIntegritas     String?
+  linkPaktaIntegritas        String?
+  keterangan                 String?
+
+  // Relation to Company (applicant company)
+  companyId                  String?
+  company                    Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 }
 
 model DisposisiLog {
@@ -479,6 +499,7 @@ model Company {
   submissions     PublicSubmission[]
   certificates    ShariaCertificate[]
   notifications   PublicNotification[]
+  dpsMembers      DpsMember[]
 }
 
 model CompanyUser {
