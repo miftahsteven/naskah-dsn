@@ -53,6 +53,31 @@ function escapeHtml(text: string) {
     .replace(/'/g, '&#039;');
 }
 
+function cleanJobTitle(rawTitle?: string | null): string {
+  if (!rawTitle) return '';
+  let clean = String(rawTitle).trim();
+
+  // Strip English translation after slash (e.g. "Ketua/Chairman" -> "Ketua", "Sekretaris/Secretary" -> "Sekretaris")
+  if (clean.includes('/')) {
+    clean = (clean.split('/')[0] || '').trim();
+  }
+
+  // Strip trailing commas if any
+  clean = clean.replace(/,+$/, '').trim();
+
+  // Standalone English mappings if any
+  const lower = clean.toLowerCase();
+  if (lower === 'chairman') clean = 'Ketua';
+  else if (lower === 'vice chairman' || lower === 'vice chief') clean = 'Wakil Ketua';
+  else if (lower === 'secretary') clean = 'Sekretaris';
+  else if (lower === 'vice secretary') clean = 'Wakil Sekretaris';
+  else if (lower === 'treasurer') clean = 'Bendahara';
+  else if (lower === 'vice treasurer') clean = 'Wakil Bendahara';
+  else if (lower === 'member') clean = 'Anggota';
+
+  return clean;
+}
+
 const HTML_PDF_PRIMARY_COLOR = '#2563eb';
 
 export function getStaticImageBase64(filename: string, mimeType: string): string {
@@ -2930,8 +2955,8 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   const targetKanan = templateVariables.namaSekretaris || templateVariables.namaKanan;
   const targetSingle = templateVariables.namaPenandatangan;
 
-  // Filter signedSigs: ONLY include signers who actually belong to the letter's designated signature slots!
-  const validSigners: Array<{ sig: any; slot: 'kiri' | 'kanan' | 'single'; targetName: string; roleName: string; signerIndex: number }> = [];
+  // Filter signedSigs: ONLY include signers who actually belong to the letter's designated signature slots or dynamic workflow
+  const validSigners: Array<{ sig: any; slot: string; targetName: string; roleName: string; signerIndex: number }> = [];
 
   const userLowerKetua = ['cholil', 'nafis', 'adiwarman', 'hasanuddin'];
   const userLowerSekretaris = ['amirsyah', 'tambunan', 'asrori', 'anwar'];
@@ -2942,52 +2967,59 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     const isUserKetua = userLowerKetua.some(k => lowerName.includes(k));
     const isUserSekretaris = userLowerSekretaris.some(k => lowerName.includes(k));
 
-    let matchedSlot: 'kiri' | 'kanan' | 'single' | null = null;
+    let matchedSlot: string | null = null;
     let targetName = '';
     let roleName = '';
 
     if (targetKiri && (isNameMatch(fullName, targetKiri) || isUserKetua)) {
       matchedSlot = 'kiri';
       targetName = targetKiri;
-      roleName = templateVariables.jabatanKiri || 'Ketua';
+      roleName = cleanJobTitle(templateVariables.jabatanKiri) || 'Ketua';
     } else if (targetKanan && (isNameMatch(fullName, targetKanan) || isUserSekretaris)) {
       matchedSlot = 'kanan';
       targetName = targetKanan;
-      roleName = templateVariables.jabatanKanan || 'Sekretaris';
+      roleName = cleanJobTitle(templateVariables.jabatanKanan) || 'Sekretaris';
     } else if (targetSingle && isNameMatch(fullName, targetSingle)) {
       matchedSlot = 'single';
       targetName = targetSingle;
-      roleName = templateVariables.jabatanPenandatangan || 'Ketua';
+      roleName = cleanJobTitle(templateVariables.jabatanPenandatangan) || 'Ketua';
     } else if (!targetKiri && !targetKanan && !targetSingle) {
       // Fallback for letters without templateVariables metadata
-      if (isUserKetua) {
+      if (isUserKetua && !validSigners.some(v => v.slot === 'kiri')) {
         matchedSlot = 'kiri';
-        targetName = '';
+        targetName = fullName;
         roleName = 'Ketua';
-      } else if (isUserSekretaris) {
+      } else if (isUserSekretaris && !validSigners.some(v => v.slot === 'kanan')) {
         matchedSlot = 'kanan';
-        targetName = '';
+        targetName = fullName;
         roleName = 'Sekretaris';
-      } else if (signedSigs.length === 1) {
+      } else if (signedSigs.length === 1 && !validSigners.some(v => v.slot === 'single')) {
         matchedSlot = 'single';
-        targetName = '';
-        roleName = s.user?.jobTitle || 'Ketua';
+        targetName = fullName;
+        roleName = cleanJobTitle(s.user?.jobTitle) || 'Ketua';
+      } else {
+        matchedSlot = s.userId ? `signer-${s.userId}` : `signer-${validSigners.length}`;
+        targetName = fullName;
+        roleName = cleanJobTitle(s.user?.jobTitle) || 'Penandatangan';
       }
+    } else {
+      // Dynamic slot for universal letters or additional signers (e.g. 3+ signers)
+      matchedSlot = s.userId ? `signer-${s.userId}` : `signer-${validSigners.length}`;
+      targetName = fullName;
+      roleName = cleanJobTitle(s.user?.jobTitle) || 'Penandatangan';
     }
 
     if (matchedSlot) {
-      const alreadyHasSlot = validSigners.some(v => v.slot === matchedSlot);
+      const alreadyHasSlot = validSigners.some(v => v.slot === matchedSlot || (s.userId && v.sig.userId === s.userId));
       if (!alreadyHasSlot) {
         validSigners.push({
           sig: s,
           slot: matchedSlot,
           targetName,
           roleName,
-          signerIndex: matchedSlot === 'kiri' ? 0 : (matchedSlot === 'kanan' ? 1 : 0)
+          signerIndex: matchedSlot === 'kiri' ? 0 : (matchedSlot === 'kanan' ? 1 : validSigners.length)
         });
       }
-    } else {
-      console.log(`[injectSignaturesToHtml] Skipping signer ${fullName} because not matching any signature slot in template`);
     }
   }
 
@@ -3042,7 +3074,7 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
     return {
       signerIndex: v.signerIndex,
       fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
-      jobTitle: escapeHtml(s.user?.jobTitle || 'Pejabat'),
+      jobTitle: escapeHtml(cleanJobTitle(s.user?.jobTitle) || 'Pejabat'),
       roleName: v.roleName,
       signedAt: escapeHtml(new Date(s.signedAt).toLocaleString('id-ID', {
         timeZone: 'Asia/Jakarta',
@@ -3078,6 +3110,15 @@ async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUr
   // Clean up legacy footers and un-interpolated placeholders
   htmlContent = htmlContent.replace(/<table class="amanah-letter-footer"[\s\S]*?<\/table>/gi, '');
   htmlContent = htmlContent.replace(/\\?\${FOOTER_HTML}/g, '');
+
+  // Strip any English job title slash translations from existing rendered HTML
+  htmlContent = htmlContent
+    .replace(/Ketua\/Chairman/g, 'Ketua')
+    .replace(/Wakil Ketua\/Vice (?:Chairman|Chief)/g, 'Wakil Ketua')
+    .replace(/Sekretaris\/Secretary/g, 'Sekretaris')
+    .replace(/Wakil Sekretaris\/Vice Secretary/g, 'Wakil Sekretaris')
+    .replace(/Bendahara\/Treasurer/g, 'Bendahara')
+    .replace(/Wakil Bendahara\/Vice Treasurer/g, 'Wakil Bendahara');
 
   // Clean up unwanted borders and negative margins from raw HTML
   htmlContent = htmlContent.replace(/border-top:\s*1px\s*solid\s*#000000;?/gi, 'border-top: none;');

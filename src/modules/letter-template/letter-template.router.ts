@@ -111,6 +111,31 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { search, category, includeArchived } = req.query;
 
+    // Ensure SK-UNIVERSAL is present and up-to-date in database
+    const universalTpl = DEFAULT_TEMPLATES.find(t => t.code === 'SK-UNIVERSAL');
+    if (universalTpl) {
+      await prisma.letterTemplate.upsert({
+        where: { code: 'SK-UNIVERSAL' },
+        update: {
+          name: universalTpl.name,
+          category: universalTpl.category,
+          description: universalTpl.description,
+          htmlContent: universalTpl.htmlContent,
+          variables: universalTpl.variables,
+          isArchived: false,
+        },
+        create: {
+          name: universalTpl.name,
+          code: 'SK-UNIVERSAL',
+          category: universalTpl.category,
+          description: universalTpl.description,
+          htmlContent: universalTpl.htmlContent,
+          variables: universalTpl.variables,
+          isArchived: false,
+        },
+      }).catch(err => console.warn('Auto-seed SK-UNIVERSAL warning:', err));
+    }
+
     const templates = await prisma.letterTemplate.findMany({
       where: {
         ...(includeArchived === 'true' ? {} : { isArchived: false }),

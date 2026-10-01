@@ -70,7 +70,7 @@ const LETTERHEAD = `<!DOCTYPE html>
   </div>
 
   <div class="recipient-block">
-    <p style="margin-bottom:2px;">Kepada Yang Terhormat,</p>
+    <p style="margin-bottom:2px;">Kepada Yth.</p>
     <p style="font-weight:bold;margin-bottom:2px;">{{namaPenerima}}</p>
     <p>{{alamatPenerima}}</p>
   </div>

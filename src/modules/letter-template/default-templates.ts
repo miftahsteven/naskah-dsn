@@ -22,6 +22,96 @@ export const FOOTER_HTML = `<table class="amanah-letter-footer" style="width: 10
     </tr>
   </table>`;
 
+export const FULL_HTML_UNIVERSAL = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
+  \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
+
+  <!-- TANGGAL SURAT -->
+  <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
+      <tr>
+        <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">{{tempatDibuat}},&nbsp;</td>
+        <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
+          <span style="border-bottom: 1.5px solid #000; display: inline-block; padding-bottom: 0px; line-height: 1.05; white-space: nowrap;">{{tanggalHijriah}}</span>
+        </td>
+      </tr>
+      <tr>
+        <td></td>
+        <td style="padding: 2px 0 0 0; text-align: right; white-space: nowrap; line-height: 1.2;">{{tanggalMasehi}}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- META SECTION (Nomor, Lampiran, Hal) -->
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
+    <tr><td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td><td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{nomorSurat}}</td></tr>
+    <tr><td style="vertical-align: top; padding: 2px 0;">Lamp.</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{lampiran}}</td></tr>
+    <tr><td style="vertical-align: top; padding: 2px 0;">Hal</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="font-weight: bold; padding: 2px 0;">{{perihal}}</td></tr>
+  </table>
+
+  <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
+  <div style="margin-left: 75px; margin-right: 15px;">
+    <!-- KEPADA YTH (HINGGA DI TEMPAT) -->
+    <div style="margin-bottom: 14px; font-size: 10.5pt; line-height: 1.25;">
+      <div>Kepada Yth.</div>
+      <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{tujuanSurat}}</div>
+      <div>di -</div>
+      <div style="margin-left: 20px; font-weight: bold;">{{tempatTujuan}}</div>
+    </div>
+
+    <!-- ISI SURAT KUSTOM 100% (WYSIWYG) -->
+    <div class="letter-body-custom" style="font-size: 10.5pt; line-height: 1.35; color: #111827; min-height: 180px;">
+      {{isiSurat}}
+    </div>
+
+    <!-- TANDA TANGAN SECTION -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 24px; page-break-inside: avoid;">
+      <tr>
+        <td style="width: 45%; vertical-align: top; padding: 0; text-align: left;">
+          <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+            <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKetua}}</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 60px;"></div>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+          </div>
+        </td>
+        <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
+          <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+            <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanSekretaris}}</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 60px;"></div>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    \${FOOTER_HTML}
+  </div>
+
+  </div>
+</div>`;
+
+export const FULL_VARS_UNIVERSAL = [
+  { key: 'nomorSurat', label: 'Nomor Surat', type: 'text', required: true, placeholder: 'B-0001/DSN-MUI/X/2026' },
+  { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '1 Oktober 2026 M' },
+  { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '19 Rabiul Akhir 1448 H' },
+  { key: 'tempatDibuat', label: 'Tempat Dibuat', type: 'text', required: true, placeholder: 'Jakarta', defaultValue: 'Jakarta' },
+  { key: 'lampiran', label: 'Lampiran', type: 'text', required: false, placeholder: '-' },
+  { key: 'perihal', label: 'Perihal / Hal', type: 'text', required: true, placeholder: 'Perihal Surat Keluar' },
+  { key: 'tujuanSurat', label: 'Tujuan Surat (Kepada Yth.)', type: 'textarea', required: true, placeholder: '1. Pimpinan / Anggota Organisasi\\n2. Pengurus Lembaga Terkait', defaultValue: 'Pimpinan / Anggota Organisasi' },
+  { key: 'tempatTujuan', label: 'Tempat / Kota Penerima', type: 'text', required: true, placeholder: 'Tempat', defaultValue: 'Tempat' },
+  { key: 'isiSurat', label: 'Isi Surat (Kustom 100%)', type: 'wysiwyg', required: true, placeholder: 'Tulis isi surat di sini atau paste dari Word / PDF...' },
+  { key: 'headerTtd', label: 'Header Tanda Tangan', type: 'textarea', required: true, placeholder: 'BADAN PENGURUS\\nDEWAN SYARIAH NASIONAL-\\nMAJELIS ULAMA INDONESIA', defaultValue: 'BADAN PENGURUS\\nDEWAN SYARIAH NASIONAL-\\nMAJELIS ULAMA INDONESIA' },
+  { key: 'jabatanKetua', label: 'Jabatan Penandatangan 1', type: 'text', required: true, placeholder: 'Wakil Ketua,', defaultValue: 'Wakil Ketua,' },
+  { key: 'namaKetua', label: 'Nama Ketua / Penandatangan 1', type: 'text', required: true, placeholder: 'K.H. M. Cholil Nafis, Lc., Ph.D.', defaultValue: 'K.H. M. Cholil Nafis, Lc., Ph.D.' },
+  { key: 'jabatanSekretaris', label: 'Jabatan Penandatangan 2', type: 'text', required: true, placeholder: 'Wakil Sekretaris,', defaultValue: 'Wakil Sekretaris,' },
+  { key: 'namaSekretaris', label: 'Nama Sekretaris / Penandatangan 2', type: 'text', required: true, placeholder: 'Dr. H. Anwar Abbas, M.M., M.Ag.', defaultValue: 'Dr. H. Anwar Abbas, M.M., M.Ag.' },
+];
+
 export const FULL_HTML_PKS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
@@ -2659,6 +2749,14 @@ export const FULL_VARS_SERTIFIKAT_KS_RS = [
 ];
 
 export const DEFAULT_TEMPLATES = [
+  {
+    name: 'Surat Keluar Universal (Kustom Bebas)',
+    code: 'SK-UNIVERSAL',
+    category: 'Universal',
+    description: 'Template surat keluar universal standar resmi DSN-MUI dengan kop surat, logo, nomor, lampiran, perihal, tujuan, tanda tangan resmi, dan isi surat 100% kustom.',
+    htmlContent: FULL_HTML_UNIVERSAL,
+    variables: FULL_VARS_UNIVERSAL,
+  },
   {
     name: 'Pernyataan Kesesuaian Syariah',
     code: 'PKS-SYARIAH',
