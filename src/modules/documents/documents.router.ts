@@ -31,7 +31,7 @@ import qrcode from 'qrcode';
 import puppeteer from 'puppeteer';
 import { PDFDocument } from 'pdf-lib';
 
-function getApiBaseUrl(req: Request) {
+export function getApiBaseUrl(req: Request) {
   const rawProtoHeader = req.get('x-forwarded-proto') || req.get('x-forwarded-protocol');
   const headerValue: string = typeof rawProtoHeader === 'string' ? rawProtoHeader : '';
   const protocol = (headerValue.split(',')[0] ?? '').trim();
@@ -2704,7 +2704,7 @@ function resolveExistingFilePath(fileUrl: string): string | null {
   return null;
 }
 
-async function ensureExistingFilePath(fileUrl: string, _docId?: string, _authHeader?: string): Promise<string | null> {
+export async function ensureExistingFilePath(fileUrl: string, _docId?: string, _authHeader?: string): Promise<string | null> {
   const local = resolveExistingFilePath(fileUrl);
   if (local) return local;
 
@@ -2918,7 +2918,7 @@ async function getCachedQrCode(payload: string): Promise<string> {
   return qrDataUrl;
 }
 
-async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
+export async function injectSignaturesToHtml(rawHtml: string, signatures: any[], baseUrl: string): Promise<string> {
   const signedSigs = (signatures || []).filter((s: any) => s.signedAt);
 
   // Parse metadata from HTML

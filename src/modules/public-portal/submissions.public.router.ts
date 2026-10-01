@@ -9,6 +9,11 @@ import {
   type PublicAuthRequest,
 } from './middleware.public.js';
 import { sendSubmissionConfirmationEmail } from '../../lib/mailer.service.js';
+import {
+  injectSignaturesToHtml,
+  getApiBaseUrl,
+  ensureExistingFilePath,
+} from '../documents/documents.router.js';
 
 const router = Router();
 
@@ -387,6 +392,170 @@ router.get('/:id', authenticatePublic, async (req: PublicAuthRequest, res: Respo
   }
 });
 
+// ── GET ATTACHED INTERVIEW INVITATION LETTER CONTENT (HTML or PDF) ──
+router.get('/:id/invitation-letter/content', authenticatePublic, async (req: PublicAuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.publicUser!.companyId;
+
+    const submission = await prisma.publicSubmission.findFirst({
+      where: { id: String(id), companyId },
+      include: { company: true },
+    });
+
+    if (!submission) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Pengajuan tidak ditemukan atau Anda tidak memiliki akses.',
+      });
+    }
+
+    const invitation = (submission.interviewInvitation as any) || null;
+    if (!invitation) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Belum ada agenda wawancara yang dijadwalkan.',
+      });
+    }
+
+    let doc: any = null;
+    if (invitation.outgoingLetterId) {
+      doc = await prisma.document.findUnique({
+        where: { id: String(invitation.outgoingLetterId) },
+        include: {
+          versions: { orderBy: { versionNum: 'desc' }, take: 1 },
+          signatures: {
+            include: {
+              user: { select: { fullName: true, email: true, jobTitle: true } },
+            },
+          },
+          workflowInstances: {
+            include: {
+              steps: {
+                where: { status: 'APPROVED' },
+                include: {
+                  user: { select: { fullName: true, email: true, jobTitle: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+    } else if (invitation.outgoingLetterNumber) {
+      doc = await prisma.document.findFirst({
+        where: { documentNumber: String(invitation.outgoingLetterNumber) },
+        include: {
+          versions: { orderBy: { versionNum: 'desc' }, take: 1 },
+          signatures: {
+            include: {
+              user: { select: { fullName: true, email: true, jobTitle: true } },
+            },
+          },
+          workflowInstances: {
+            include: {
+              steps: {
+                where: { status: 'APPROVED' },
+                include: {
+                  user: { select: { fullName: true, email: true, jobTitle: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    let filePath: string | null = null;
+    let fileName = invitation.outgoingLetterFileName || '';
+    let fileUrl = invitation.outgoingLetterFileUrl || '';
+
+    if (doc?.versions?.[0]) {
+      const v = doc.versions[0];
+      fileName = v.fileName || fileName || 'Surat_Undangan.pdf';
+      fileUrl = v.fileUrl;
+      filePath = await ensureExistingFilePath(v.fileUrl, doc.id);
+    } else if (invitation.outgoingLetterFileUrl) {
+      filePath = await ensureExistingFilePath(invitation.outgoingLetterFileUrl);
+      if (!fileName) fileName = path.basename(invitation.outgoingLetterFileUrl);
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.json({
+        status: 'success',
+        data: {
+          type: 'none',
+          documentNumber: doc?.documentNumber || invitation.outgoingLetterNumber || invitation.invitationNumber,
+          title: doc?.title || invitation.outgoingLetterTitle || invitation.subject,
+          invitation,
+        },
+      });
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const isHtml = ext === '.html' || ext === '.htm' || fileName.toLowerCase().endsWith('.html');
+
+    if (isHtml) {
+      const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+
+      const allSignatures: any[] = [...(doc?.signatures || [])];
+      if (doc?.workflowInstances) {
+        doc.workflowInstances.forEach((wf: any) => {
+          (wf.steps || []).forEach((st: any) => {
+            if (st.status === 'APPROVED' && st.userId && (!st.roleId || st.roleId === 'PENANDATANGAN')) {
+              const exists = allSignatures.some((sig: any) => sig.userId === st.userId);
+              if (!exists) {
+                allSignatures.push({
+                  id: st.id,
+                  documentId: doc?.id,
+                  userId: st.userId,
+                  signedAt: st.actionedAt || st.updatedAt || new Date(),
+                  user: st.user,
+                });
+              }
+            }
+          });
+        });
+      }
+
+      const httpUrlBase = getApiBaseUrl(req) + '/';
+      const renderedHtml = await injectSignaturesToHtml(rawHtml, allSignatures, httpUrlBase);
+
+      return res.json({
+        status: 'success',
+        data: {
+          type: 'html',
+          htmlContent: renderedHtml,
+          documentNumber: doc?.documentNumber || invitation.outgoingLetterNumber || invitation.invitationNumber,
+          title: doc?.title || invitation.outgoingLetterTitle || invitation.subject,
+          fileName,
+          downloadUrl: `/api/public/submissions/${id}/invitation-letter/download`,
+          invitation,
+        },
+      });
+    } else {
+      return res.json({
+        status: 'success',
+        data: {
+          type: 'pdf',
+          fileUrl,
+          documentNumber: doc?.documentNumber || invitation.outgoingLetterNumber || invitation.invitationNumber,
+          title: doc?.title || invitation.outgoingLetterTitle || invitation.subject,
+          fileName,
+          downloadUrl: `/api/public/submissions/${id}/invitation-letter/download`,
+          invitation,
+        },
+      });
+    }
+  } catch (error: any) {
+    console.error('[Public Submissions] Error getting invitation letter content:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Gagal memuat dokumen surat undangan.',
+      error: error.message,
+    });
+  }
+});
+
 // ── DOWNLOAD ATTACHED INTERVIEW INVITATION LETTER (Surat Keluar DSN-MUI) ──
 router.get('/:id/invitation-letter/download', authenticatePublic, async (req: PublicAuthRequest, res: Response) => {
   try {
@@ -405,58 +574,108 @@ router.get('/:id/invitation-letter/download', authenticatePublic, async (req: Pu
     }
 
     const invitation = (submission.interviewInvitation as any) || null;
-    if (!invitation || (!invitation.outgoingLetterId && !invitation.outgoingLetterFileUrl)) {
+    if (!invitation || (!invitation.outgoingLetterId && !invitation.outgoingLetterFileUrl && !invitation.outgoingLetterNumber)) {
       return res.status(404).json({
         status: 'error',
         message: 'Surat undangan resmi belum dilampirkan pada wawancara ini.',
       });
     }
 
+    let doc: any = null;
+    if (invitation.outgoingLetterId) {
+      doc = await prisma.document.findUnique({
+        where: { id: String(invitation.outgoingLetterId) },
+        include: {
+          versions: { orderBy: { versionNum: 'desc' }, take: 1 },
+          signatures: {
+            include: {
+              user: { select: { fullName: true, email: true, jobTitle: true } },
+            },
+          },
+          workflowInstances: {
+            include: {
+              steps: {
+                where: { status: 'APPROVED' },
+                include: {
+                  user: { select: { fullName: true, email: true, jobTitle: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+    } else if (invitation.outgoingLetterNumber) {
+      doc = await prisma.document.findFirst({
+        where: { documentNumber: String(invitation.outgoingLetterNumber) },
+        include: {
+          versions: { orderBy: { versionNum: 'desc' }, take: 1 },
+          signatures: {
+            include: {
+              user: { select: { fullName: true, email: true, jobTitle: true } },
+            },
+          },
+          workflowInstances: {
+            include: {
+              steps: {
+                where: { status: 'APPROVED' },
+                include: {
+                  user: { select: { fullName: true, email: true, jobTitle: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
     let filePath: string | null = null;
     let fileName =
       invitation.outgoingLetterFileName ||
-      `Surat_Undangan_${(invitation.invitationNumber || 'DSN_MUI').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      `Surat_Undangan_${(invitation.outgoingLetterNumber || invitation.invitationNumber || 'DSN_MUI').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
 
-    if (invitation.outgoingLetterId) {
-      const doc = await prisma.document.findUnique({
-        where: { id: String(invitation.outgoingLetterId) },
-        include: { versions: { orderBy: { versionNum: 'desc' }, take: 1 } },
-      });
-      if (doc?.versions?.[0]) {
-        const v = doc.versions[0];
-        fileName = v.fileName || fileName;
-        filePath = path.resolve(process.cwd(), v.fileUrl.startsWith('/') ? v.fileUrl.slice(1) : v.fileUrl);
-        if (!fs.existsSync(filePath)) {
-          const uploadsCandidate = path.resolve(process.cwd(), 'uploads', path.basename(v.fileUrl));
-          if (fs.existsSync(uploadsCandidate)) {
-            filePath = uploadsCandidate;
-          }
-        }
-      }
-    }
-
-    if (!filePath || !fs.existsSync(filePath)) {
-      if (invitation.outgoingLetterFileUrl) {
-        const raw = invitation.outgoingLetterFileUrl;
-        const candidate = path.resolve(process.cwd(), raw.startsWith('/') ? raw.slice(1) : raw);
-        if (fs.existsSync(candidate)) {
-          filePath = candidate;
-        } else {
-          const uploadsCandidate = path.resolve(process.cwd(), 'uploads', path.basename(raw));
-          if (fs.existsSync(uploadsCandidate)) {
-            filePath = uploadsCandidate;
-          }
-        }
-      }
+    if (doc?.versions?.[0]) {
+      const v = doc.versions[0];
+      fileName = v.fileName || fileName;
+      filePath = await ensureExistingFilePath(v.fileUrl, doc.id);
+    } else if (invitation.outgoingLetterFileUrl) {
+      filePath = await ensureExistingFilePath(invitation.outgoingLetterFileUrl);
     }
 
     if (filePath && fs.existsSync(filePath)) {
-      const ext = path.extname(fileName).toLowerCase();
-      if (ext === '.pdf') {
-        res.setHeader('Content-Type', 'application/pdf');
-      } else if (ext === '.html') {
+      const ext = path.extname(filePath).toLowerCase();
+      const isHtml = ext === '.html' || ext === '.htm' || fileName.toLowerCase().endsWith('.html');
+
+      if (isHtml) {
+        const rawHtml = await fs.promises.readFile(filePath, 'utf8');
+        const allSignatures: any[] = [...(doc?.signatures || [])];
+        if (doc?.workflowInstances) {
+          doc.workflowInstances.forEach((wf: any) => {
+            (wf.steps || []).forEach((st: any) => {
+              if (st.status === 'APPROVED' && st.userId && (!st.roleId || st.roleId === 'PENANDATANGAN')) {
+                const exists = allSignatures.some((sig: any) => sig.userId === st.userId);
+                if (!exists) {
+                  allSignatures.push({
+                    id: st.id,
+                    documentId: doc?.id,
+                    userId: st.userId,
+                    signedAt: st.actionedAt || st.updatedAt || new Date(),
+                    user: st.user,
+                  });
+                }
+              }
+            });
+          });
+        }
+        const httpUrlBase = getApiBaseUrl(req) + '/';
+        const renderedHtml = await injectSignaturesToHtml(rawHtml, allSignatures, httpUrlBase);
+
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.end(renderedHtml);
       }
+
+      res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
       return res.sendFile(filePath);
     }

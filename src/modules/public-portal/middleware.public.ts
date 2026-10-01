@@ -36,14 +36,20 @@ export const authenticatePublic = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    let token: string | null = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1] || null;
+    } else if (req.query.token && typeof req.query.token === 'string') {
+      token = req.query.token;
+    }
+
+    if (!token) {
       return res.status(401).json({
         status: 'error',
         message: 'Akses ditolak: Token otentikasi tidak ditemukan. Silakan login kembali.',
       });
     }
 
-    const token = authHeader.split(' ')[1] || '';
     const decoded = verifyPublicToken(token);
 
     if (!decoded || !decoded.id || !decoded.companyId) {

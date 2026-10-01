@@ -28,7 +28,17 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
   if (!token) {
     return res.status(401).json({ status: 'error', message: 'Unauthorized: No token provided' });
   }
-  const decoded = AuthService.verifyToken(token);
+  let decoded = AuthService.verifyToken(token);
+
+  if (!decoded) {
+    const refreshToken = (req.headers['x-refresh-token'] as string) || (req.query.refreshToken as string);
+    if (refreshToken) {
+      const refreshDecoded = AuthService.verifyToken(refreshToken);
+      if (refreshDecoded && refreshDecoded.id) {
+        decoded = refreshDecoded;
+      }
+    }
+  }
 
   if (!decoded) {
     return res.status(401).json({ status: 'error', message: 'Unauthorized: Invalid or expired token' });
