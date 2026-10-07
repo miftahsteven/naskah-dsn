@@ -1,6 +1,6 @@
 
 import { calculateAttendees } from '../meeting/meeting.router.js';
-import { FOOTER_HTML } from '../letter-template/default-templates.js';
+import { FOOTER_HTML, normalizeTeamListToOrderedList } from '../letter-template/default-templates.js';
 
 import { Router } from 'express';
 import type { Response, Request } from 'express';
@@ -3126,9 +3126,20 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
   htmlContent = htmlContent.replace(/margin-left:\s*-30px;\s*margin-right:\s*-30px;/gi, 'margin-left: 0; margin-right: 0;');
   htmlContent = htmlContent.replace(/margin-left:\s*-40px;\s*margin-right:\s*-40px;/gi, 'margin-left: 0; margin-right: 0;');
 
-  // Remove any stray <br> tags directly inside <table>, <thead>, <tbody>, <tfoot>, <tr> which trigger browser foster-parenting gaps
+  // Remove any stray <br> tags directly outside <td>/<th> (e.g. between <table>, <tbody>, <tr>) which trigger browser foster-parenting gaps
   htmlContent = htmlContent.replace(/(<table\b[^>]*>[\s\S]*?<\/table>)/gi, (tbl) => {
-    return tbl.replace(/<br\s*\/?>/gi, '');
+    return tbl
+      .replace(/(<table\b[^>]*>)\s*<br\s*\/?>/gi, '$1')
+      .replace(/<br\s*\/?>\s*(<\/table>)/gi, '$1')
+      .replace(/(<thead\b[^>]*>)\s*<br\s*\/?>/gi, '$1')
+      .replace(/<br\s*\/?>\s*(<\/thead>)/gi, '$1')
+      .replace(/(<tbody\b[^>]*>)\s*<br\s*\/?>/gi, '$1')
+      .replace(/<br\s*\/?>\s*(<\/tbody>)/gi, '$1')
+      .replace(/(<tfoot\b[^>]*>)\s*<br\s*\/?>/gi, '$1')
+      .replace(/<br\s*\/?>\s*(<\/tfoot>)/gi, '$1')
+      .replace(/(<tr\b[^>]*>)\s*<br\s*\/?>/gi, '$1')
+      .replace(/<br\s*\/?>\s*(<\/tr>)/gi, '$1')
+      .replace(/(<\/td>|<\/th>)\s*<br\s*\/?>\s*(<td\b|<th\b)/gi, '$1$2');
   });
 
   // Replace any relative or absolute image references with self-contained Base64 Data URLs
@@ -3152,6 +3163,42 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
     /(<p[^>]*>)\s*[Aa]ssalamu([’'‘`]?alaikum\s+Warahmatullah\s+Wabarakatuh)\.\s*(<\/p>)/gi,
     '$1Wassalamu’alaikum Warahmatullah Wabarakatuh.$3'
   );
+
+  // Normalize Nama Tim table cell to semantic <ol> ordered list if not already formatted
+  htmlContent = htmlContent.replace(
+    /(<td[^>]*>\s*Nama\s+Tim\s*<\/td>\s*<td[^>]*>\s*:\s*<\/td>\s*<td[^>]*>)([\s\S]*?)(<\/td>)/gi,
+    (_match, prefix, content, suffix) => {
+      return prefix + normalizeTeamListToOrderedList(content) + suffix;
+    }
+  );
+
+  // Ensure ordered list style is injected for proper numbering & compact layout
+  if (htmlContent.includes('<ol') && !htmlContent.includes('list-style-type: decimal')) {
+    const listStyle = `
+<style>
+  ol, ul {
+    margin-top: 1px !important;
+    margin-bottom: 3px !important;
+    padding-left: 20px !important;
+  }
+  ol {
+    list-style-type: decimal !important;
+  }
+  ul {
+    list-style-type: disc !important;
+  }
+  li {
+    font-size: 9.5pt !important;
+    line-height: 1.25 !important;
+    margin-bottom: 1px !important;
+  }
+</style>`;
+    if (htmlContent.includes('</head>')) {
+      htmlContent = htmlContent.replace('</head>', `${listStyle}\n</head>`);
+    } else {
+      htmlContent = `${listStyle}\n${htmlContent}`;
+    }
+  }
 
   // Check if document is a landscape certificate
   const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);

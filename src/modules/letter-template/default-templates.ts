@@ -1238,6 +1238,8 @@ export const FULL_VARS_U0000 = [
   { key: 'namaSekretaris', label: 'Nama Sekretaris', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' }
 ];
 
+export const DEFAULT_PEMBUKA_SURAT_TUGAS = `<p style="text-align: justify; margin-top: 0; margin-bottom: 0; text-indent: 30px; line-height: 1.25;">Menunjuk surat dari Lembaga Penggerak Ekonomi Umat (LPEU) Majelis Ulama Indonesia No. A-120/LPEU MUI/VII/2026 tertanggal 28 Juli 2026, dan berdasarkan keputusan Rapat Kesekretarisan Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) tanggal 6 Agustus 2026, DSN-MUI dengan ini <strong>menugaskan</strong> kepada:</p>`;
+
 export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
   \${HEADER_HTML}
 
@@ -1249,10 +1251,10 @@ export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif
     <div style="font-size: 10.5pt; margin-top: 2px;">No: {{nomorSurat}}</div>
   </div>
 
-  <!-- KONSIDERANS PEMBUKA -->
-  <p style="text-align: justify; margin-top: 0; margin-bottom: 8px; text-indent: 30px; line-height: 1.25;">
-    Menunjuk surat dari {{namaLembagaPengundang}} No. {{nomorSuratPengundang}} tertanggal {{tanggalSuratPengundang}}, dan berdasarkan keputusan Rapat {{namaRapatPengambilKeputusan}} Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) tanggal {{tanggalRapat}}, DSN-MUI dengan ini <strong>menugaskan</strong> kepada:
-  </p>
+  <!-- KONSIDERANS PEMBUKA (WYSIWYG) -->
+  <div style="text-align: justify; margin-top: 0; margin-bottom: 8px; line-height: 1.25;">
+    {{pembukaSurat}}
+  </div>
 
   <!-- TABEL RINCIAN PENUGASAN -->
   <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10.5pt; line-height: 1.25;">
@@ -1366,13 +1368,7 @@ export const FULL_HTML_SURAT_TUGAS = `<div style="font-family: Arial, sans-serif
 
 export const FULL_VARS_SURAT_TUGAS = [
   { key: 'nomorSurat', label: 'Nomor Surat Tugas', type: 'text', required: true, placeholder: 'ST-0650/DSN-MUI/VIII/2026', defaultValue: 'ST-0650/DSN-MUI/VIII/2026' },
-  { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '6 Agustus 2026 M', defaultValue: '6 Agustus 2026 M' },
-  { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '22 Shafar 1448 H', defaultValue: '22 Shafar 1448 H' },
-  { key: 'namaLembagaPengundang', label: 'Nama Lembaga Pengundang', type: 'text', required: true, placeholder: 'Lembaga Penggerak Ekonomi Umat (LPEU) Majelis Ulama Indonesia', defaultValue: 'Lembaga Penggerak Ekonomi Umat (LPEU) Majelis Ulama Indonesia' },
-  { key: 'nomorSuratPengundang', label: 'Nomor Surat Pengundang', type: 'text', required: true, placeholder: 'A-120/LPEU MUI/VII/2026', defaultValue: 'A-120/LPEU MUI/VII/2026' },
-  { key: 'tanggalSuratPengundang', label: 'Tanggal Surat Pengundang', type: 'text', required: true, placeholder: '28 Juli 2026', defaultValue: '28 Juli 2026' },
-  { key: 'namaRapatPengambilKeputusan', label: 'Nama Rapat Pengambil Keputusan', type: 'text', required: true, placeholder: 'Kesekretarisan', defaultValue: 'Kesekretarisan' },
-  { key: 'tanggalRapat', label: 'Tanggal Rapat Keputusan', type: 'text', required: true, placeholder: '6 Agustus 2026', defaultValue: '6 Agustus 2026' },
+  { key: 'pembukaSurat', label: 'Kalimat Pembuka Surat Tugas (Konsiderans)', type: 'wysiwyg', required: true, defaultValue: DEFAULT_PEMBUKA_SURAT_TUGAS },
   { key: 'daftarNamaPenugasan', label: 'Nama yang Ditugaskan', type: 'textarea', required: true, placeholder: '1. Dr. Asep Supyadillah, M.Ag.\n2. Dr. Yulizar Djamaluddin Sanrego, M.Ec.', defaultValue: '1. Dr. Asep Supyadillah, M.Ag.\n2. Dr. Yulizar Djamaluddin Sanrego, M.Ec.' },
   { key: 'jabatan', label: 'Jabatan', type: 'textarea', required: true, placeholder: '1. Koordinator Bidang Layanan, Literasi, Relasi Industri dan Regulasi\n2. Anggota Bidang Fatwa', defaultValue: '1. Koordinator Bidang Layanan, Literasi, Relasi Industri dan Regulasi\n2. Anggota Bidang Fatwa' },
   { key: 'keperluan', label: 'Keperluan / Acara Penugasan', type: 'textarea', required: true, placeholder: 'menghadiri kegiatan Risk Based Performance Management Training, yang diselenggarakan oleh LPEU MUI, yang insyaAllah dilaksanakan pada:', defaultValue: 'menghadiri kegiatan Risk Based Performance Management Training, yang diselenggarakan oleh LPEU MUI, yang insyaAllah dilaksanakan pada:' },
@@ -1380,10 +1376,12 @@ export const FULL_VARS_SURAT_TUGAS = [
   { key: 'waktuKegiatan', label: 'Waktu Kegiatan', type: 'text', required: true, placeholder: '08.00 WIB - selesai (Rundown acara terlampir)', defaultValue: '08.00 WIB - selesai (Rundown acara terlampir)' },
   { key: 'tempatKegiatan', label: 'Tempat Kegiatan', type: 'textarea', required: true, placeholder: 'Aula Buya Hamka Gedung MUI Pusat\nJl. Proklamasi 51, Menteng, Jakarta Pusat', defaultValue: 'Aula Buya Hamka Gedung MUI Pusat\nJl. Proklamasi 51, Menteng, Jakarta Pusat' },
   { key: 'keteranganNarahubung', label: 'Keterangan Narahubung', type: 'wysiwyg', required: true, placeholder: '<p><strong>❖ Sekretariat DSN-MUI</strong><br>Telp./WA : 0818 404 852 (Sdr. Abdul Wasik, M.Si)<br>WA Hotline : 0822 6000 4146<br>Email : sekretariat@dsnmui.or.id<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dsnmui@gmail.com</p><p><strong>❖ LPEU MUI</strong><br>Telp. : 0812 1569 7070 (Admin WA LPEU MUI)<br>Email : lpeu.mui.pusat@gmail.com</p>', defaultValue: '<p><strong>❖ Sekretariat DSN-MUI</strong><br>Telp./WA : 0818 404 852 (Sdr. Abdul Wasik, M.Si)<br>WA Hotline : 0822 6000 4146<br>Email : sekretariat@dsnmui.or.id<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dsnmui@gmail.com</p><p><strong>❖ LPEU MUI</strong><br>Telp. : 0812 1569 7070 (Admin WA LPEU MUI)<br>Email : lpeu.mui.pusat@gmail.com</p>' },
+  { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '6 Agustus 2026 M', defaultValue: '6 Agustus 2026 M' },
+  { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '22 Shafar 1448 H', defaultValue: '22 Shafar 1448 H' },
   { key: 'headerTtd', label: 'Header Tanda Tangan', type: 'textarea', required: true, placeholder: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA', defaultValue: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA' },
   { key: 'jabatanKiri', label: 'Jabatan Kiri', type: 'text', required: true, placeholder: 'Ketua', defaultValue: 'Ketua' },
-  { key: 'jabatanKanan', label: 'Jabatan Kanan', type: 'text', required: true, placeholder: 'Sekretaris', defaultValue: 'Sekretaris' },
   { key: 'namaKetua', label: 'Nama Ketua (Kiri)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.', defaultValue: 'K.H. M. CHOLIL NAFIS, Lc., Ph.D.' },
+  { key: 'jabatanKanan', label: 'Jabatan Kanan', type: 'text', required: true, placeholder: 'Sekretaris', defaultValue: 'Sekretaris' },
   { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
 ];
 
@@ -2055,28 +2053,28 @@ export const FULL_VARS_KETERANGAN_PELATIHAN = [
 ];
 
 export const DEFAULT_NAMA_TIM_SURAT_TUGAS = `<div style="line-height: 1.25;">
-  <div style="font-weight: bold;">1. Penanggung Jawab:</div>
-  <div style="margin-left: 16px; margin-bottom: 2px;">
-    1) K.H. M. Cholil Nafis, Lc., Ph.D.<br>
-    2) Dr. H. Amisyah Tambunan, M.A.<br>
-    3) Hj. Trisna Ningsih Yuliati Djuwaeli, S.E., M.M.
-  </div>
-  <div style="font-weight: bold;">2. Pengarah:</div>
-  <div style="margin-left: 16px; margin-bottom: 2px;">
-    1) Prof. Dr. K.H. Hasanudin, M.Ag.<br>
-    2) Prof. Dr. K.H. M. Asrorun Niam Sholeh, S.H., M.A.<br>
-    3) Drs. H. Muhammad Ziyad, M.A.<br>
-    4) Prof. Dr. H. Jaih Mubarok, S.E., M.H., M.Ag.
-  </div>
-  <div style="font-weight: bold;">3. Pelaksana:</div>
-  <div style="margin-left: 16px;">
-    1) Dr. K.H. Moch. Bukhori Muslim, Lc., M.A.<br>
-    2) Dr. Yulizar Djamaluddin Sanrego, M.Ec.<br>
-    3) K.H. Mahbub Ma’afi Ramdlan, S.H.I., M.Hum.<br>
-    4) K.H. Muhammad Faishol, Lc., M.A.<br>
-    5) Ibnu Wazi<br>
-    6) Dr. Asep Supyadillah, M.Ag.
-  </div>
+  <div style="font-weight: bold; margin-bottom: 1px;">1. Penanggung Jawab:</div>
+  <ol style="margin-top: 1px; margin-bottom: 3px; padding-left: 20px; list-style-type: decimal;">
+    <li>K.H. M. Cholil Nafis, Lc., Ph.D.</li>
+    <li>Dr. H. Amisyah Tambunan, M.A.</li>
+    <li>Hj. Trisna Ningsih Yuliati Djuwaeli, S.E., M.M.</li>
+  </ol>
+  <div style="font-weight: bold; margin-bottom: 1px;">2. Pengarah:</div>
+  <ol style="margin-top: 1px; margin-bottom: 3px; padding-left: 20px; list-style-type: decimal;">
+    <li>Prof. Dr. K.H. Hasanudin, M.Ag.</li>
+    <li>Prof. Dr. K.H. M. Asrorun Niam Sholeh, S.H., M.A.</li>
+    <li>Drs. H. Muhammad Ziyad, M.A.</li>
+    <li>Prof. Dr. H. Jaih Mubarok, S.E., M.H., M.Ag.</li>
+  </ol>
+  <div style="font-weight: bold; margin-bottom: 1px;">3. Pelaksana:</div>
+  <ol style="margin-top: 1px; margin-bottom: 2px; padding-left: 20px; list-style-type: decimal;">
+    <li>Dr. K.H. Moch. Bukhori Muslim, Lc., M.A.</li>
+    <li>Dr. Yulizar Djamaluddin Sanrego, M.Ec.</li>
+    <li>K.H. Mahbub Ma’afi Ramdlan, S.H.I., M.Hum.</li>
+    <li>K.H. Muhammad Faishol, Lc., M.A.</li>
+    <li>Ibnu Wazi</li>
+    <li>Dr. Asep Supyadillah, M.Ag.</li>
+  </ol>
 </div>`;
 
 export const DEFAULT_KEPERLUAN_SURAT_TUGAS_TIM = `<p style="margin: 0; line-height: 1.25; text-align: justify;">
@@ -2105,7 +2103,24 @@ export const DEFAULT_KETERANGAN_SURAT_TUGAS_TIM = `<div style="line-height: 1.25
   </table>
 </div>`;
 
+export const DEFAULT_PEMBUKA_SURAT_TUGAS_TIM = `<p style="text-align: justify; margin-top: 0; margin-bottom: 0; line-height: 1.3;">Menunjuk keputusan Rapat Pimpinan Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) tanggal 5 Agustus 2026, DSN-MUI dengan ini <strong>menugaskan kepada</strong>:</p>`;
+
 export const FULL_HTML_SURAT_TUGAS_TIM = `<div style="font-family: Arial, sans-serif; font-size: 9.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
+  <style>
+    ol, ul {
+      margin-top: 1px !important;
+      margin-bottom: 3px !important;
+      padding-left: 20px !important;
+    }
+    ol {
+      list-style-type: decimal !important;
+    }
+    li {
+      margin-bottom: 1px !important;
+      line-height: 1.25 !important;
+      font-size: 9.5pt !important;
+    }
+  </style>
   \${HEADER_HTML}
 
   <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
@@ -2122,10 +2137,10 @@ export const FULL_HTML_SURAT_TUGAS_TIM = `<div style="font-family: Arial, sans-s
 
   <!-- BODY CONTENT -->
   <div style="margin-left: 0; margin-right: 0;">
-    <!-- PEMBUKA -->
-    <p style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.3;">
-      Menunjuk keputusan Rapat Pimpinan Dewan Syariah Nasional-Majelis Ulama Indonesia (DSN-MUI) tanggal {{tanggalRapatPimpinan}}, DSN-MUI dengan ini <strong>menugaskan kepada</strong>:
-    </p>
+    <!-- PEMBUKA (WYSIWYG) -->
+    <div style="text-align: justify; margin-top: 0; margin-bottom: 6px; line-height: 1.3;">
+      {{pembukaSurat}}
+    </div>
 
     <!-- TABEL ISIAN SURAT TUGAS TIM -->
     <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; line-height: 1.25; margin-bottom: 6px;">
@@ -2235,7 +2250,7 @@ export const FULL_HTML_SURAT_TUGAS_TIM = `<div style="font-family: Arial, sans-s
 
 export const FULL_VARS_SURAT_TUGAS_TIM = [
   { key: 'nomorSurat', label: 'Nomor Surat Tugas', type: 'text', required: true, placeholder: 'ST-0663/DSN-MUI/VIII/2026', defaultValue: 'ST-0663/DSN-MUI/VIII/2026' },
-  { key: 'tanggalRapatPimpinan', label: 'Tanggal Rapat Pimpinan', type: 'text', required: true, placeholder: '5 Agustus 2026', defaultValue: '5 Agustus 2026' },
+  { key: 'pembukaSurat', label: 'Kalimat Pembuka Surat Tugas (Konsiderans)', type: 'wysiwyg', required: true, defaultValue: DEFAULT_PEMBUKA_SURAT_TUGAS_TIM },
   { key: 'namaTim', label: 'Nama Tim (Struktur & Anggota Tim)', type: 'wysiwyg', required: true, defaultValue: DEFAULT_NAMA_TIM_SURAT_TUGAS },
   { key: 'jabatan', label: 'Jabatan', type: 'text', required: true, placeholder: 'Pengurus DSN-MUI', defaultValue: 'Pengurus DSN-MUI' },
   { key: 'waktuTugas', label: 'Waktu Tugas (Tanggal Awal – Akhir)', type: 'text', required: true, placeholder: '12 Agustus 2026 – 12 September 2026', defaultValue: '12 Agustus 2026 – 12 September 2026' },
@@ -2886,4 +2901,54 @@ export const DEFAULT_TEMPLATES = [
     variables: FULL_VARS_SERTIFIKAT_KS_RS,
   },
 ];
+
+/**
+ * Normalizes unformatted team member lists (e.g. "1) ... 2) ..." or lines with newlines/<br>)
+ * into standard HTML semantic <ol> ordered lists.
+ */
+export function normalizeTeamListToOrderedList(html: string): string {
+  if (!html || typeof html !== 'string') return html;
+  if (/<ol\b[^>]*>[\s\S]*?<li>[\s\S]*?<\/ol>/i.test(html)) return html;
+
+  function formatItemsToOl(itemsStr: string): string {
+    const clean = itemsStr.replace(/<\/?(?:div|p|span)[^>]*>/gi, ' ').trim();
+    const parts = clean
+      .split(/(?:<br\s*\/?>|\r?\n|\s+|^|(?<=[A-Za-z\.,]))(?=\d+[\)\.]\s*[A-Z])/gi)
+      .map((s) => s.replace(/<br\s*\/?>/gi, '').trim())
+      .filter(Boolean);
+
+    const listItems: string[] = [];
+    for (const p of parts) {
+      const itemText = p.replace(/^\d+[\)\.]\s*/, '').trim();
+      if (itemText) listItems.push(`<li>${itemText}</li>`);
+    }
+    if (listItems.length === 0) return itemsStr;
+    return `<ol style="margin-top: 1px; margin-bottom: 3px; padding-left: 20px; list-style-type: decimal;">\n  ${listItems.join('\n  ')}\n</ol>`;
+  }
+
+  const sectionRegex = /(<(?:div|p|strong|b)\b[^>]*>(?:(?:\d+\.|\d+\))\s*)?[^<:]+:[\s\S]*?<\/(?:div|p|strong|b)>)([\s\S]*?)(?=(?:<(?:div|p|strong|b)\b[^>]*>(?:(?:\d+\.|\d+\))\s*)?[^<:]+:[\s\S]*?<\/(?:div|p|strong|b)>)|$)/gi;
+
+  const matches = [...html.matchAll(sectionRegex)];
+  if (matches.length > 0) {
+    let result = '';
+    let lastIndex = 0;
+    for (const m of matches) {
+      const matchIndex = m.index ?? 0;
+      result += html.substring(lastIndex, matchIndex);
+      const header = m[1];
+      const body = m[2] || '';
+      result += header + '\n' + formatItemsToOl(body);
+      lastIndex = matchIndex + m[0].length;
+    }
+    result += html.substring(lastIndex);
+    return result;
+  }
+
+  if (/\d+[\)\.]\s*[A-Z]/i.test(html)) {
+    return formatItemsToOl(html);
+  }
+
+  return html;
+}
+
 

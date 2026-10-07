@@ -111,29 +111,32 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { search, category, includeArchived } = req.query;
 
-    // Ensure SK-UNIVERSAL is present and up-to-date in database
-    const universalTpl = DEFAULT_TEMPLATES.find(t => t.code === 'SK-UNIVERSAL');
-    if (universalTpl) {
-      await prisma.letterTemplate.upsert({
-        where: { code: 'SK-UNIVERSAL' },
-        update: {
-          name: universalTpl.name,
-          category: universalTpl.category,
-          description: universalTpl.description,
-          htmlContent: universalTpl.htmlContent,
-          variables: universalTpl.variables,
-          isArchived: false,
-        },
-        create: {
-          name: universalTpl.name,
-          code: 'SK-UNIVERSAL',
-          category: universalTpl.category,
-          description: universalTpl.description,
-          htmlContent: universalTpl.htmlContent,
-          variables: universalTpl.variables,
-          isArchived: false,
-        },
-      }).catch(err => console.warn('Auto-seed SK-UNIVERSAL warning:', err));
+    // Ensure critical templates are present and up-to-date in database
+    const autoSyncCodes = ['SK-UNIVERSAL', 'ST-0663-TUGAS-TIM', 'ST-0650-TUGAS', 'SK-TUGAS'];
+    for (const code of autoSyncCodes) {
+      const tpl = DEFAULT_TEMPLATES.find(t => t.code === code);
+      if (tpl) {
+        await prisma.letterTemplate.upsert({
+          where: { code: tpl.code },
+          update: {
+            name: tpl.name,
+            category: tpl.category,
+            description: tpl.description,
+            htmlContent: tpl.htmlContent,
+            variables: tpl.variables,
+            isArchived: false,
+          },
+          create: {
+            name: tpl.name,
+            code: tpl.code,
+            category: tpl.category,
+            description: tpl.description,
+            htmlContent: tpl.htmlContent,
+            variables: tpl.variables,
+            isArchived: false,
+          },
+        }).catch(err => console.warn(`Auto-seed ${tpl.code} warning:`, err));
+      }
     }
 
     const templates = await prisma.letterTemplate.findMany({
