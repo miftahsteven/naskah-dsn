@@ -378,9 +378,20 @@ router.get('/:id', authenticatePublic, async (req: PublicAuthRequest, res: Respo
       });
     }
 
+    let presentationInvitation = (submission as any).presentationInvitation || null;
+    let interviewInvitation = submission.interviewInvitation as any;
+    if (!presentationInvitation && interviewInvitation && interviewInvitation.type === 'PRESENTASI_LEMBAGA') {
+      presentationInvitation = interviewInvitation;
+      interviewInvitation = null;
+    }
+
     return res.json({
       status: 'success',
-      data: submission,
+      data: {
+        ...submission,
+        presentationInvitation,
+        interviewInvitation,
+      },
     });
   } catch (error: any) {
     console.error('[Public Submissions] Error getting detail:', error);

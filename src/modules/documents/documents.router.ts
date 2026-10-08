@@ -792,11 +792,23 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           }));
         }
 
-        let presentationInvitation = sub.presentationInvitation;
+        let presentationInvitation = (sub as any).presentationInvitation;
+        if (!presentationInvitation && interviewInvitation && (interviewInvitation as any).type === 'PRESENTASI_LEMBAGA') {
+          presentationInvitation = interviewInvitation;
+          interviewInvitation = null;
+        }
+
+        if (!presentationInvitation && Array.isArray((document as any).disposisiLogs)) {
+          const presLog = (document as any).disposisiLogs.find((l: any) => l.action === 'UNDANG_PRESENTASI');
+          if (presLog?.metadata) {
+            presentationInvitation = presLog.metadata;
+          }
+        }
+
         if (presentationInvitation && typeof presentationInvitation === 'object') {
           presentationInvitation = {
             ...presentationInvitation,
-            venue: sanitizeVenueStr(presentationInvitation.venue),
+            venue: sanitizeVenueStr(presentationInvitation.venue || presentationInvitation.venueOrLink),
           };
         }
 
@@ -1806,9 +1818,25 @@ router.post('/:id/upload-certificate', authenticate, upload.single('file'), asyn
 router.post('/:id/invite-presentation', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { invitationNumber, presentationDate, presentationTime, format, venueOrLink, notes } = req.body;
+    const {
+      invitationNumber,
+      presentationDate,
+      presentationTime,
+      format,
+      venueOrLink,
+      venue,
+      zoomUrl,
+      zoomMeetingId,
+      zoomPasscode,
+      picName,
+      agendaNotes,
+      notes,
+    } = req.body;
 
-    if (!presentationDate || !venueOrLink) {
+    const resolvedVenueOrLink = venueOrLink || (format === 'ONLINE' ? zoomUrl : venue) || venue || zoomUrl || '';
+    const resolvedNotes = notes || agendaNotes || '';
+
+    if (!presentationDate || !resolvedVenueOrLink) {
       return res.status(400).json({
         status: 'error',
         message: 'Tanggal pelaksanaan dan lokasi / tautan ruang rapat wajib diisi.',
@@ -1835,8 +1863,14 @@ router.post('/:id/invite-presentation', authenticate, async (req: AuthRequest, r
       presentationDate,
       presentationTime: presentationTime || '09:00 - 11:30 WIB',
       format: format || 'OFFLINE',
-      venueOrLink,
-      notes: notes || '',
+      venueOrLink: resolvedVenueOrLink,
+      venue: format === 'OFFLINE' ? (venue || resolvedVenueOrLink) : (venue || ''),
+      zoomUrl: format === 'ONLINE' ? (zoomUrl || resolvedVenueOrLink) : (zoomUrl || ''),
+      zoomMeetingId: zoomMeetingId || '',
+      zoomPasscode: zoomPasscode || '',
+      picName: picName || req.user?.fullName || 'Sekretariat DSN-MUI',
+      agendaNotes: resolvedNotes,
+      notes: resolvedNotes,
       invitedAt: new Date().toISOString(),
       invitedBy: req.user?.fullName || 'Sekretariat DSN-MUI',
     };
@@ -1854,7 +1888,7 @@ router.post('/:id/invite-presentation', authenticate, async (req: AuthRequest, r
         data: {
           submissionId: pubSub.id,
           title: 'Undangan Presentasi Instansi / Lembaga Pemohon',
-          description: `DSN-MUI mengundang pihak ${pubSub.company?.name || 'pemohon'} untuk mempresentasikan profil dan permohonan pada ${presentationDate} pukul ${presentationData.presentationTime} (${format === 'ONLINE' ? 'Online' : 'Tatap Muka'}). Lokasi/Tautan: ${venueOrLink}.${notes ? ' Catatan: ' + notes : ''}`,
+          description: `DSN-MUI mengundang pihak ${pubSub.company?.name || 'pemohon'} untuk mempresentasikan profil dan permohonan pada ${presentationDate} pukul ${presentationData.presentationTime} (${format === 'ONLINE' ? 'Online' : 'Tatap Muka'}). Lokasi/Tautan: ${resolvedVenueOrLink}.${resolvedNotes ? ' Catatan: ' + resolvedNotes : ''}`,
           publicStatus: 'Undangan Presentasi',
           visibility: 'PUBLIC',
           performedByName: req.user?.fullName || 'Sekretariat DSN-MUI',
@@ -1883,8 +1917,8 @@ router.post('/:id/invite-presentation', authenticate, async (req: AuthRequest, r
           presentationDate,
           presentationTime: presentationData.presentationTime,
           format: presentationData.format,
-          venueOrLink,
-          notes,
+          venueOrLink: resolvedVenueOrLink,
+          notes: resolvedNotes,
         }).catch((err) => console.error('[Mailer Error] Presentation invite:', err));
       }
     }
@@ -1894,7 +1928,7 @@ router.post('/:id/invite-presentation', authenticate, async (req: AuthRequest, r
         documentId: document.id,
         userId: req.user!.id,
         action: 'UNDANG_PRESENTASI',
-        description: `Undangan presentasi diterbitkan oleh ${req.user?.fullName || 'Admin'} untuk tanggal ${presentationDate} (${venueOrLink}).`,
+        description: `Undangan presentasi diterbitkan oleh ${req.user?.fullName || 'Admin'} untuk tanggal ${presentationDate} (${resolvedVenueOrLink}).`,
         metadata: presentationData,
       },
     });
