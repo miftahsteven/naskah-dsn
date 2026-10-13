@@ -2911,8 +2911,17 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   }
 
   // ── SAFE FALLBACK: Target specific role titles in main signature block (before Lampiran) ──
-  const isKetua = row.signerIndex === 0 || /ketua|ketum/i.test(row.roleName || '') || /cholil|nafis/i.test((row.candidates || []).join(' '));
-  const targetRole = isKetua ? '(?:Ketua|Menyetujui|Ketum)' : '(?:Sekretaris|Mengetahui|Sekjen)';
+  const isKetua = (row.slot === 'kiri' || ((row.signerIndex === 0 || row.slot !== 'kanan') && (/ketua|ketum/i.test(row.roleName || '') || /cholil|nafis/i.test((row.candidates || []).join(' '))))) && row.slot !== 'kanan';
+  const isSekretaris = (row.slot === 'kanan' || ((row.signerIndex === 1 || row.slot !== 'kiri') && (/sekretaris|sekjen/i.test(row.roleName || '') || /amirsyah|tambunan/i.test((row.candidates || []).join(' '))))) && row.slot !== 'kiri';
+  const isSingle = row.slot === 'single';
+
+  if (!isKetua && !isSekretaris && !isSingle) {
+    return { html: htmlContent, injected: false };
+  }
+
+  const targetRole = isKetua
+    ? '(?:Ketua|Menyetujui|Ketum)'
+    : (isSekretaris ? '(?:Sekretaris|Mengetahui|Sekjen)' : '(?:Ketua|Direktur|Pimpinan|Kepala|Menyetujui)');
 
   // Find targetRole before any Lampiran
   const lampiranMatch = htmlContent.match(/Lampiran\s+[0-9I|IVX]+/i);
@@ -3051,7 +3060,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
           slot: matchedSlot,
           targetName,
           roleName,
-          signerIndex: matchedSlot === 'kiri' ? 0 : (matchedSlot === 'kanan' ? 1 : validSigners.length)
+          signerIndex: matchedSlot === 'kiri' ? 0 : (matchedSlot === 'kanan' ? 1 : (2 + validSigners.length))
         });
       }
     }
@@ -3107,6 +3116,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
 
     return {
       signerIndex: v.signerIndex,
+      slot: v.slot,
       fullName: escapeHtml(s.user?.fullName || 'Penandatangan'),
       jobTitle: escapeHtml(cleanJobTitle(s.user?.jobTitle) || 'Pejabat'),
       roleName: v.roleName,
