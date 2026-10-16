@@ -3017,11 +3017,11 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
     if (targetKiri && (isNameMatch(fullName, targetKiri) || isUserKetua)) {
       matchedSlot = 'kiri';
       targetName = targetKiri;
-      roleName = cleanJobTitle(templateVariables.jabatanKiri) || 'Ketua';
+      roleName = cleanJobTitle(templateVariables.jabatanKiri || templateVariables.jabatanKetua) || 'Ketua';
     } else if (targetKanan && (isNameMatch(fullName, targetKanan) || isUserSekretaris)) {
       matchedSlot = 'kanan';
       targetName = targetKanan;
-      roleName = cleanJobTitle(templateVariables.jabatanKanan) || 'Sekretaris';
+      roleName = cleanJobTitle(templateVariables.jabatanKanan || templateVariables.jabatanSekretaris) || 'Sekretaris';
     } else if (targetSingle && isNameMatch(fullName, targetSingle)) {
       matchedSlot = 'single';
       targetName = targetSingle;

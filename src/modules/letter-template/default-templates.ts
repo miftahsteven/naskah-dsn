@@ -2785,7 +2785,381 @@ export const FULL_VARS_SERTIFIKAT_KS_RS = [
   { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' },
 ];
 
+export const DEFAULT_ISI_SURAT_INVOICE = `<p style="text-align: justify; margin-top: 0; margin-bottom: 8px; line-height: 1.35;">
+  Puji syukur ke hadirat Allah Subhanahu wa Ta'ala, teriring doa semoga Saudara dalam keadaan sehat wal'afiat dan mendapat lindungan dari Allah SWT dalam menjalankan tugas sehari-hari.
+</p>
+<p style="text-align: justify; margin-top: 0; margin-bottom: 8px; line-height: 1.35;">
+  Merujuk pada (i) Perjanjian Kerja Sama antara Pemerintah Republik Indonesia dengan Majelis Ulama Indonesia Nomor: PRJ-73/PR/2026, Nomor B-0119/DSN-MUI/II/2026 tanggal 11 Februari 2026 tentang Penerbitan dan Pengembangan Surat Berharga Syariah Negara, dan (ii) Pernyataan Kesesuaian Syariah Nomor B-0649/DSN-MUI/VIII/2026, bersama ini kami sampaikan bahwa kami telah menyelesaikan kegiatan penyusunan dan penerbitan Pernyataan Kesesuaian Syariah SBSN Cash Waqf Linked Sukuk (CWLS) Seri SWR007 Tahun 2026.
+</p>
+<p style="text-align: justify; margin-top: 0; margin-bottom: 8px; line-height: 1.35;">
+  Sehubungan dengan hal tersebut di atas, maka bersama ini kami lampirkan invoice No: 024/DSN-MUI/X/2026 sebesar Rp175.000.000 (<em>seratus tujuh puluh lima juta rupiah</em>), termasuk Pajak Pertambahan Nilai (PPN), dan setelah pembebanan PPN menjadi sebesar Rp 157.657.658 (<em>Seratus lima puluh tujuh juta enam ratus lima puluh tujuh ribu enam ratus lima puluh delapan rupiah</em>).
+</p>
+<p style="text-align: justify; margin-top: 0; margin-bottom: 8px; line-height: 1.35;">
+  Demikian kami sampaikan. Atas perhatian dan kerja sama Saudara, kami ucapkan terima kasih, <em>jazakumullah khairan</em>.
+</p>`;
+
+export const DEFAULT_RINCIAN_PEMBAYARAN_INVOICE = `Pembayaran kontribusi pembiayaan atas kegiatan penyusunan dan penerbitan Pernyataan Kesesuaian Syariah SBSN Cash Waqf Linked Sukuk (CWLS) Seri SWR007 Tahun 2026`;
+
+export const DEFAULT_INFORMASI_REKENING_INVOICE = `Ke Rekening:<br>
+No: <strong>7001316747</strong> atas nama <strong>Dewan Syariah Nasional MUI</strong><br>
+di <strong>Bank Syariah Indonesia</strong><br>
+Kantor Cabang Thamrin<br>
+Jl. M.H. Thamrin No.5 – Jakarta Pusat`;
+
+export const FULL_HTML_INVOICE = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
+  \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
+
+  <!-- TANGGAL SURAT -->
+  <div style="text-align: right; margin-bottom: 12px; margin-right: 15px;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
+      <tr>
+        <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">{{tempatDibuat}},&nbsp;</td>
+        <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
+          <span style="border-bottom: 1.5px solid #000; display: inline-block; padding-bottom: 0px; line-height: 1.05; white-space: nowrap;">{{tanggalHijriah}}</span>
+        </td>
+      </tr>
+      <tr>
+        <td></td>
+        <td style="padding: 2px 0 0 0; text-align: right; white-space: nowrap; line-height: 1.2;">{{tanggalMasehi}}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- META SECTION (Nomor, Lampiran, Hal) -->
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
+    <tr><td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td><td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{nomorSurat}}</td></tr>
+    <tr><td style="vertical-align: top; padding: 2px 0;">Lamp.</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{lampiran}}</td></tr>
+    <tr><td style="vertical-align: top; padding: 2px 0;">Hal</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="font-weight: bold; padding: 2px 0;">{{perihal}}</td></tr>
+  </table>
+
+  <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
+  <div style="margin-left: 75px; margin-right: 15px;">
+    <!-- KEPADA YTH -->
+    <div style="margin-bottom: 12px; font-size: 10.5pt; line-height: 1.25;">
+      <div>Kepada Yth.:</div>
+      <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{tujuanSurat}}</div>
+      <div>di -</div>
+      <div style="margin-left: 20px; font-weight: bold;">{{tempatTujuan}}</div>
+    </div>
+
+    <!-- SALAM PEMBUKA -->
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">{{salamPembuka}}</div>
+
+    <!-- ISI SURAT (WYSIWYG) -->
+    <div class="letter-body-custom" style="font-size: 10.5pt; line-height: 1.35; color: #111827; text-align: justify; margin-bottom: 6px;">
+      {{isiSurat}}
+    </div>
+
+    <!-- SALAM PENUTUP -->
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">{{salamPenutup}}</div>
+
+    <!-- TANDA TANGAN SECTION (HALAMAN 1) -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid;">
+      <tr>
+        <td style="width: 45%; vertical-align: top; padding: 0; text-align: left;">
+          <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+            <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKetua}}</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 60px;"></div>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+          </div>
+        </td>
+        <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
+          <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+            <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 6px;">{{headerTtd}}</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanSekretaris}},</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 60px;"></div>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- HALAMAN 2: KELANJUTAN SURAT INVOICE (LAMPIRAN INVOICE) -->
+  <div class="page-break" style="page-break-before: always; margin-top: 30px; padding-top: 0;">
+    <!-- TEMBUSAN -->
+    <div style="margin-bottom: 14px; font-size: 10.5pt; line-height: 1.35;">
+      <div>Tembusan:</div>
+      <div style="white-space: pre-line;">{{tembusanInvoice}}</div>
+    </div>
+
+    <!-- LAMPIRAN SURAT & KOTAK INVOICE -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+      <tr>
+        <td style="vertical-align: middle; text-align: left; padding: 0;">
+          <span style="font-size: 10.5pt;">Lampiran Surat Nomor: {{nomorSurat}}</span>
+        </td>
+        <td style="vertical-align: middle; text-align: right; width: 220px; padding: 0;">
+          <div style="border: 1.5px solid #000; padding: 6px 14px; text-align: center; display: inline-block; min-width: 180px; box-sizing: border-box;">
+            <div style="font-weight: bold; font-size: 11pt; line-height: 1.2;">Invoice</div>
+            <div style="font-size: 10pt; line-height: 1.2;">No: {{nomorInvoice}}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- KEPADA YTH PADA INVOICE (HALAMAN 2) -->
+    <div style="margin-bottom: 16px; font-size: 10.5pt; line-height: 1.25;">
+      <div>Kepada Yth.:</div>
+      <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{tujuanInvoice}}</div>
+      <div>di -</div>
+      <div style="margin-left: 20px; font-weight: bold;">{{tempatTujuanInvoice}}</div>
+    </div>
+
+    <!-- TABEL RINCIAN INVOICE -->
+    <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #000; margin-bottom: 18px; font-size: 10.5pt; line-height: 1.35;">
+      <thead>
+        <tr style="border-bottom: 1.5px solid #000;">
+          <th style="border-right: 1.5px solid #000; padding: 6px 10px; text-align: center; font-weight: bold; width: 68%;">Perihal</th>
+          <th style="padding: 6px 10px; text-align: center; font-weight: bold; width: 32%;">Total (Rp)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="border-right: 1.5px solid #000; padding: 10px 12px; vertical-align: top; text-align: justify;">
+            {{rincianPembayaran}}
+          </td>
+          <td style="padding: 10px 12px; vertical-align: bottom; text-align: right; white-space: nowrap;">
+            {{nominalBruto}}
+          </td>
+        </tr>
+        <tr>
+          <td style="border-right: 1.5px solid #000; padding: 6px 12px; vertical-align: middle; text-align: right; font-weight: normal;">
+            {{labelPajak}}
+          </td>
+          <td style="padding: 6px 12px; vertical-align: middle; text-align: right; white-space: nowrap;">
+            {{nominalPajak}}
+          </td>
+        </tr>
+        <tr style="border-top: 1.5px solid #000;">
+          <td style="border-right: 1.5px solid #000; padding: 8px 12px; vertical-align: middle;">
+            <div style="font-weight: normal; margin-bottom: 2px;">{{labelTotalPembayaran}}</div>
+            <div style="font-style: italic; font-size: 10pt;">({{terbilangTotal}})</div>
+          </td>
+          <td style="padding: 8px 12px; vertical-align: middle; text-align: right; font-weight: bold; font-size: 10.5pt; white-space: nowrap;">
+            {{nominalTotal}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- INFORMASI PEMBAYARAN REKENING & NPWP -->
+    <div style="margin-bottom: 16px; font-size: 10pt; line-height: 1.4;">
+      <div style="text-decoration: underline; font-weight: bold; margin-bottom: 4px;">Pembayaran</div>
+      <div style="line-height: 1.4;">{{informasiRekening}}</div>
+      <div style="margin-top: 8px; font-weight: normal;">NPWP MUI: {{npwpMui}}</div>
+    </div>
+
+    <!-- TANDA TANGAN & MATERAI HALAMAN 2 -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 6px; page-break-inside: avoid;">
+      <tr>
+        <td style="width: 50%; vertical-align: top;"></td>
+        <td style="width: 50%; vertical-align: top; text-align: right; padding-right: 10px;">
+          <div style="display: inline-block; text-align: center; min-width: 200px;">
+            <div style="border: 1px solid #ef4444; color: #dc2626; font-size: 8.5pt; padding: 5px 12px; display: inline-block; margin-bottom: 8px; font-weight: 500; border-radius: 2px;">
+              {{labelMaterai}}
+            </div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 45px;"></div>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">
+              {{namaPenandatanganInvoice}}
+            </span>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  \${FOOTER_HTML}
+
+  </div>
+</div>`;
+
+export const FULL_VARS_INVOICE = [
+  { key: 'nomorSurat', label: 'Nomor Surat', type: 'text', required: true, placeholder: 'B-0771/DSN-MUI/X/2026', defaultValue: 'B-0771/DSN-MUI/X/2026' },
+  { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '6 Oktober 2026 M', defaultValue: '6 Oktober 2026 M' },
+  { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '25 Rabi’ul Akhir 1448 H', defaultValue: '25 Rabi’ul Akhir 1448 H' },
+  { key: 'tempatDibuat', label: 'Tempat Dibuat', type: 'text', required: true, placeholder: 'Jakarta', defaultValue: 'Jakarta' },
+  { key: 'lampiran', label: 'Lampiran', type: 'text', required: false, placeholder: '1 (satu) berkas', defaultValue: '1 (satu) berkas' },
+  { key: 'perihal', label: 'Perihal Surat', type: 'text', required: true, placeholder: 'Invoice', defaultValue: 'Invoice' },
+  { key: 'tujuanSurat', label: 'Tujuan Surat (Kepada Yth. Halaman 1)', type: 'textarea', required: true, placeholder: 'Direktur Evaluasi, Akuntansi dan Setelmen,\nDirektorat Jenderal Pengelolaan Pembiayaan dan Risiko\nKementerian Keuangan RI', defaultValue: 'Direktur Evaluasi, Akuntansi dan Setelmen,\nDirektorat Jenderal Pengelolaan Pembiayaan dan Risiko\nKementerian Keuangan RI' },
+  { key: 'tempatTujuan', label: 'Tempat / Kota Tujuan (Halaman 1)', type: 'text', required: true, placeholder: 'JAKARTA', defaultValue: 'JAKARTA' },
+  { key: 'salamPembuka', label: 'Salam Pembuka', type: 'text', required: true, placeholder: 'Assalamu’alaikum Warahmatullah Wabarakatuh', defaultValue: 'Assalamu’alaikum Warahmatullah Wabarakatuh' },
+  { key: 'isiSurat', label: 'Isi Surat Pengantar Invoice (Halaman 1)', type: 'wysiwyg', required: true, defaultValue: DEFAULT_ISI_SURAT_INVOICE },
+  { key: 'salamPenutup', label: 'Salam Penutup', type: 'text', required: true, placeholder: 'Wassalamu’alaikum Warahmatullah Wabarakatuh.', defaultValue: 'Wassalamu’alaikum Warahmatullah Wabarakatuh.' },
+  { key: 'headerTtd', label: 'Header Tanda Tangan', type: 'textarea', required: true, placeholder: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA', defaultValue: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA' },
+  { key: 'jabatanKetua', label: 'Jabatan Penandatangan Kiri (Halaman 1)', type: 'text', required: true, placeholder: 'Ketua', defaultValue: 'Ketua' },
+  { key: 'namaKetua', label: 'Nama Penandatangan Kiri (Halaman 1)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, LC., PH.D.', defaultValue: 'K.H. M. CHOLIL NAFIS, LC., PH.D.' },
+  { key: 'jabatanSekretaris', label: 'Jabatan Penandatangan Kanan (Halaman 1)', type: 'text', required: true, placeholder: 'Sekretaris', defaultValue: 'Sekretaris' },
+  { key: 'namaSekretaris', label: 'Nama Penandatangan Kanan (Halaman 1)', type: 'text', required: true, placeholder: 'DR. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'DR. H. AMIRSYAH TAMBUNAN, M.A.' },
+  { key: 'tembusanInvoice', label: 'Tembusan (Halaman 2)', type: 'textarea', required: false, placeholder: 'Kepada Yth. Direktur Pembiayaan Syariah, Direktorat Jenderal Pengelolaan Pembiayaan dan Risiko, Kementerian Keuangan RI', defaultValue: 'Kepada Yth. Direktur Pembiayaan Syariah, Direktorat Jenderal Pengelolaan Pembiayaan dan Risiko, Kementerian Keuangan RI' },
+  { key: 'nomorInvoice', label: 'Nomor Invoice (Kotak Kanan Atas Halaman 2)', type: 'text', required: true, placeholder: '024/DSN-MUI/X/2026', defaultValue: '024/DSN-MUI/X/2026' },
+  { key: 'tujuanInvoice', label: 'Penerima Invoice (Kepada Yth. Halaman 2)', type: 'textarea', required: true, placeholder: 'Direktur Evaluasi, Akuntansi dan Setelmen,\nDirektorat Jenderal Pengelolaan Pembiayaan dan Risiko\nKementerian Keuangan RI', defaultValue: 'Direktur Evaluasi, Akuntansi dan Setelmen,\nDirektorat Jenderal Pengelolaan Pembiayaan dan Risiko\nKementerian Keuangan RI' },
+  { key: 'tempatTujuanInvoice', label: 'Tempat / Kota Penerima Invoice (Halaman 2)', type: 'text', required: true, placeholder: 'JAKARTA', defaultValue: 'JAKARTA' },
+  { key: 'rincianPembayaran', label: 'Perihal / Rincian Tagihan (Tabel Halaman 2)', type: 'wysiwyg', required: true, placeholder: 'Pembayaran kontribusi pembiayaan atas kegiatan...', defaultValue: DEFAULT_RINCIAN_PEMBAYARAN_INVOICE },
+  { key: 'nominalBruto', label: 'Nominal Tagihan / DPP (Rp)', type: 'text', required: true, placeholder: '175.000.000', defaultValue: '175.000.000' },
+  { key: 'labelPajak', label: 'Label Pajak (Misal: PPN)', type: 'text', required: true, placeholder: 'PPN', defaultValue: 'PPN' },
+  { key: 'nominalPajak', label: 'Nominal Pajak (Rp)', type: 'text', required: true, placeholder: '17.342.342', defaultValue: '17.342.342' },
+  { key: 'labelTotalPembayaran', label: 'Label Total (Misal: Total jumlah yang dibayarkan)', type: 'text', required: true, placeholder: 'Total jumlah yang dibayarkan', defaultValue: 'Total jumlah yang dibayarkan' },
+  { key: 'terbilangTotal', label: 'Terbilang Total Pembayaran', type: 'textarea', required: true, placeholder: 'Seratus lima puluh tujuh juta enam ratus lima puluh tujuh ribu enam ratus lima puluh delapan rupiah', defaultValue: 'Seratus lima puluh tujuh juta enam ratus lima puluh tujuh ribu enam ratus lima puluh delapan rupiah' },
+  { key: 'nominalTotal', label: 'Total Yang Dibayarkan (Rp)', type: 'text', required: true, placeholder: '157.657.658', defaultValue: '157.657.658' },
+  { key: 'informasiRekening', label: 'Informasi Rekening Pembayaran', type: 'wysiwyg', required: true, defaultValue: DEFAULT_INFORMASI_REKENING_INVOICE },
+  { key: 'npwpMui', label: 'NPWP MUI', type: 'text', required: true, placeholder: '01.334.448.6-071.000', defaultValue: '01.334.448.6-071.000' },
+  { key: 'labelMaterai', label: 'Label Kotak Materai', type: 'text', required: false, placeholder: 'Materai 10.000', defaultValue: 'Materai 10.000' },
+  { key: 'namaPenandatanganInvoice', label: 'Nama Penandatangan Invoice (Halaman 2)', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, LC., PH.D.', defaultValue: 'K.H. M. CHOLIL NAFIS, LC., PH.D.' },
+];
+
+export const FULL_HTML_TAGIHAN_IURAN = `<div style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #111827; line-height: 1.25; width: 100%; max-width: 100%; margin: 0; padding: 0;">
+  \${HEADER_HTML}
+
+  <div class="letter-body-wrapper" style="margin-left: 15mm; margin-right: 10mm;">
+
+  <!-- TANGGAL SURAT -->
+  <div style="text-align: right; margin-bottom: 10px; margin-right: 15px;">
+    <table style="display: inline-table; margin-left: auto; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 10.5pt;">
+      <tr>
+        <td style="padding: 0; white-space: nowrap; vertical-align: bottom; line-height: 1.05;">{{tempatDibuat}},&nbsp;</td>
+        <td style="padding: 0; text-align: right; white-space: nowrap; vertical-align: bottom;">
+          <span style="border-bottom: 1.5px solid #000; display: inline-block; padding-bottom: 0px; line-height: 1.05; white-space: nowrap;">{{tanggalHijriah}}</span>
+        </td>
+      </tr>
+      <tr>
+        <td></td>
+        <td style="padding: 2px 0 0 0; text-align: right; white-space: nowrap; line-height: 1.2;">{{tanggalMasehi}}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- META SECTION (Nomor, Lampiran, Hal) -->
+  <table style="width: calc(100% - 15px); border-collapse: collapse; margin-bottom: 8px; font-size: 10.5pt; line-height: 1.25;">
+    <tr><td style="width: 60px; vertical-align: top; padding: 2px 0;">Nomor</td><td style="width: 15px; vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{nomorSurat}}</td></tr>
+    <tr><td style="vertical-align: top; padding: 2px 0;">Lamp.</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="padding: 2px 0;">{{lampiran}}</td></tr>
+    <tr><td style="vertical-align: top; padding: 2px 0;">Hal</td><td style="vertical-align: top; padding: 2px 0;">:</td><td style="font-weight: bold; padding: 2px 0;">{{perihal}}</td></tr>
+  </table>
+
+  <!-- BODY CONTENT (Aligned under HAL at margin-left: 75px, ending at margin-right: 15px) -->
+  <div style="margin-left: 75px; margin-right: 15px;">
+    <!-- KEPADA YTH -->
+    <div style="margin-bottom: 10px; font-size: 10.5pt; line-height: 1.25;">
+      <div>Kepada Yth. :</div>
+      <div style="white-space: pre-line; font-weight: bold; margin-bottom: 2px;">{{tujuanSurat}}</div>
+      <div>di -</div>
+      <div style="margin-left: 20px; font-weight: bold;">{{tempatTujuan}}</div>
+    </div>
+
+    <!-- SALAM PEMBUKA -->
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">{{salamPembuka}}</div>
+
+    <!-- PARAGRAF 1: DOA & SYUKUR -->
+    <p style="margin: 0 0 6px 0; text-indent: 28px; text-align: justify; line-height: 1.35;">
+      {{paragrafPembuka}}
+    </p>
+
+    <!-- PARAGRAF 2: STATUS PEMBAYARAN TERAKHIR -->
+    <p style="margin: 0 0 6px 0; text-indent: 28px; text-align: justify; line-height: 1.35;">
+      Selanjutnya, kami sampaikan bahwa menurut catatan keuangan kami, {{namaLembaga}} telah membayar iuran bulanan hingga {{bulanLunasTerakhir}}. Untuk itu, kami mengucapkan terima kasih.
+    </p>
+
+    <!-- PARAGRAF 3: PERIODE & PERHITUNGAN TAGIHAN -->
+    <p style="margin: 0 0 6px 0; text-indent: 28px; text-align: justify; line-height: 1.35;">
+      Sehubungan dengan itu, kami harapkan Saudara dapat segera membayar iuran keanggotaan untuk bulan-bulan berikutnya, yaitu {{periodeTagihan}} sebesar {{perhitunganTagihan}}.
+    </p>
+
+    <!-- PARAGRAF 4: INSTRUKSI PEMBAYARAN & KONTAK -->
+    <p style="margin: 0 0 6px 0; text-indent: 28px; text-align: justify; line-height: 1.35;">
+      Iuran tersebut agar ditransfer ke {{instruksiPembayaran}}. Untuk mempermudah pencatatan kami, harap Saudara mengirim bukti transfer ke DSN-MUI via {{kontakKonfirmasi}}.
+    </p>
+
+    <!-- CATATAN TAMBAHAN (OPSIONAL) -->
+    <div style="font-size: 10.5pt; color: #111827; line-height: 1.35; text-align: justify;">{{catatanTambahan}}</div>
+
+    <!-- PARAGRAF 5: PENUTUP -->
+    <p style="margin: 0 0 6px 0; text-indent: 28px; text-align: justify; line-height: 1.35;">
+      {{paragrafPenutup}}
+    </p>
+
+    <!-- SALAM PENUTUP -->
+    <div style="margin-top: 0; margin-bottom: 6px; font-style: italic;">{{salamPenutup}}</div>
+
+    <!-- TANDA TANGAN SECTION -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; page-break-inside: avoid;">
+      <tr>
+        <td style="width: 45%; vertical-align: top; padding: 0; text-align: left;">
+          <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+            <div style="visibility: hidden; font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanKetua}}</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 50px;"></div>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaKetua}}</span>
+          </div>
+        </td>
+        <td style="width: 55%; vertical-align: top; padding: 0; text-align: right;">
+          <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">
+            <div style="font-size: 9.5pt; font-weight: normal; text-transform: uppercase; line-height: 1.25; white-space: pre-line; margin-bottom: 4px;">{{headerTtd}}</div>
+            <div style="font-weight: bold; font-size: 10.5pt;">{{jabatanSekretaris}}</div>
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 50px;"></div>
+            <span style="font-size: 10.5pt; font-weight: bold; border-bottom: 1.5px solid #000; text-decoration: none; padding-bottom: 0px; line-height: 1.15; display: inline-block; white-space: nowrap;">{{namaSekretaris}}</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  \${FOOTER_HTML}
+
+  </div>
+</div>`;
+
+export const FULL_VARS_TAGIHAN_IURAN = [
+  { key: 'nomorSurat', label: 'Nomor Surat', type: 'text', required: true, placeholder: 'U-0731/Keu-391/DSN-MUI/IX/2026', defaultValue: 'U-0731/Keu-391/DSN-MUI/IX/2026' },
+  { key: 'tanggalMasehi', label: 'Tanggal Masehi', type: 'text', required: true, placeholder: '30 September 2026 M', defaultValue: '30 September 2026 M' },
+  { key: 'tanggalHijriah', label: 'Tanggal Hijriah', type: 'text', required: true, placeholder: '19 Rabi’ul Akhir 1448 H', defaultValue: '19 Rabi’ul Akhir 1448 H' },
+  { key: 'tempatDibuat', label: 'Tempat Dibuat', type: 'text', required: true, placeholder: 'Jakarta', defaultValue: 'Jakarta' },
+  { key: 'lampiran', label: 'Lampiran', type: 'text', required: false, placeholder: '1 (satu) kuitansi', defaultValue: '1 (satu) kuitansi' },
+  { key: 'perihal', label: 'Perihal Surat', type: 'text', required: true, placeholder: 'Iuran Bulanan', defaultValue: 'Iuran Bulanan' },
+  { key: 'tujuanSurat', label: 'Tujuan Surat (Jabatan & Nama Lembaga)', type: 'textarea', required: true, placeholder: 'Kepala Divisi Syariah\nPT BPD Kalimantan Timur dan Kalimantan Utara', defaultValue: 'Kepala Divisi Syariah\nPT BPD Kalimantan Timur dan Kalimantan Utara' },
+  { key: 'tempatTujuan', label: 'Tempat / Kota Tujuan', type: 'text', required: true, placeholder: 'TEMPAT', defaultValue: 'TEMPAT' },
+  { key: 'salamPembuka', label: 'Salam Pembuka', type: 'text', required: true, placeholder: 'Assalamu’alaikum Warahmatullah Wabarakatuh,', defaultValue: 'Assalamu’alaikum Warahmatullah Wabarakatuh,' },
+  { key: 'paragrafPembuka', label: 'Paragraf Pembuka / Doa', type: 'textarea', required: true, placeholder: 'Puji syukur ke hadirat Allah...', defaultValue: 'Puji syukur ke hadirat Allah Subhanahu wa Ta’ala, teriring doa semoga Saudara dalam keadaan sehat wal afiat dan mendapat lindungan dari Allah SWT dalam menjalankan tugas sehari-hari.' },
+  { key: 'namaLembaga', label: 'Nama / Sebutan Lembaga (Paragraf 2)', type: 'text', required: true, placeholder: 'lembaga keuangan syariah yang Saudara pimpin', defaultValue: 'lembaga keuangan syariah yang Saudara pimpin' },
+  { key: 'bulanLunasTerakhir', label: 'Bulan Pembayaran Terakhir yang Sudah Lunas', type: 'text', required: true, placeholder: 'bulan Desember 2025', defaultValue: 'bulan Desember 2025' },
+  { key: 'periodeTagihan', label: 'Periode Tagihan Iuran', type: 'text', required: true, placeholder: 'bulan Januari sd Desember 2026 (12 bulan)', defaultValue: 'bulan Januari sd Desember 2026 (12 bulan)' },
+  { key: 'perhitunganTagihan', label: 'Rincian Perhitungan Tagihan (Bulan x Tarif = Total)', type: 'text', required: true, placeholder: '12 x Rp 1.500.000 = Rp 18.000.000 (delapan belas juta rupiah)', defaultValue: '12 x Rp 1.500.000 = Rp 18.000.000 (delapan belas juta rupiah)' },
+  { key: 'instruksiPembayaran', label: 'Tujuan Transfer (Rekening / Virtual Account)', type: 'text', required: true, placeholder: 'No Virtual Account Dewan Syariah Nasional MUI di Bank Muamalat: 8550000000000028', defaultValue: 'No Virtual Account Dewan Syariah Nasional MUI di Bank Muamalat: 8550000000000028' },
+  { key: 'kontakKonfirmasi', label: 'Kontak Konfirmasi Bukti Transfer', type: 'text', required: true, placeholder: 'email: keuangan@dsnmui.or.id atau ke Hotline Keuangan DSN-MUI di 0811-9000-3456', defaultValue: 'email: keuangan@dsnmui.or.id atau ke Hotline Keuangan DSN-MUI di 0811-9000-3456' },
+  { key: 'catatanTambahan', label: 'Catatan Tambahan / Jatuh Tempo (Opsional)', type: 'textarea', required: false, placeholder: 'Catatan khusus jika ada (kosongkan jika tidak ada)...', defaultValue: '' },
+  { key: 'paragrafPenutup', label: 'Paragraf Penutup', type: 'textarea', required: true, placeholder: 'Demikianlah, atas perhatian dan kerjasama...', defaultValue: 'Demikianlah, atas perhatian dan kerjasama Saudara, kami ucapkan terima kasih.' },
+  { key: 'salamPenutup', label: 'Salam Penutup', type: 'text', required: true, placeholder: 'Wassalamu’alaikum Warahmatullah Wabarakatuh', defaultValue: 'Wassalamu’alaikum Warahmatullah Wabarakatuh' },
+  { key: 'headerTtd', label: 'Header Tanda Tangan', type: 'textarea', required: true, placeholder: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA', defaultValue: 'BADAN PENGURUS\nDEWAN SYARIAH NASIONAL-\nMAJELIS ULAMA INDONESIA' },
+  { key: 'jabatanKetua', label: 'Jabatan Penandatangan Kiri', type: 'text', required: true, placeholder: 'Ketua', defaultValue: 'Ketua' },
+  { key: 'namaKetua', label: 'Nama Penandatangan Kiri', type: 'text', required: true, placeholder: 'K.H. M. CHOLIL NAFIS, LC., PH.D.', defaultValue: 'K.H. M. CHOLIL NAFIS, LC., PH.D.' },
+  { key: 'jabatanSekretaris', label: 'Jabatan Penandatangan Kanan', type: 'text', required: true, placeholder: 'Sekretaris,', defaultValue: 'Sekretaris,' },
+  { key: 'namaSekretaris', label: 'Nama Penandatangan Kanan', type: 'text', required: true, placeholder: 'DR. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'DR. H. AMIRSYAH TAMBUNAN, M.A.' },
+];
+
 export const DEFAULT_TEMPLATES = [
+  {
+    name: 'Surat Keluar Tagihan Iuran Lembaga (U-0731 Keuangan)',
+    code: 'U-0731-TAGIHAN-IURAN',
+    category: 'Keuangan',
+    description: 'Template resmi Surat Keluar Tagihan Iuran Bulanan Lembaga Keuangan Syariah (LKS) Bagian Keuangan DSN-MUI lengkap dengan kop surat, nomor, perincian iuran, virtual account, dan tanda tangan resmi BPH DSN-MUI.',
+    htmlContent: FULL_HTML_TAGIHAN_IURAN,
+    variables: FULL_VARS_TAGIHAN_IURAN,
+  },
+  {
+    name: 'Surat Keluar Invoice / Tagihan (B-0771)',
+    code: 'B-0771-INVOICE',
+    category: 'Invoice',
+    description: 'Template resmi Surat Keluar Invoice / Tagihan Pembayaran Dewan Syariah Nasional - Majelis Ulama Indonesia (DSN-MUI) lengkap dengan surat pengantar (halaman 1) dan rincian lampiran invoice (halaman 2).',
+    htmlContent: FULL_HTML_INVOICE,
+    variables: FULL_VARS_INVOICE,
+  },
   {
     name: 'Surat Keluar Universal (Kustom Bebas)',
     code: 'SK-UNIVERSAL',

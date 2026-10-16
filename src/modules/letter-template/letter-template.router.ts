@@ -112,7 +112,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const { search, category, includeArchived } = req.query;
 
     // Ensure critical templates are present and up-to-date in database
-    const autoSyncCodes = ['SK-UNIVERSAL', 'ST-0663-TUGAS-TIM', 'ST-0650-TUGAS', 'SK-TUGAS', 'U-0667-UNDANGAN-LAYANAN'];
+    const autoSyncCodes = ['SK-UNIVERSAL', 'ST-0663-TUGAS-TIM', 'ST-0650-TUGAS', 'SK-TUGAS', 'U-0667-UNDANGAN-LAYANAN', 'B-0771-INVOICE', 'U-0731-TAGIHAN-IURAN'];
     for (const code of autoSyncCodes) {
       const tpl = DEFAULT_TEMPLATES.find(t => t.code === code);
       if (tpl) {
