@@ -132,6 +132,10 @@ export function getLogoDsnCertBase64(): string {
   return getStaticImageBase64('logo-dsn-cert.png', 'image/png');
 }
 
+export function getKwitansiBgBase64(): string {
+  return getStaticImageBase64('kwitansi-bg.jpg', 'image/jpeg');
+}
+
 export async function mergePdfWithEvidence(
   mainPdfBuffer: Buffer,
   evidenceFiles: { id: string; name: string; fileUrl: string; mimeType: string }[]
@@ -2921,7 +2925,7 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
 
   const targetRole = isKetua
     ? '(?:Ketua|Menyetujui|Ketum)'
-    : (isSekretaris ? '(?:Sekretaris|Mengetahui|Sekjen)' : '(?:Ketua|Direktur|Pimpinan|Kepala|Menyetujui)');
+    : (isSekretaris ? '(?:Sekretaris|Mengetahui|Sekjen)' : '(?:Ketua|Direktur|Pimpinan|Kepala|Menyetujui|Bendahara)');
 
   // Find targetRole before any Lampiran
   const lampiranMatch = htmlContent.match(/Lampiran\s+[0-9I|IVX]+/i);
@@ -3242,6 +3246,21 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
     } else {
       htmlContent = `${listStyle}\n${htmlContent}`;
     }
+  }
+
+  // Check if document is a kwitansi
+  const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
+  if (isKwitansi) {
+    const kwitansiBgBase64 = getKwitansiBgBase64();
+    htmlContent = htmlContent
+      .replace(/(\\?\${KWITANSI_BG}|\${KWITANSI_BG})/g, kwitansiBgBase64)
+      .replace(/url\(['"]?[^'"]*kwitansi-bg\.jpg['"]?\)/gi, `url('${kwitansiBgBase64}')`)
+      .replace(/src=["'][^"']*kwitansi-bg\.jpg["']/gi, `src="${kwitansiBgBase64}"`);
+
+    if (!/<base[^>]*href=["'][^"']+["'][^>]*>/i.test(htmlContent)) {
+      htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
+    }
+    return htmlContent;
   }
 
   // Check if document is a landscape certificate
@@ -3865,20 +3884,30 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         }
 
         const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
+        const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
         const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
-        await page.setViewport(isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 });
+        await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 }));
         await page.emulateMediaType('print');
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
         const pdfOptions: any = {
-          format: 'A4',
-          landscape: isLandscape,
           printBackground: true,
+          preferCSSPageSize: true,
         };
-        if (isLandscape) {
+        if (isKwitansi) {
+          pdfOptions.width = '240mm';
+          pdfOptions.height = '106mm';
+          pdfOptions.landscape = true;
           pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+        } else if (isLandscape) {
+          pdfOptions.format = 'A4';
+          pdfOptions.landscape = true;
+          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+        } else {
+          pdfOptions.format = 'A4';
+          pdfOptions.landscape = false;
         }
         const rawPdfBuffer = await page.pdf(pdfOptions);
         await browser.close();
@@ -4002,19 +4031,33 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         }
 
         const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
+        const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
         const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
-        await page.setViewport(isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 1200, height: 1600, deviceScaleFactor: 2 });
+        await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 1200, height: 1600, deviceScaleFactor: 2 }));
         await page.emulateMediaType('screen');
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
-        const rawPdfBuffer = await page.pdf({
-          format: 'A4',
-          landscape: isLandscape,
+        const pdfOptions: any = {
           printBackground: true,
-          margin: isLandscape ? { top: 0, bottom: 0, left: 0, right: 0 } : { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
-        });
+          preferCSSPageSize: true,
+        };
+        if (isKwitansi) {
+          pdfOptions.width = '240mm';
+          pdfOptions.height = '106mm';
+          pdfOptions.landscape = true;
+          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+        } else if (isLandscape) {
+          pdfOptions.format = 'A4';
+          pdfOptions.landscape = true;
+          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+        } else {
+          pdfOptions.format = 'A4';
+          pdfOptions.landscape = false;
+          pdfOptions.margin = { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' };
+        }
+        const rawPdfBuffer = await page.pdf(pdfOptions);
         await browser.close();
 
         // Merge supporting documents / evidence files if any
@@ -4506,21 +4549,31 @@ export async function getDocumentPdfBuffer(
 
     const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
     const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
+    const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
 
     const browser = await launchPuppeteerBrowser();
     const page = await browser.newPage();
-    await page.setViewport(isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 });
+    await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 }));
     await page.emulateMediaType('print');
 
     await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
     const pdfOptions: any = {
-      format: 'A4',
-      landscape: isLandscape,
       printBackground: true,
+      preferCSSPageSize: true,
     };
-    if (isLandscape) {
+    if (isKwitansi) {
+      pdfOptions.width = '240mm';
+      pdfOptions.height = '106mm';
+      pdfOptions.landscape = true;
       pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+    } else if (isLandscape) {
+      pdfOptions.format = 'A4';
+      pdfOptions.landscape = true;
+      pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+    } else {
+      pdfOptions.format = 'A4';
+      pdfOptions.landscape = false;
     }
     const rawPdfBuffer = await page.pdf(pdfOptions);
     await browser.close();

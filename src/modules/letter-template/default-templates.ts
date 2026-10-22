@@ -2420,6 +2420,214 @@ export const FULL_VARS_KONTRIBUSI_DPS = [
   { key: 'namaSekretaris', label: 'Nama Sekretaris (Kanan)', type: 'text', required: true, placeholder: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.', defaultValue: 'Dr. H. AMIRSYAH TAMBUNAN, M.A.' }
 ];
 
+export const FULL_HTML_KWITANSI = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Kwitansi Pembayaran Resmi DSN-MUI</title>
+  <style>
+    @page {
+      size: 240mm 106mm;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 240mm;
+      height: 106mm;
+      background: #f8fafc;
+      font-family: Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    @media print {
+      body { background: transparent; }
+    }
+    .kwitansi-card {
+      position: relative;
+      width: 240mm;
+      height: 106mm;
+      background-image: url('/images/kwitansi-bg.jpg');
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      overflow: hidden;
+      margin: 0 auto;
+    }
+    .kwitansi-body {
+      position: absolute;
+      top: 9mm;
+      left: 44mm;
+      right: 11mm;
+      bottom: 5.5mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .label-italic {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      color: #111827;
+    }
+    .dotted-line {
+      border-bottom: 1.5px dotted #64748b;
+    }
+    .terbilang-bar {
+      position: relative;
+      height: 27px;
+      background: repeating-linear-gradient(
+        to bottom,
+        #475569 0px,
+        #475569 1px,
+        transparent 1px,
+        transparent 2.8px
+      );
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      border-radius: 2px;
+      clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+    }
+    .rp-box {
+      width: 75mm;
+      height: 15mm;
+      border: 1.5px solid #334155;
+      background: #ffffff;
+      padding: 1.8mm 2mm;
+      box-sizing: border-box;
+      margin-bottom: 3.5mm;
+    }
+    .rp-inner-bar {
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        to bottom,
+        #475569 0px,
+        #475569 1px,
+        transparent 1px,
+        transparent 2.8px
+      );
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      box-sizing: border-box;
+      clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+    }
+    .rp-symbol {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      font-weight: bold;
+      font-size: 24pt;
+      color: #0f172a;
+      margin-right: 12px;
+      line-height: 1;
+    }
+    .rp-amount {
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: 800;
+      font-size: 15pt;
+      color: #0f172a;
+      letter-spacing: 0.5px;
+      line-height: 1;
+    }
+    .untuk-pembayaran-area {
+      font-family: Arial, sans-serif;
+      font-size: 10pt;
+      color: #000;
+      line-height: 22px;
+      background-image: radial-gradient(circle, #64748b 0.75px, transparent 0.75px);
+      background-size: 4px 22px;
+      background-position: 0 19px;
+      min-height: 66px;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="kwitansi-card">
+    <div class="kwitansi-body">
+      <!-- TOP CONTENT -->
+      <div>
+        <!-- ROW 1: NOMOR -->
+        <div style="display: flex; align-items: baseline; margin-bottom: 6px;">
+          <span class="label-italic" style="font-size: 11.5pt; margin-right: 6px;">No.</span>
+          <div class="dotted-line" style="width: 65mm; padding-bottom: 1px;">
+            <span style="font-family: Arial, sans-serif; font-size: 10.5pt; font-weight: 600; color: #111;">{{nomorKwitansi}}</span>
+          </div>
+        </div>
+
+        <!-- ROW 2: SUDAH DITERIMA DARI -->
+        <div style="display: flex; align-items: baseline; width: 100%; margin-bottom: 7px;" class="dotted-line">
+          <span class="label-italic" style="font-size: 11.5pt; white-space: nowrap; margin-right: 10px; padding-bottom: 2px;">Sudah diterima dari :</span>
+          <span style="font-family: Arial, sans-serif; font-size: 11pt; font-weight: bold; color: #000; flex: 1; padding-bottom: 2px;">{{sudahDiterimaDari}}</span>
+        </div>
+
+        <!-- ROW 3: TERBILANG -->
+        <div style="display: flex; align-items: center; width: 100%; margin-bottom: 7px;">
+          <span class="label-italic" style="font-size: 11.5pt; width: 38mm; white-space: nowrap;">Terbilang</span>
+          <div class="terbilang-bar" style="flex: 1;">
+            <span style="font-family: Arial, sans-serif; font-size: 10.5pt; font-weight: bold; color: #0f172a;">{{terbilang}}</span>
+          </div>
+        </div>
+
+        <!-- ROW 4: UNTUK PEMBAYARAN -->
+        <div style="margin-bottom: 0px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 38mm; vertical-align: top; padding: 0 0 2px 0;">
+                <span class="label-italic" style="font-size: 11.5pt; white-space: nowrap;">Untuk pembayaran</span>
+              </td>
+              <td style="vertical-align: top; padding: 0;">
+                <div class="untuk-pembayaran-area">
+                  {{untukPembayaran}}
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- ROW 5: RP BOX & TANDA TANGAN (LOWERED TO BOTTOM) -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0px;">
+        <!-- Rp Box with Inner Horizontal Lines -->
+        <div class="rp-box">
+          <div class="rp-inner-bar">
+            <span class="rp-symbol">Rp</span>
+            <span class="rp-amount">{{jumlahUang}}</span>
+          </div>
+        </div>
+
+        <!-- Signature Section -->
+        <div style="text-align: center; min-width: 95mm; max-width: 108mm; width: auto; display: flex; flex-direction: column; align-items: center;">
+          <div style="font-family: Arial, sans-serif; font-size: 10pt; color: #111; margin-bottom: 2px; white-space: nowrap;">{{tempatDibuat}}, {{tanggalMasehi}}</div>
+          <!-- QR Code Container -->
+          <div style="min-height: 52px; display: flex; align-items: center; justify-content: center; margin: 1px 0;">
+            <!-- QR_CODE_TTE_PLACEHOLDER -->
+            <div style="height: 52px;"></div>
+          </div>
+          <div style="font-family: Arial, sans-serif; font-weight: bold; font-size: 9.5pt; text-decoration: underline; text-transform: uppercase; color: #000; margin-top: 2px; line-height: 1.2; white-space: nowrap; text-align: center;">{{namaPenandatangan}}</div>
+          <div style="font-family: Arial, sans-serif; font-size: 9.5pt; color: #111; margin-top: 2px; white-space: nowrap; text-align: center;">{{jabatanPenandatangan}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+export const FULL_VARS_KWITANSI = [
+  { key: 'nomorKwitansi', label: 'Nomor Kwitansi', type: 'text', required: true, placeholder: '003/LBS/III/2026', defaultValue: '003/LBS/III/2026' },
+  { key: 'sudahDiterimaDari', label: 'Sudah Diterima Dari (Pembayar)', type: 'text', required: true, placeholder: 'PT Bank Pembangunan Daerah Jawa Tengah', defaultValue: 'PT Bank Pembangunan Daerah Jawa Tengah' },
+  { key: 'terbilang', label: 'Jumlah Terbilang', type: 'text', required: true, placeholder: 'Satu juta lima ratus ribu Rupiah', defaultValue: 'Satu juta lima ratus ribu Rupiah' },
+  { key: 'untukPembayaran', label: 'Untuk Pembayaran (Rincian)', type: 'textarea', required: true, placeholder: "Iuran (Ta'awun) Bulan Februari 2026 (1 bulan) sebesar 1 x Rp. 1.500.000 = Rp. 1.500.000", defaultValue: "Iuran (Ta'awun) Bulan Februari 2026 (1 bulan) sebesar 1 x Rp. 1.500.000 = Rp. 1.500.000" },
+  { key: 'jumlahUang', label: 'Nominal Angka (Rp)', type: 'text', required: true, placeholder: '1.500.000', defaultValue: '1.500.000' },
+  { key: 'tempatDibuat', label: 'Kota / Tempat', type: 'text', required: true, placeholder: 'Jakarta', defaultValue: 'Jakarta' },
+  { key: 'tanggalMasehi', label: 'Tanggal Kwitansi', type: 'text', required: true, placeholder: '9 Maret 2026', defaultValue: '9 Maret 2026' },
+];
+
 export const FULL_HTML_SERTIFIKAT_KS_RS = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -3295,6 +3503,14 @@ export const DEFAULT_TEMPLATES = [
     description: 'Template resmi Sertifikat Pernyataan Kesesuaian Syariah Rumah Sakit Dewan Syariah Nasional - Majelis Ulama Indonesia (DSN-MUI).',
     htmlContent: FULL_HTML_SERTIFIKAT_KS_RS,
     variables: FULL_VARS_SERTIFIKAT_KS_RS,
+  },
+  {
+    name: 'Kwitansi Pembayaran Resmi DSN-MUI',
+    code: 'KWITANSI-KEUANGAN',
+    category: 'Keuangan',
+    description: 'Template resmi Kwitansi Pembayaran Tanda Penerimaan Uang Dewan Syariah Nasional - Majelis Ulama Indonesia (DSN-MUI).',
+    htmlContent: FULL_HTML_KWITANSI,
+    variables: FULL_VARS_KWITANSI,
   },
 ];
 

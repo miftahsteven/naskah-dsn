@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { authenticate } from '../../middleware/auth.js';
 import type { AuthRequest } from '../../middleware/auth.js';
-import { getKopSuratBase64, getBismillahBase64, getLogoDsnBase64, getWqaUkasBase64, getCertKsRsBgBase64, getStempelDsnBase64, getBismillahCertBase64, getLogoDsnCertBase64 } from '../documents/documents.router.js';
+import { getKopSuratBase64, getBismillahBase64, getLogoDsnBase64, getWqaUkasBase64, getCertKsRsBgBase64, getStempelDsnBase64, getBismillahCertBase64, getLogoDsnCertBase64, getKwitansiBgBase64 } from '../documents/documents.router.js';
 import { DEFAULT_TEMPLATES, HEADER_HTML, FOOTER_HTML } from './default-templates.js';
 
 const router = Router();
@@ -87,7 +87,12 @@ function sanitizeTemplateHtml(html: string): string {
     return `${p1}${cleanStyle ? cleanStyle + '; ' : ''}width: 260px; max-width: 45%; height: auto; max-height: 48px; object-fit: contain; filter: brightness(0); display: block; margin: 8px auto 14px auto;${p3}`;
   });
 
-  const isCert = out.includes('certificate-sheet') || out.includes('cert-page');
+  const kwitansiBgBase64 = getKwitansiBgBase64();
+  out = out.replace(/(\\?\${KWITANSI_BG}|\${KWITANSI_BG})/g, kwitansiBgBase64);
+  out = out.replace(/url\(['"]?[^'"]*kwitansi-bg\.jpg['"]?\)/gi, `url('${kwitansiBgBase64}')`);
+  out = out.replace(/src=["'][^"']*kwitansi-bg\.jpg["']/gi, `src="${kwitansiBgBase64}"`);
+
+  const isCert = out.includes('certificate-sheet') || out.includes('cert-page') || out.includes('kwitansi-card');
   if (!isCert) {
     out = out.replace(/font-size:\s*11pt/gi, 'font-size: 10.5pt');
   }
@@ -112,7 +117,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const { search, category, includeArchived } = req.query;
 
     // Ensure critical templates are present and up-to-date in database
-    const autoSyncCodes = ['SK-UNIVERSAL', 'ST-0663-TUGAS-TIM', 'ST-0650-TUGAS', 'SK-TUGAS', 'U-0667-UNDANGAN-LAYANAN', 'B-0771-INVOICE', 'U-0731-TAGIHAN-IURAN'];
+    const autoSyncCodes = ['SK-UNIVERSAL', 'ST-0663-TUGAS-TIM', 'ST-0650-TUGAS', 'SK-TUGAS', 'U-0667-UNDANGAN-LAYANAN', 'B-0771-INVOICE', 'U-0731-TAGIHAN-IURAN', 'SERTIFIKAT-KS-RS', 'KWITANSI-KEUANGAN'];
     for (const code of autoSyncCodes) {
       const tpl = DEFAULT_TEMPLATES.find(t => t.code === code);
       if (tpl) {
