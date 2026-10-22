@@ -91,16 +91,21 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       { tanggal: orderDirection },
     ];
 
-    const take = limit ? parseInt(String(limit), 10) : undefined;
-    const skip = page && take ? (parseInt(String(page), 10) - 1) * take : undefined;
+    const findManyArgs: any = {
+      where: filter,
+      orderBy: orderByList,
+    };
+
+    if (limit) {
+      const takeNum = parseInt(String(limit), 10);
+      findManyArgs.take = takeNum;
+      if (page) {
+        findManyArgs.skip = (parseInt(String(page), 10) - 1) * takeNum;
+      }
+    }
 
     const [list, total] = await Promise.all([
-      prisma.fatwa.findMany({
-        where: filter,
-        orderBy: orderByList,
-        take,
-        skip,
-      }),
+      prisma.fatwa.findMany(findManyArgs),
       prisma.fatwa.count({ where: filter }),
     ]);
 
@@ -109,7 +114,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       data: list,
       total,
       page: page ? parseInt(String(page), 10) : 1,
-      limit: take || total,
+      limit: findManyArgs.take ?? total,
     });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
