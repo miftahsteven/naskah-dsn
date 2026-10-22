@@ -378,15 +378,21 @@ model DisposisiLog {
 }
 
 model Fatwa {
-  id           String   @id @default(uuid())
-  title        String
-  agendaNumber String   @unique
-  status       String   // 'PERMOHONAN' | 'KAJIAN' | 'BPH' | 'PLENO' | 'TTE' | 'PUBLIKASI'
-  applicant    String   // Pengaju / Pihak terkait
-  tanggal      DateTime @default(now())
-  keterangan   String?  // Catatan / Deskripsi fatwa
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(uuid())
+  title          String
+  agendaNumber   String    @unique
+  status         String    // 'PERMOHONAN' | 'KAJIAN' | 'BPH' | 'PLENO' | 'TTE' | 'PUBLIKASI'
+  applicant      String    // Pengaju / Pihak terkait
+  tanggal        DateTime  @default(now())
+  keterangan     String?   // Catatan / Deskripsi fatwa
+  nomorFatwa     String?   // Nomor resmi fatwa e.g. "01/DSN-MUI/IV/2000"
+  pleno          String?   // Rapat Pleno ke- (e.g. "1", "7 & 8", "60")
+  tahun          Int?      // Tahun pengesahan (2000-2026)
+  penandatangan1 String?   // Ketua / Ketum DSN-MUI
+  penandatangan2 String?   // Sekretaris DSN-MUI
+  noUrut         Int?      // Nomor urut 1 - 166
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model Meeting {
