@@ -148,7 +148,10 @@ export async function mergePdfWithEvidence(
     const mergedPdf = await PDFDocument.load(mainPdfBuffer, { ignoreEncryption: true });
 
     for (const file of evidenceFiles) {
-      let actualPath = resolveExistingFilePath(file.fileUrl);
+      let actualPath = await ensureExistingFilePath(file.fileUrl);
+      if (!actualPath || !fs.existsSync(actualPath)) {
+        actualPath = resolveExistingFilePath(file.fileUrl);
+      }
       if (!actualPath || !fs.existsSync(actualPath)) {
         if (!path.isAbsolute(file.fileUrl)) {
           actualPath = path.resolve(process.cwd(), file.fileUrl);
@@ -2789,13 +2792,18 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   htmlContent = htmlContent.replace(/<div style="text-align: center; display: inline-flex;[\s\S]*?TTE VERIFIED[\s\S]*?<\/div>\s*<\/div>/gi, '<!-- QR_CODE_TTE_PLACEHOLDER -->');
 
   const candidates = row.candidates || [];
-  let bestMatch: { m: RegExpExecArray, cand: string, score: number, index: number } | null = null;
+  let bestMatch: { m: RegExpExecArray; cand: string; score: number; index: number } | null = null;
+  const allPositiveMatches: Array<{ m: RegExpExecArray; cand: string; score: number; index: number }> = [];
 
   for (const cand of candidates) {
+    // Extract meaningful tokens (words of length >= 2, ignoring punctuation)
     const tokens = cand
-      .split(/[\s,.]+/)
-      .filter((t: string) => t.length >= 3 && !/^(dr|kh|prof|drs|h|lc|phd|ma|sh|mag|msi|ir|se|ag)$/i.test(t));
-    
+      .replace(/\b(Dr|K\.?H|Prof|Drs|H|Lc|Ph\.?D|M\.?A|S\.?H|M\.?Si|Ir|M\.?Ag|S\.?Ag|S\.?E|M\.?B\.?A)\b\.?/gi, '')
+      .replace(/[^a-zA-Z0-9\s]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter((t: string) => t.length >= 2);
+
     if (tokens.length > 0) {
       const patternStr = tokens.map((t: string) => escapeRegExp(t)).join('[\\s\\S]{0,80}?');
       const nameRegex = new RegExp(patternStr, 'gi'); 
@@ -2814,9 +2822,10 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
         const closeSlice = prefix.slice(Math.max(0, prefix.length - 200));
 
         let score = 0;
+        const hasExplicitQrPlaceholder = /<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/i.test(wideSlice);
 
         // Negative indicators: Attachment headers (Lampiran 1/Lampiran I), lists, colons like "Wakil Ketua :"
-        if (/Lampiran\s+[0-9I|IVX]+/i.test(prefix)) score -= 100;
+        if (!hasExplicitQrPlaceholder && /Lampiran\s+(?:\d+|[IVX]+\b)/i.test(prefix)) score -= 100;
         if (/Wakil\s*(?:Ketua|Sekretaris)\s*:/i.test(wideSlice)) score -= 100;
         if (/:\s*(<[^>]+>\s*)*$/.test(closeSlice) || /:\s*$/.test(prefix.trim())) score -= 100;
         if (/<li[^>]*>/i.test(closeSlice) && !/<\/li>/i.test(closeSlice)) score -= 50;
@@ -2835,10 +2844,10 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
         }
 
         // Positive indicators: Signature table, role headers, height spacers, placeholder
-        if (/(?:Ketua|Sekretaris|Direktur|Pimpinan|Kepala|Menyetujui|Mengetahui|Ketum|Sekjen)/i.test(wideSlice)) score += 30;
+        if (/(?:Ketua|Sekretaris|Direktur|Pimpinan|Kepala|Menyetujui|Mengetahui|Ketum|Sekjen|Bendahara|Keuangan)/i.test(wideSlice)) score += 30;
         if (/(?:<br\s*\/?>\s*){2,}/i.test(wideSlice)) score += 15;
         if (/margin-bottom:\s*\d{2,}px/i.test(wideSlice)) score += 25;
-        if (/<div[^>]*style="[^"]*height:\s*\d{2,}px/i.test(wideSlice)) score += 25;
+        if (/<div[^>]*style="[^"]*height:\s*\d{2,}(?:px|mm)/i.test(wideSlice)) score += 25;
         if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/i.test(wideSlice)) score += 30;
 
         // Matching specific role
@@ -2849,6 +2858,9 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
 
         if (!bestMatch || score > bestMatch.score) {
           bestMatch = { m, cand, score, index: m.index };
+        }
+        if (score > 0) {
+          allPositiveMatches.push({ m, cand, score, index: m.index });
         }
       }
     }
@@ -2862,55 +2874,86 @@ function injectSignatureQrIntoHtml(htmlContent: string, row: any, baseUrl: strin
   const qrImageHtml = `<div style="text-align:left; margin:4px 0 4px 0; line-height:1; display:block; position:relative; width:60px; height:60px;"><img src="${row.qrDataUrl}" alt="QR Signature" class="qr-signature-img" style="width:60px !important; height:60px !important; min-width:60px !important; min-height:60px !important; object-fit:contain !important; display:block !important; position:absolute; top:0; left:0; z-index:1;" />${logoImg}</div>`;
 
   if (bestMatch && bestMatch.score > 0) {
-    const matchIndex = bestMatch.m.index;
-    const prefix = htmlContent.substring(0, matchIndex);
-
-    const lastOpenTagIndex = prefix.lastIndexOf('<');
-    let targetIndex = matchIndex;
-    if (lastOpenTagIndex !== -1) {
-      const tagSub = prefix.substring(lastOpenTagIndex);
-      if (/^<(span|u|b|strong|div|p)[^>]*>/i.test(tagSub)) {
-        targetIndex = lastOpenTagIndex;
-      }
-    }
-
-    const realPrefix = htmlContent.substring(0, targetIndex);
-    let suffix = htmlContent.substring(targetIndex);
-    suffix = suffix.replace(/^([^>]+style="[^"]*)(?:margin-top|padding-top):\s*\d+px;?/i, "$1margin-top: 2px;");
-
-    const sliceLen = Math.min(600, realPrefix.length);
-    const prefixBase = realPrefix.slice(0, realPrefix.length - sliceLen);
-    const lastSlice = realPrefix.slice(realPrefix.length - sliceLen);
-
-    // If QR placeholder or existing qr-signature-img is already here, skip duplicate injection
-    if (lastSlice.includes('qr-signature-img')) {
-      return { html: htmlContent, injected: true };
-    }
-
-    if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->\s*<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>/gi.test(lastSlice)) {
-      const updatedSlice = lastSlice.replace(/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->\s*<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>/gi, qrImageHtml);
-      return { html: prefixBase + updatedSlice + suffix, injected: true };
-    } else if (/(<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
-      const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
-      return { html: prefixBase + updatedSlice + suffix, injected: true };
-    } else if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi.test(lastSlice)) {
-      const updatedSlice = lastSlice.replace(/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi, qrImageHtml);
-      return { html: prefixBase + updatedSlice + suffix, injected: true };
-    } else if (/margin-bottom:\s*\d+px/i.test(lastSlice)) {
-      const updatedSlice = lastSlice.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
-      return { html: prefixBase + updatedSlice + qrImageHtml + suffix, injected: true };
-    } else {
-      const lastBrMatches = [...lastSlice.matchAll(/(?:<br\s*\/?>\s*){2,}/gi)];
-      if (lastBrMatches.length > 0) {
-        const lastBrMatch = lastBrMatches[lastBrMatches.length - 1];
-        if (lastBrMatch && typeof lastBrMatch.index === 'number') {
-          const bPrefix = lastSlice.substring(0, lastBrMatch.index);
-          const bSuffix = lastSlice.substring(lastBrMatch.index + lastBrMatch[0].length);
-          const updatedSlice = bPrefix + qrImageHtml + bSuffix;
-          return { html: prefixBase + updatedSlice + suffix, injected: true };
+    // Collect distinct signature block matches (e.g. Page 1 Ketua AND Page 2 Invoice signatory)
+    const selectedMatches = [bestMatch];
+    for (const pm of allPositiveMatches) {
+      const isFarEnough = selectedMatches.every(sel => Math.abs(sel.index - pm.index) > 150);
+      if (isFarEnough && pm.score >= 25) {
+        const pmWideSlice = htmlContent.substring(Math.max(0, pm.index - 600), pm.index);
+        if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/i.test(pmWideSlice) || /<div[^>]*style="[^"]*height:\s*\d{2,}(?:px|mm)/i.test(pmWideSlice)) {
+          selectedMatches.push(pm);
         }
       }
-      return { html: realPrefix + qrImageHtml + suffix, injected: true };
+    }
+
+    // Sort descending by index so replacing later matches never invalidates earlier indices
+    selectedMatches.sort((a, b) => b.index - a.index);
+
+    let updatedHtml = htmlContent;
+    let anyInjected = false;
+
+    for (const matchItem of selectedMatches) {
+      const matchIndex = matchItem.m.index;
+      const prefix = updatedHtml.substring(0, matchIndex);
+
+      const lastOpenTagIndex = prefix.lastIndexOf('<');
+      let targetIndex = matchIndex;
+      if (lastOpenTagIndex !== -1) {
+        const tagSub = prefix.substring(lastOpenTagIndex);
+        if (/^<(span|u|b|strong|div|p)[^>]*>/i.test(tagSub)) {
+          targetIndex = lastOpenTagIndex;
+        }
+      }
+
+      const realPrefix = updatedHtml.substring(0, targetIndex);
+      let suffix = updatedHtml.substring(targetIndex);
+      suffix = suffix.replace(/^([^>]+style="[^"]*)(?:margin-top|padding-top):\s*\d+px;?/i, "$1margin-top: 2px;");
+
+      const sliceLen = Math.min(600, realPrefix.length);
+      const prefixBase = realPrefix.slice(0, realPrefix.length - sliceLen);
+      const lastSlice = realPrefix.slice(realPrefix.length - sliceLen);
+
+      if (lastSlice.includes('qr-signature-img')) {
+        anyInjected = true;
+        continue;
+      }
+
+      if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->\s*<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>/gi.test(lastSlice)) {
+        const updatedSlice = lastSlice.replace(/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->\s*<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>/gi, qrImageHtml);
+        updatedHtml = prefixBase + updatedSlice + suffix;
+        anyInjected = true;
+      } else if (/(<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>)/gi.test(lastSlice)) {
+        const updatedSlice = lastSlice.replace(/(<div[^>]*style="[^"]*height:\s*[\d\.]+(?:px|mm)[^"]*"[^>]*>\s*<\/div>)/gi, qrImageHtml);
+        updatedHtml = prefixBase + updatedSlice + suffix;
+        anyInjected = true;
+      } else if (/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi.test(lastSlice)) {
+        const updatedSlice = lastSlice.replace(/<!--\s*QR_CODE_TTE_PLACEHOLDER\s*-->/gi, qrImageHtml);
+        updatedHtml = prefixBase + updatedSlice + suffix;
+        anyInjected = true;
+      } else if (/margin-bottom:\s*\d+px/i.test(lastSlice)) {
+        const updatedSlice = lastSlice.replace(/margin-bottom:\s*\d+px/gi, 'margin-bottom: 4px');
+        updatedHtml = prefixBase + updatedSlice + qrImageHtml + suffix;
+        anyInjected = true;
+      } else {
+        const lastBrMatches = [...lastSlice.matchAll(/(?:<br\s*\/?>\s*){2,}/gi)];
+        if (lastBrMatches.length > 0) {
+          const lastBrMatch = lastBrMatches[lastBrMatches.length - 1];
+          if (lastBrMatch && typeof lastBrMatch.index === 'number') {
+            const bPrefix = lastSlice.substring(0, lastBrMatch.index);
+            const bSuffix = lastSlice.substring(lastBrMatch.index + lastBrMatch[0].length);
+            const updatedSlice = bPrefix + qrImageHtml + bSuffix;
+            updatedHtml = prefixBase + updatedSlice + suffix;
+            anyInjected = true;
+            continue;
+          }
+        }
+        updatedHtml = realPrefix + qrImageHtml + suffix;
+        anyInjected = true;
+      }
+    }
+
+    if (anyInjected) {
+      return { html: updatedHtml, injected: true };
     }
   }
 
@@ -3000,7 +3043,8 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
 
   const targetKiri = templateVariables.namaKetua || templateVariables.namaKiri;
   const targetKanan = templateVariables.namaSekretaris || templateVariables.namaKanan;
-  const targetSingle = templateVariables.namaPenandatangan;
+  const targetSingle = templateVariables.namaPenandatangan || templateVariables.namaPenandatanganInvoice;
+  const targetInvoiceSigner = templateVariables.namaPenandatanganInvoice;
 
   // Filter signedSigs: ONLY include signers who actually belong to the letter's designated signature slots or dynamic workflow
   const validSigners: Array<{ sig: any; slot: string; targetName: string; roleName: string; signerIndex: number }> = [];
@@ -3112,6 +3156,9 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
       candidates.push("CHOLIL NAFIS");
       candidates.push("ADIWARMAN");
       candidates.push("HASANUDDIN");
+      if (targetInvoiceSigner && !candidates.includes(targetInvoiceSigner)) {
+        candidates.push(targetInvoiceSigner);
+      }
     } else if (v.slot === 'kanan') {
       candidates.push("AMIRSYAH TAMBUNAN");
       candidates.push("ASRORI KARNI");
@@ -3260,6 +3307,92 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
     if (!/<base[^>]*href=["'][^"']+["'][^>]*>/i.test(htmlContent)) {
       htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
     }
+
+    if (signatureRows.length > 0) {
+      signatureRows.forEach(row => {
+        const res = injectSignatureQrIntoHtml(htmlContent, row, baseUrl);
+        if (res.injected) {
+          htmlContent = res.html;
+        }
+      });
+    }
+
+    const kwitansiScreenHelper = `
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+<style id="amanah-kwitansi-responsive">
+  img.qr-signature-img {
+    width: 52px !important;
+    height: 52px !important;
+    max-width: 52px !important;
+    max-height: 52px !important;
+    min-width: 52px !important;
+    min-height: 52px !important;
+    display: inline-block !important;
+    object-fit: contain !important;
+  }
+  @media screen {
+    html, body {
+      width: 100% !important;
+      min-height: 100% !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 12px 8px !important;
+      background: #f1f5f9 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      overflow-x: hidden !important;
+      box-sizing: border-box !important;
+    }
+    .kwitansi-scale-shell {
+      position: relative !important;
+      margin: 0 auto !important;
+      overflow: hidden !important;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.12) !important;
+      border-radius: 6px !important;
+      background: #ffffff !important;
+    }
+  }
+</style>
+<script>
+(function() {
+  function fitKwitansi() {
+    var card = document.querySelector('.kwitansi-card');
+    if (!card) return;
+    var cardW = 907.09;
+    var cardH = 400.63;
+    var shell = document.querySelector('.kwitansi-scale-shell');
+    if (!shell && card.parentNode) {
+      shell = document.createElement('div');
+      shell.className = 'kwitansi-scale-shell';
+      card.parentNode.insertBefore(shell, card);
+      shell.appendChild(card);
+    }
+    var availW = Math.max(260, (window.innerWidth || document.documentElement.clientWidth || cardW) - 16);
+    var scale = availW < cardW ? (availW / cardW) : 1;
+    card.style.transformOrigin = 'top left';
+    card.style.transform = 'scale(' + scale + ')';
+    card.style.margin = '0';
+    if (shell) {
+      shell.style.width = Math.ceil(cardW * scale) + 'px';
+      shell.style.height = Math.ceil(cardH * scale) + 'px';
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fitKwitansi);
+  } else {
+    fitKwitansi();
+  }
+  window.addEventListener('resize', fitKwitansi);
+  setTimeout(fitKwitansi, 150);
+})();
+</script>`;
+    if (htmlContent.includes('</head>')) {
+      htmlContent = htmlContent.replace('</head>', `${kwitansiScreenHelper}\n</head>`);
+    } else {
+      htmlContent = `${kwitansiScreenHelper}\n${htmlContent}`;
+    }
     return htmlContent;
   }
 
@@ -3282,6 +3415,15 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
 
     if (!/<base[^>]*href=[\"'][^\"']+[\"'][^>]*>/i.test(htmlContent)) {
       htmlContent = htmlContent.replace(/<head([^>]*)>/i, `<head$1><base href="${baseUrl}">`);
+    }
+
+    if (signatureRows.length > 0) {
+      signatureRows.forEach(row => {
+        const res = injectSignatureQrIntoHtml(htmlContent, row, baseUrl);
+        if (res.injected) {
+          htmlContent = res.html;
+        }
+      });
     }
     return htmlContent;
   }
@@ -3351,7 +3493,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
       @page {
         size: A4;
         margin-top: 10mm !important;
-        margin-bottom: 12mm !important;
+        margin-bottom: 8mm !important;
         margin-left: 10mm !important;
         margin-right: 10mm !important;
       }
@@ -3564,7 +3706,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
         height: auto !important;
         max-height: 48px !important;
         display: block !important;
-        margin: 8px auto 14px auto !important;
+        margin: 6px auto 10px auto !important;
         object-fit: contain !important;
         filter: brightness(0) !important;
       }
@@ -3595,7 +3737,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
       table[style*="margin-top: 14px"],
       table[style*="margin-top: 15px"],
       table[style*="margin-top: 30px"] {
-        margin-top: 8px !important;
+        margin-top: 4px !important;
         page-break-inside: avoid !important;
       }
       div[style*="width: 280px"] {
@@ -3692,6 +3834,7 @@ router.get('/:id/render', authenticate, async (req: AuthRequest, res: Response) 
             user: { select: { fullName: true, email: true, jobTitle: true } }
           }
         },
+        evidenceFiles: { orderBy: { createdAt: 'asc' } },
         workflowInstances: {
           include: {
             steps: {
@@ -3723,6 +3866,7 @@ router.get('/:id/render', authenticate, async (req: AuthRequest, res: Response) 
               user: { select: { fullName: true, email: true, jobTitle: true } }
             }
           },
+          evidenceFiles: { orderBy: { createdAt: 'asc' } },
           workflowInstances: {
             include: {
               steps: {
@@ -3782,7 +3926,43 @@ router.get('/:id/render', authenticate, async (req: AuthRequest, res: Response) 
     const rawHtml = await fs.promises.readFile(filePath, 'utf8');
     // Use HTTP base URL so all images (like logos) load correctly in html2pdf
     const httpUrlBase = getApiBaseUrl(req) + '/';
-    const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, httpUrlBase);
+    let htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, httpUrlBase);
+
+    if (document.evidenceFiles && document.evidenceFiles.length > 0) {
+      const evidenceHtml = `
+<div class="amanah-evidence-section" style="margin-top: 36px; padding: 20px 16px; background: #f8fafc; border-top: 2px dashed #94a3b8; border-radius: 8px;">
+  <div style="font-family: Arial, sans-serif; font-size: 11pt; font-weight: bold; color: #1e293b; margin-bottom: 14px; text-align: center;">
+    📄 DOKUMEN LAMPIRAN TERKAIT (${document.evidenceFiles.length} Berkas)
+  </div>
+  ${document.evidenceFiles.map((ef: any, idx: number) => {
+    const efName = ef.name || `Lampiran ${idx + 1}`;
+    const cleanUrl = ef.fileUrl ? (ef.fileUrl.startsWith('http') ? ef.fileUrl : `${httpUrlBase}${ef.fileUrl.replace(/^\/+/, '')}`) : '';
+    const isImg = (ef.mimeType || '').startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(efName);
+    if (isImg && cleanUrl) {
+      return `
+        <div style="margin-bottom: 20px; text-align: center;">
+          <div style="font-size: 9pt; font-weight: bold; color: #475569; margin-bottom: 8px;">${efName}</div>
+          <img src="${cleanUrl}" alt="${efName}" style="max-width: 100%; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" />
+        </div>
+      `;
+    }
+    return `
+      <div style="display: flex; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-family: Arial, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: bold; padding: 4px 8px; border-radius: 4px;">PDF</span>
+          <span style="font-size: 10pt; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${efName}</span>
+        </div>
+        ${cleanUrl ? `<a href="${cleanUrl}" target="_blank" style="padding: 6px 12px; background: #006633; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 9pt; font-weight: bold; white-space: nowrap;">Unduh / Buka</a>` : ''}
+      </div>
+    `;
+  }).join('')}
+</div>`;
+      if (htmlContent.includes('</body>')) {
+        htmlContent = htmlContent.replace('</body>', `${evidenceHtml}</body>`);
+      } else {
+        htmlContent = `${htmlContent}${evidenceHtml}`;
+      }
+    }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
@@ -3874,17 +4054,93 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
           });
         }
 
-        const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
+        let htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
 
         if (previewMode) {
+          if (document.evidenceFiles && document.evidenceFiles.length > 0) {
+            const evidenceHtml = `
+<div class="amanah-evidence-section" style="margin-top: 36px; padding: 20px 16px; background: #f8fafc; border-top: 2px dashed #94a3b8; border-radius: 8px;">
+  <div style="font-family: Arial, sans-serif; font-size: 11pt; font-weight: bold; color: #1e293b; margin-bottom: 14px; text-align: center;">
+    📄 DOKUMEN LAMPIRAN TERKAIT (${document.evidenceFiles.length} Berkas)
+  </div>
+  ${document.evidenceFiles.map((ef: any, idx: number) => {
+    const efName = ef.name || `Lampiran ${idx + 1}`;
+    const cleanUrl = ef.fileUrl ? (ef.fileUrl.startsWith('http') ? ef.fileUrl : `${baseUrl}${ef.fileUrl.replace(/^\/+/, '')}`) : '';
+    const isImg = (ef.mimeType || '').startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(efName);
+    if (isImg && cleanUrl) {
+      return `
+        <div style="margin-bottom: 20px; text-align: center;">
+          <div style="font-size: 9pt; font-weight: bold; color: #475569; margin-bottom: 8px;">${efName}</div>
+          <img src="${cleanUrl}" alt="${efName}" style="max-width: 100%; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" />
+        </div>
+      `;
+    }
+    return `
+      <div style="display: flex; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-family: Arial, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: bold; padding: 4px 8px; border-radius: 4px;">PDF</span>
+          <span style="font-size: 10pt; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${efName}</span>
+        </div>
+        ${cleanUrl ? `<a href="${cleanUrl}" target="_blank" style="padding: 6px 12px; background: #006633; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 9pt; font-weight: bold; white-space: nowrap;">Unduh / Buka</a>` : ''}
+      </div>
+    `;
+  }).join('')}
+</div>`;
+            if (htmlContent.includes('</body>')) {
+              htmlContent = htmlContent.replace('</body>', `${evidenceHtml}</body>`);
+            } else {
+              htmlContent = `${htmlContent}${evidenceHtml}`;
+            }
+          }
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           return res.end(htmlContent);
         }
 
+        const cachePdfPath = path.join(path.dirname(filePath), `${path.basename(filePath, path.extname(filePath))}_cached.pdf`);
+        const cleanDocNum = (document.documentNumber || document.title || version.fileName || 'surat_keluar')
+          .replace(/[\/\\?%*:|"<>]/g, '_')
+          .replace(/\.(html?|htm)$/i, '');
+        const pdfFileName = `${cleanDocNum}.pdf`;
+        const disposition = req.query.download === '1' || req.query.download === 'true' ? 'attachment' : 'inline';
+
+        const forceFresh = req.query.fresh === '1' || req.query.nocache === '1';
+        let useCached = false;
+        if (!forceFresh && fs.existsSync(cachePdfPath)) {
+          try {
+            const stat = await fs.promises.stat(cachePdfPath);
+            const docUpdatedTime = (document.updatedAt ? new Date(document.updatedAt) : new Date(0)).getTime();
+            const latestSigTime = (allSignatures || []).reduce((max: number, s: any) => {
+              const t = new Date(s.signedAt || s.actionedAt || 0).getTime();
+              return t > max ? t : max;
+            }, 0);
+            const latestEvidenceTime = (document.evidenceFiles || []).reduce((max: number, ef: any) => {
+              const t = new Date(ef.updatedAt || ef.createdAt || 0).getTime();
+              return t > max ? t : max;
+            }, 0);
+            const latestChangeTime = Math.max(docUpdatedTime, latestSigTime, latestEvidenceTime);
+            if (stat.mtimeMs >= latestChangeTime && stat.size > 1000) {
+              useCached = true;
+            }
+          } catch (e) {
+            useCached = false;
+          }
+        }
+
+        if (useCached) {
+          const cachedBuffer = await fs.promises.readFile(cachePdfPath);
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Length', String(cachedBuffer.length));
+          res.setHeader('Content-Disposition', `${disposition}; filename="${pdfFileName}"`);
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          return res.end(cachedBuffer);
+        }
+
         const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
         const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
+        const hasExplicitPageBreaks = /page-break-before:\s*always|break-before:\s*page|\.page-break/i.test(htmlContent);
+
         const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
         await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 }));
@@ -3908,20 +4164,39 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         } else {
           pdfOptions.format = 'A4';
           pdfOptions.landscape = false;
+          if (!hasExplicitPageBreaks) {
+            pdfOptions.scale = 0.95;
+          }
         }
-        const rawPdfBuffer = await page.pdf(pdfOptions);
+        let rawPdfBuffer = await page.pdf(pdfOptions);
+        if (!isLandscape && !isKwitansi && !hasExplicitPageBreaks) {
+          try {
+            const pDoc = await PDFDocument.load(rawPdfBuffer);
+            if (pDoc.getPageCount() > 1) {
+              const scaledPdfBuffer = await page.pdf({ ...pdfOptions, scale: 0.93 });
+              const scaledDoc = await PDFDocument.load(scaledPdfBuffer);
+              if (scaledDoc.getPageCount() === 1) {
+                rawPdfBuffer = scaledPdfBuffer;
+              }
+            }
+          } catch (scaleErr) {
+            console.warn('[PDF] Auto-fit check error:', scaleErr);
+          }
+        }
         await browser.close();
 
         // Merge supporting documents / evidence files if any
         const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
 
-        const cleanDocNum = (document.documentNumber || document.title || version.fileName || 'surat_keluar')
-          .replace(/[\/\\?%*:|"<>]/g, '_')
-          .replace(/\.(html?|htm)$/i, '');
-        const pdfFileName = `${cleanDocNum}.pdf`;
+        try {
+          await fs.promises.writeFile(cachePdfPath, Buffer.from(pdfBuffer));
+        } catch (cacheErr) {
+          console.warn('[PDF Cache] Could not write cache file:', cacheErr);
+        }
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Length', String(pdfBuffer.length));
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        res.setHeader('Content-Disposition', `${disposition}; filename="${pdfFileName}"`);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.end(Buffer.from(pdfBuffer));
       } catch (convErr: any) {
@@ -3940,6 +4215,8 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
       }
     }
 
+    const disposition = req.query.download === '1' || req.query.download === 'true' ? 'attachment' : 'inline';
+
     // If PDF file, check if there are supporting documents to merge
     if (fileExtension === '.pdf' || version.mimeType === 'application/pdf') {
       if (document.evidenceFiles && document.evidenceFiles.length > 0) {
@@ -3951,7 +4228,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
         const pdfFileName = `${cleanDocNum}.pdf`;
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Length', String(mergedBuffer.length));
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        res.setHeader('Content-Disposition', `${disposition}; filename="${pdfFileName}"`);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.end(mergedBuffer);
       }
@@ -3959,7 +4236,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
 
     // Send file with proper headers
     res.setHeader('Content-Type', version.mimeType || 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${version.fileName}"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     
     const fileStream = fs.createReadStream(filePath);
@@ -4032,10 +4309,11 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
 
         const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
         const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
+        const hasExplicitPageBreaks = /page-break-before:\s*always|break-before:\s*page|\.page-break/i.test(htmlContent);
         const browser = await launchPuppeteerBrowser();
         const page = await browser.newPage();
-        await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 1200, height: 1600, deviceScaleFactor: 2 }));
-        await page.emulateMediaType('screen');
+        await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 }));
+        await page.emulateMediaType('print');
 
         await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
@@ -4055,9 +4333,25 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         } else {
           pdfOptions.format = 'A4';
           pdfOptions.landscape = false;
-          pdfOptions.margin = { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' };
+          if (!hasExplicitPageBreaks) {
+            pdfOptions.scale = 0.95;
+          }
         }
-        const rawPdfBuffer = await page.pdf(pdfOptions);
+        let rawPdfBuffer = await page.pdf(pdfOptions);
+        if (!isLandscape && !isKwitansi && !hasExplicitPageBreaks) {
+          try {
+            const pDoc = await PDFDocument.load(rawPdfBuffer);
+            if (pDoc.getPageCount() > 1) {
+              const scaledPdfBuffer = await page.pdf({ ...pdfOptions, scale: 0.93 });
+              const scaledDoc = await PDFDocument.load(scaledPdfBuffer);
+              if (scaledDoc.getPageCount() === 1) {
+                rawPdfBuffer = scaledPdfBuffer;
+              }
+            }
+          } catch (scaleErr) {
+            console.warn('[PDF] Auto-fit check error (version):', scaleErr);
+          }
+        }
         await browser.close();
 
         // Merge supporting documents / evidence files if any
@@ -4087,6 +4381,8 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
       }
     }
 
+    const disposition = req.query.download === '1' || req.query.download === 'true' ? 'attachment' : 'inline';
+
     // If PDF file, check if there are supporting documents to merge
     if (fileExtension === '.pdf' || version.mimeType === 'application/pdf') {
       if (document.evidenceFiles && document.evidenceFiles.length > 0) {
@@ -4098,7 +4394,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
         const pdfFileName = `${cleanDocNum}.pdf`;
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Length', String(mergedBuffer.length));
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        res.setHeader('Content-Disposition', `${disposition}; filename="${pdfFileName}"`);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.end(mergedBuffer);
       }
@@ -4106,7 +4402,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
 
     // Send file with proper headers
     res.setHeader('Content-Type', version.mimeType || 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${version.fileName}"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     
     const fileStream = fs.createReadStream(filePath);
@@ -4558,6 +4854,7 @@ export async function getDocumentPdfBuffer(
 
     await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
 
+    const hasExplicitPageBreaks = /page-break-before:\s*always|break-before:\s*page|\.page-break/i.test(htmlContent);
     const pdfOptions: any = {
       printBackground: true,
       preferCSSPageSize: true,
@@ -4574,8 +4871,25 @@ export async function getDocumentPdfBuffer(
     } else {
       pdfOptions.format = 'A4';
       pdfOptions.landscape = false;
+      if (!hasExplicitPageBreaks) {
+        pdfOptions.scale = 0.95;
+      }
     }
-    const rawPdfBuffer = await page.pdf(pdfOptions);
+    let rawPdfBuffer = await page.pdf(pdfOptions);
+    if (!isLandscape && !isKwitansi && !hasExplicitPageBreaks) {
+      try {
+        const pDoc = await PDFDocument.load(rawPdfBuffer);
+        if (pDoc.getPageCount() > 1) {
+          const scaledPdfBuffer = await page.pdf({ ...pdfOptions, scale: 0.93 });
+          const scaledDoc = await PDFDocument.load(scaledPdfBuffer);
+          if (scaledDoc.getPageCount() === 1) {
+            rawPdfBuffer = scaledPdfBuffer;
+          }
+        }
+      } catch (scaleErr) {
+        console.warn('[PDF] Auto-fit check error (getDocumentPdfBuffer):', scaleErr);
+      }
+    }
     await browser.close();
 
     const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
