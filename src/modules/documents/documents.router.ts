@@ -3926,43 +3926,7 @@ router.get('/:id/render', authenticate, async (req: AuthRequest, res: Response) 
     const rawHtml = await fs.promises.readFile(filePath, 'utf8');
     // Use HTTP base URL so all images (like logos) load correctly in html2pdf
     const httpUrlBase = getApiBaseUrl(req) + '/';
-    let htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, httpUrlBase);
-
-    if (document.evidenceFiles && document.evidenceFiles.length > 0) {
-      const evidenceHtml = `
-<div class="amanah-evidence-section" style="margin-top: 36px; padding: 20px 16px; background: #f8fafc; border-top: 2px dashed #94a3b8; border-radius: 8px;">
-  <div style="font-family: Arial, sans-serif; font-size: 11pt; font-weight: bold; color: #1e293b; margin-bottom: 14px; text-align: center;">
-    📄 DOKUMEN LAMPIRAN TERKAIT (${document.evidenceFiles.length} Berkas)
-  </div>
-  ${document.evidenceFiles.map((ef: any, idx: number) => {
-    const efName = ef.name || `Lampiran ${idx + 1}`;
-    const cleanUrl = ef.fileUrl ? (ef.fileUrl.startsWith('http') ? ef.fileUrl : `${httpUrlBase}${ef.fileUrl.replace(/^\/+/, '')}`) : '';
-    const isImg = (ef.mimeType || '').startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(efName);
-    if (isImg && cleanUrl) {
-      return `
-        <div style="margin-bottom: 20px; text-align: center;">
-          <div style="font-size: 9pt; font-weight: bold; color: #475569; margin-bottom: 8px;">${efName}</div>
-          <img src="${cleanUrl}" alt="${efName}" style="max-width: 100%; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" />
-        </div>
-      `;
-    }
-    return `
-      <div style="display: flex; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-family: Arial, sans-serif;">
-        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-          <span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: bold; padding: 4px 8px; border-radius: 4px;">PDF</span>
-          <span style="font-size: 10pt; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${efName}</span>
-        </div>
-        ${cleanUrl ? `<a href="${cleanUrl}" target="_blank" style="padding: 6px 12px; background: #006633; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 9pt; font-weight: bold; white-space: nowrap;">Unduh / Buka</a>` : ''}
-      </div>
-    `;
-  }).join('')}
-</div>`;
-      if (htmlContent.includes('</body>')) {
-        htmlContent = htmlContent.replace('</body>', `${evidenceHtml}</body>`);
-      } else {
-        htmlContent = `${htmlContent}${evidenceHtml}`;
-      }
-    }
+    const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, httpUrlBase);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
@@ -4054,44 +4018,9 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
           });
         }
 
-        let htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
+        const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
 
         if (previewMode) {
-          if (document.evidenceFiles && document.evidenceFiles.length > 0) {
-            const evidenceHtml = `
-<div class="amanah-evidence-section" style="margin-top: 36px; padding: 20px 16px; background: #f8fafc; border-top: 2px dashed #94a3b8; border-radius: 8px;">
-  <div style="font-family: Arial, sans-serif; font-size: 11pt; font-weight: bold; color: #1e293b; margin-bottom: 14px; text-align: center;">
-    📄 DOKUMEN LAMPIRAN TERKAIT (${document.evidenceFiles.length} Berkas)
-  </div>
-  ${document.evidenceFiles.map((ef: any, idx: number) => {
-    const efName = ef.name || `Lampiran ${idx + 1}`;
-    const cleanUrl = ef.fileUrl ? (ef.fileUrl.startsWith('http') ? ef.fileUrl : `${baseUrl}${ef.fileUrl.replace(/^\/+/, '')}`) : '';
-    const isImg = (ef.mimeType || '').startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(efName);
-    if (isImg && cleanUrl) {
-      return `
-        <div style="margin-bottom: 20px; text-align: center;">
-          <div style="font-size: 9pt; font-weight: bold; color: #475569; margin-bottom: 8px;">${efName}</div>
-          <img src="${cleanUrl}" alt="${efName}" style="max-width: 100%; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" />
-        </div>
-      `;
-    }
-    return `
-      <div style="display: flex; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-family: Arial, sans-serif;">
-        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-          <span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: bold; padding: 4px 8px; border-radius: 4px;">PDF</span>
-          <span style="font-size: 10pt; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${efName}</span>
-        </div>
-        ${cleanUrl ? `<a href="${cleanUrl}" target="_blank" style="padding: 6px 12px; background: #006633; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 9pt; font-weight: bold; white-space: nowrap;">Unduh / Buka</a>` : ''}
-      </div>
-    `;
-  }).join('')}
-</div>`;
-            if (htmlContent.includes('</body>')) {
-              htmlContent = htmlContent.replace('</body>', `${evidenceHtml}</body>`);
-            } else {
-              htmlContent = `${htmlContent}${evidenceHtml}`;
-            }
-          }
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.setHeader('Content-Disposition', `inline; filename="${version.fileName}"`);
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
