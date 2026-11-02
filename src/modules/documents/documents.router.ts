@@ -3014,16 +3014,25 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
   // Parse metadata from HTML
   let templateVariables: any = {};
   let penandatanganSteps: any[] = [];
+  let metaData: any = {};
   const metaMatch = rawHtml.match(/<script id="template-metadata" type="application\/json">\s*([\s\S]*?)\s*<\/script>/);
   if (metaMatch) {
     try {
       const meta = JSON.parse(metaMatch[1] || '{}');
+      metaData = meta;
       templateVariables = meta.templateVariables || {};
       penandatanganSteps = (meta.steps || []).filter((st: any) => st.role === 'PENANDATANGAN');
     } catch (e) {
       console.warn("Failed to parse template metadata in injectSignaturesToHtml:", e);
     }
   }
+
+  const isUniversal = Boolean(
+    metaData?.selectedTemplate === 'SK-UNIVERSAL' ||
+    metaData?.selectedTemplate === 'universal' ||
+    rawHtml.includes('SK-UNIVERSAL') ||
+    rawHtml.includes('universal-letter-editor-content')
+  );
 
   // Helper to match user name against target signatory name
   const isNameMatch = (userName: string, targetName: string) => {
@@ -3057,12 +3066,35 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
     const lowerName = fullName.toLowerCase();
     const isUserKetua = userLowerKetua.some(k => lowerName.includes(k));
     const isUserSekretaris = userLowerSekretaris.some(k => lowerName.includes(k));
+    const isWasik = lowerName.includes('wasik') || (s.user?.jobTitle || '').toLowerCase().includes('kepala sekretariat');
+    const isExplicitApprover = metaData?.approverList?.some((a: any) => a.userId === s.userId);
+    const isPenandatanganInList = metaData?.penandatanganList && metaData.penandatanganList.length > 0
+      ? metaData.penandatanganList.some((p: any) => p.userId === s.userId)
+      : (penandatanganSteps.length > 0 ? penandatanganSteps.some((st: any) => st.userId === s.userId) : true);
+
+    // On SK-UNIVERSAL: Pak Abdul Wasik is Kepala Sekretariat / Approver, NOT a letter signatory.
+    // Skip him so his barcode and name never appear on the letter.
+    if (isUniversal && (isWasik || isExplicitApprover || !isPenandatanganInList)) {
+      continue;
+    }
 
     let matchedSlot: string | null = null;
     let targetName = '';
     let roleName = '';
 
-    if (targetKiri && (isNameMatch(fullName, targetKiri) || isUserKetua)) {
+    if (isUniversal) {
+      if (isUserKetua && !validSigners.some(v => v.slot === 'kiri')) {
+        matchedSlot = 'kiri';
+        targetName = fullName;
+        roleName = 'Ketua';
+      } else if (isUserSekretaris && !validSigners.some(v => v.slot === 'kanan')) {
+        matchedSlot = 'kanan';
+        targetName = fullName;
+        roleName = 'Sekretaris';
+      } else {
+        continue;
+      }
+    } else if (targetKiri && (isNameMatch(fullName, targetKiri) || isUserKetua)) {
       matchedSlot = 'kiri';
       targetName = targetKiri;
       roleName = cleanJobTitle(templateVariables.jabatanKiri || templateVariables.jabatanKetua) || 'Ketua';
