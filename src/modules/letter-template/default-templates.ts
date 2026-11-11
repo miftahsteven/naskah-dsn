@@ -66,7 +66,7 @@ export const FULL_HTML_UNIVERSAL = `<div style="font-family: Arial, sans-serif; 
     </div>
 
     <!-- TANDA TANGAN SECTION -->
-    <table style="width: 100%; border-collapse: collapse; margin-top: 24px; page-break-inside: avoid;">
+    <table style="width: 100%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid;">
       <tr>
         <td style="width: 45%; vertical-align: top; padding: 0; text-align: left;">
           <div style="display: inline-block; text-align: left; font-family: Arial, sans-serif;">

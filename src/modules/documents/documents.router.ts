@@ -2339,11 +2339,20 @@ router.patch('/:id/restore', authenticate, checkPermission('DOC_EDIT'), async (r
 });
 
 // ── EDIT DOCUMENT ──
-router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.any(), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, categoryId, subCategory, classificationId, documentNumber, status, documentDate, receivedDate } = req.body;
-    const file = req.file;
+    const { title, categoryId, subCategory, classificationId, documentNumber, status, documentDate, receivedDate, deleteEvidenceIds } = req.body;
+    const files = (req.files as Express.Multer.File[]) || [];
+    const file = req.file || files.find((f) => f.fieldname === 'file') || files[0];
+    const supportingFiles = files.filter(
+      (f) =>
+        f !== file &&
+        (f.fieldname === 'dokumenPendukung' ||
+          f.fieldname === 'evidenceFile' ||
+          f.fieldname === 'supportingDocument' ||
+          f.fieldname.startsWith('dokumenPendukung'))
+    );
 
     const existingDoc = await prisma.document.findUnique({
       where: { id: String(id) },
@@ -2526,6 +2535,57 @@ router.put('/:id', authenticate, checkPermission('DOC_EDIT'), upload.single('fil
       }
     }
 
+    // Handle deleting evidence files if requested in PUT payload
+    if (deleteEvidenceIds) {
+      let idsToDelete: string[] = [];
+      try {
+        idsToDelete = Array.isArray(deleteEvidenceIds)
+          ? deleteEvidenceIds
+          : typeof deleteEvidenceIds === 'string' && deleteEvidenceIds.startsWith('[')
+          ? JSON.parse(deleteEvidenceIds)
+          : String(deleteEvidenceIds).split(',').map((s: string) => s.trim()).filter(Boolean);
+      } catch (_) {
+        idsToDelete = String(deleteEvidenceIds).split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+
+      if (idsToDelete.length > 0) {
+        const filesToDelete = await prisma.evidenceFile.findMany({
+          where: { id: { in: idsToDelete }, documentId: String(id) }
+        });
+        for (const ef of filesToDelete) {
+          const cand = resolveExistingFilePath(ef.fileUrl);
+          if (cand && fs.existsSync(cand)) {
+            try { fs.unlinkSync(cand); } catch (_) {}
+          }
+        }
+        await prisma.evidenceFile.deleteMany({
+          where: { id: { in: idsToDelete }, documentId: String(id) }
+        });
+      }
+    }
+
+    // Handle supporting files uploaded directly in PUT payload
+    if (supportingFiles.length > 0) {
+      for (const sf of supportingFiles) {
+        const ext = path.extname(sf.originalname).toLowerCase();
+        if (ext === '.pdf' || sf.mimetype === 'application/pdf') {
+          await prisma.evidenceFile.create({
+            data: {
+              name: sf.originalname,
+              fileUrl: sf.path,
+              fileSize: sf.size,
+              mimeType: sf.mimetype,
+              documentId: String(id),
+              uploaderId: req.user!.id,
+            }
+          });
+        }
+      }
+    }
+
+    // Always invalidate document PDF cache on document edit
+    await invalidateDocumentPdfCache(String(id));
+
     res.json({ status: 'success', data: updatedDoc });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -2703,6 +2763,78 @@ async function launchPuppeteerBrowser() {
   }
 }
 
+// ── UNIFIED HTML TO PDF CONVERTER (WITH DYNAMIC SINGLE/MULTI-PAGE FIT) ──
+export async function convertHtmlToPdfBuffer(
+  htmlContent: string,
+  evidenceFiles: any[] = []
+): Promise<Buffer> {
+  const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
+  const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
+  const htmlBodyOnly = htmlContent.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  const explicitBreaks = htmlBodyOnly.match(/page-break-before:\s*always|break-before:\s*page|\.page-break/gi) || [];
+  const expectedTargetPages = explicitBreaks.length + 1;
+
+  const browser = await launchPuppeteerBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setViewport(
+      isKwitansi
+        ? { width: 1400, height: 620, deviceScaleFactor: 2 }
+        : isLandscape
+        ? { width: 1400, height: 990, deviceScaleFactor: 2 }
+        : { width: 794, height: 1123, deviceScaleFactor: 2 }
+    );
+    await page.emulateMediaType('print');
+    await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
+
+    const pdfOptions: any = {
+      printBackground: true,
+      preferCSSPageSize: true,
+    };
+    if (isKwitansi) {
+      pdfOptions.width = '240mm';
+      pdfOptions.height = '106mm';
+      pdfOptions.landscape = true;
+      pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+    } else if (isLandscape) {
+      pdfOptions.format = 'A4';
+      pdfOptions.landscape = true;
+      pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
+    } else {
+      pdfOptions.format = 'A4';
+      pdfOptions.landscape = false;
+      pdfOptions.scale = 0.95;
+    }
+
+    let rawPdfBuffer = await page.pdf(pdfOptions);
+    if (!isLandscape && !isKwitansi) {
+      try {
+        const pDoc = await PDFDocument.load(rawPdfBuffer);
+        if (pDoc.getPageCount() > expectedTargetPages) {
+          const candidateScales = [0.93, 0.91, 0.89, 0.87, 0.85, 0.83, 0.81, 0.79, 0.77, 0.75];
+          for (const s of candidateScales) {
+            const scaledPdfBuffer = await page.pdf({ ...pdfOptions, scale: s });
+            const scaledDoc = await PDFDocument.load(scaledPdfBuffer);
+            if (scaledDoc.getPageCount() <= expectedTargetPages) {
+              rawPdfBuffer = scaledPdfBuffer;
+              break;
+            }
+          }
+        }
+      } catch (scaleErr) {
+        console.warn('[PDF] Auto-fit check error (convertHtmlToPdfBuffer):', scaleErr);
+      }
+    }
+    await browser.close();
+
+    const finalPdf = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), evidenceFiles || []);
+    return Buffer.from(finalPdf);
+  } catch (err) {
+    try { await browser.close(); } catch (_) {}
+    throw err;
+  }
+}
+
 
 function resolveExistingFilePath(fileUrl: string): string | null {
   if (!fileUrl) return null;
@@ -2743,6 +2875,50 @@ function resolveExistingFilePath(fileUrl: string): string | null {
     }
   }
   return null;
+}
+
+export async function invalidateDocumentPdfCache(documentId: string): Promise<void> {
+  if (!documentId) return;
+  try {
+    const doc = await prisma.document.findUnique({
+      where: { id: String(documentId) },
+      include: { versions: true }
+    });
+    if (!doc) return;
+
+    // 1. Touch document.updatedAt to current timestamp
+    await prisma.document.update({
+      where: { id: String(documentId) },
+      data: { updatedAt: new Date() }
+    }).catch(() => {});
+
+    // 2. Unlink any cached pdfs for all versions of this document
+    for (const v of doc.versions || []) {
+      if (!v.fileUrl) continue;
+      const candidates = [
+        resolveExistingFilePath(v.fileUrl),
+        path.resolve(process.cwd(), v.fileUrl),
+        path.resolve(process.cwd(), 'uploads', path.basename(v.fileUrl)),
+      ].filter(Boolean) as string[];
+
+      for (const p of candidates) {
+        if (p && fs.existsSync(p)) {
+          const dir = path.dirname(p);
+          const base = path.basename(p, path.extname(p));
+          const v2 = path.join(dir, `${base}_cached_v2.pdf`);
+          const v1 = path.join(dir, `${base}_cached.pdf`);
+          if (fs.existsSync(v2)) {
+            try { await fs.promises.unlink(v2); } catch (_) {}
+          }
+          if (fs.existsSync(v1)) {
+            try { await fs.promises.unlink(v1); } catch (_) {}
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[PDF Cache] Invalidate error:', err);
+  }
 }
 
 export async function ensureExistingFilePath(fileUrl: string, _docId?: string, _authHeader?: string): Promise<string | null> {
@@ -3502,7 +3678,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
     <tfoot>
       <tr>
         <td>
-          <div style="height: 20mm;"></div>
+          <div style="height: 8mm;"></div>
         </td>
       </tr>
     </tfoot>
@@ -3533,7 +3709,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
         margin: 0 !important;
         padding: 0 !important;
         font-family: Arial, Helvetica, sans-serif !important;
-        font-size: 10.5pt !important;
+        font-size: 10pt !important;
         line-height: 1.25 !important;
         color: #111827 !important;
         -webkit-print-color-adjust: exact !important;
@@ -3560,7 +3736,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
         vertical-align: top !important;
       }
       table.master-page-table > tfoot > tr > td {
-        height: 20mm !important; /* Reserves space so body never overlaps footer */
+        height: 8mm !important; /* Reserves space so body never overlaps footer */
         padding: 0 !important;
         border: none !important;
       }
@@ -3703,23 +3879,23 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
         font-family: Arial, Helvetica, sans-serif !important;
       }
       p, td, th, li, ol, ul {
-        font-size: 10.5pt !important;
+        font-size: 10pt !important;
       }
       ol, ul {
-        margin-top: 4px !important;
-        margin-bottom: 8px !important;
+        margin-top: 2px !important;
+        margin-bottom: 4px !important;
         padding-left: 20px !important;
       }
       li {
-        margin-bottom: 3px !important;
-        font-size: 10.5pt !important;
-        line-height: 1.3 !important;
+        margin-bottom: 2px !important;
+        font-size: 10pt !important;
+        line-height: 1.25 !important;
       }
       p {
         margin-top: 0px !important;
-        margin-bottom: 8px !important;
-        font-size: 10.5pt !important;
-        line-height: 1.35 !important;
+        margin-bottom: 4px !important;
+        font-size: 10pt !important;
+        line-height: 1.25 !important;
       }
 
       /* Kop Surat Header */
@@ -3728,17 +3904,17 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
         max-width: 100% !important;
         height: auto !important;
         display: block !important;
-        margin: 0 auto 6px auto !important;
+        margin: 0 auto 4px auto !important;
       }
 
       /* Bismillah - proper, elegant calligraphy */
       img[src*="bismillah"], img[alt*="Bismillah"], .bismillah-img {
-        width: 260px !important;
-        max-width: 45% !important;
+        width: 250px !important;
+        max-width: 42% !important;
         height: auto !important;
-        max-height: 48px !important;
+        max-height: 40px !important;
         display: block !important;
-        margin: 6px auto 10px auto !important;
+        margin: 4px auto 8px auto !important;
         object-fit: contain !important;
         filter: brightness(0) !important;
       }
@@ -3746,30 +3922,32 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
       /* Spacing of meta table & date block */
       table[style*="calc(100% - 15px)"] td,
       table.meta-table td {
-        padding: 2.5px 0 !important;
-        line-height: 1.25 !important;
+        padding: 1.5px 0 !important;
+        line-height: 1.2 !important;
+        font-size: 10pt !important;
       }
 
       /* Jadwal table spacing and padding */
       table[style*="margin: 8px auto"],
       table[style*="margin: 15px auto"],
       table[style*="margin-left: 30px"] {
-        margin-top: 6px !important;
-        margin-bottom: 10px !important;
-        font-size: 10.5pt !important;
+        margin-top: 4px !important;
+        margin-bottom: 6px !important;
+        font-size: 10pt !important;
       }
       table[style*="margin: 8px auto"] td,
       table[style*="margin: 15px auto"] td,
       table[style*="margin-left: 30px"] td {
-        padding: 2.5px 0 !important;
-        line-height: 1.25 !important;
+        padding: 1.5px 0 !important;
+        line-height: 1.2 !important;
       }
 
       /* Signature table spacing */
       table[style*="margin-top: 14px"],
       table[style*="margin-top: 15px"],
+      table[style*="margin-top: 24px"],
       table[style*="margin-top: 30px"] {
-        margin-top: 4px !important;
+        margin-top: 2px !important;
         page-break-inside: avoid !important;
       }
       div[style*="width: 280px"] {
@@ -3782,7 +3960,7 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
       }
       div[style*="height: 60px"],
       div[style*="height: 70px"] {
-        height: 50px !important;
+        height: 48px !important;
       }
       div[style*="width: 60px"] img[src*="logo-dsn"],
       div[style*="width: 70px"] img[src*="logo-dsn"] {
@@ -3799,20 +3977,20 @@ export async function injectSignaturesToHtml(rawHtml: string, signatures: any[],
         vertical-align: middle !important;
       }
       img.qr-signature-img {
-        width: 55px !important;
-        height: 55px !important;
-        max-width: 55px !important;
-        max-height: 55px !important;
-        min-width: 55px !important;
-        min-height: 55px !important;
+        width: 52px !important;
+        height: 52px !important;
+        max-width: 52px !important;
+        max-height: 52px !important;
+        min-width: 52px !important;
+        min-height: 52px !important;
         display: inline-block !important;
         object-fit: contain !important;
       }
       div[style*="width: 60px"][style*="height: 60px"],
       div[style*="width: 70px"][style*="height: 70px"] {
-        margin: 2px 0 2px 0 !important;
-        width: 55px !important;
-        height: 55px !important;
+        margin: 1px 0 1px 0 !important;
+        width: 52px !important;
+        height: 52px !important;
       }
       .amanah-letter-footer td {
         font-size: 7.5pt !important;
@@ -4059,7 +4237,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
           return res.end(htmlContent);
         }
 
-        const cachePdfPath = path.join(path.dirname(filePath), `${path.basename(filePath, path.extname(filePath))}_cached.pdf`);
+        const cachePdfPath = path.join(path.dirname(filePath), `${path.basename(filePath, path.extname(filePath))}_cached_v2.pdf`);
         const cleanDocNum = (document.documentNumber || document.title || version.fileName || 'surat_keluar')
           .replace(/[\/\\?%*:|"<>]/g, '_')
           .replace(/\.(html?|htm)$/i, '');
@@ -4098,56 +4276,7 @@ router.get('/:id/download', authenticate, checkPermission('DOC_VIEW'), async (re
           return res.end(cachedBuffer);
         }
 
-        const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
-        const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
-        const hasExplicitPageBreaks = /page-break-before:\s*always|break-before:\s*page|\.page-break/i.test(htmlContent);
-
-        const browser = await launchPuppeteerBrowser();
-        const page = await browser.newPage();
-        await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 }));
-        await page.emulateMediaType('print');
-
-        await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
-
-        const pdfOptions: any = {
-          printBackground: true,
-          preferCSSPageSize: true,
-        };
-        if (isKwitansi) {
-          pdfOptions.width = '240mm';
-          pdfOptions.height = '106mm';
-          pdfOptions.landscape = true;
-          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
-        } else if (isLandscape) {
-          pdfOptions.format = 'A4';
-          pdfOptions.landscape = true;
-          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
-        } else {
-          pdfOptions.format = 'A4';
-          pdfOptions.landscape = false;
-          if (!hasExplicitPageBreaks) {
-            pdfOptions.scale = 0.95;
-          }
-        }
-        let rawPdfBuffer = await page.pdf(pdfOptions);
-        if (!isLandscape && !isKwitansi && !hasExplicitPageBreaks) {
-          try {
-            const pDoc = await PDFDocument.load(rawPdfBuffer);
-            if (pDoc.getPageCount() > 1) {
-              const scaledPdfBuffer = await page.pdf({ ...pdfOptions, scale: 0.93 });
-              const scaledDoc = await PDFDocument.load(scaledPdfBuffer);
-              if (scaledDoc.getPageCount() === 1) {
-                rawPdfBuffer = scaledPdfBuffer;
-              }
-            }
-          } catch (scaleErr) {
-            console.warn('[PDF] Auto-fit check error:', scaleErr);
-          }
-        }
-        await browser.close();
-
-        // Merge supporting documents / evidence files if any
-        const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
+        const pdfBuffer = await convertHtmlToPdfBuffer(htmlContent, document.evidenceFiles || []);
 
         try {
           await fs.promises.writeFile(cachePdfPath, Buffer.from(pdfBuffer));
@@ -4268,55 +4397,7 @@ router.get('/:id/versions/:versionId/download', authenticate, checkPermission('D
           return res.end(htmlContent);
         }
 
-        const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
-        const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
-        const hasExplicitPageBreaks = /page-break-before:\s*always|break-before:\s*page|\.page-break/i.test(htmlContent);
-        const browser = await launchPuppeteerBrowser();
-        const page = await browser.newPage();
-        await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 }));
-        await page.emulateMediaType('print');
-
-        await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
-
-        const pdfOptions: any = {
-          printBackground: true,
-          preferCSSPageSize: true,
-        };
-        if (isKwitansi) {
-          pdfOptions.width = '240mm';
-          pdfOptions.height = '106mm';
-          pdfOptions.landscape = true;
-          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
-        } else if (isLandscape) {
-          pdfOptions.format = 'A4';
-          pdfOptions.landscape = true;
-          pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
-        } else {
-          pdfOptions.format = 'A4';
-          pdfOptions.landscape = false;
-          if (!hasExplicitPageBreaks) {
-            pdfOptions.scale = 0.95;
-          }
-        }
-        let rawPdfBuffer = await page.pdf(pdfOptions);
-        if (!isLandscape && !isKwitansi && !hasExplicitPageBreaks) {
-          try {
-            const pDoc = await PDFDocument.load(rawPdfBuffer);
-            if (pDoc.getPageCount() > 1) {
-              const scaledPdfBuffer = await page.pdf({ ...pdfOptions, scale: 0.93 });
-              const scaledDoc = await PDFDocument.load(scaledPdfBuffer);
-              if (scaledDoc.getPageCount() === 1) {
-                rawPdfBuffer = scaledPdfBuffer;
-              }
-            }
-          } catch (scaleErr) {
-            console.warn('[PDF] Auto-fit check error (version):', scaleErr);
-          }
-        }
-        await browser.close();
-
-        // Merge supporting documents / evidence files if any
-        const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
+        const pdfBuffer = await convertHtmlToPdfBuffer(htmlContent, document.evidenceFiles || []);
 
         const cleanDocNum = (document.documentNumber || document.title || version.fileName || 'surat_keluar')
           .replace(/[\/\\?%*:|"<>]/g, '_')
@@ -4504,6 +4585,9 @@ router.post('/:id/evidence/files', authenticate, upload.single('file'), async (r
       fileUrl: `${baseUrl}/documents/${id}/evidence/files/${evidenceFile.id}/download`,
     };
 
+    // Invalidate cached PDF so new evidence is immediately included in generated PDF
+    await invalidateDocumentPdfCache(String(id));
+
     res.status(201).json({ status: 'success', data: transformedFile });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -4558,15 +4642,33 @@ router.get('/:id/evidence/files/:fileId/download', async (req: Request, res: Res
 // ── DELETE EVIDENCE FILE ──
 router.delete('/:id/evidence/files/:fileId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { fileId } = req.params;
+    const { id, fileId } = req.params;
     const file = await prisma.evidenceFile.findUnique({ where: { id: String(fileId) } });
     if (!file) return res.status(404).json({ status: 'error', message: 'File not found' });
 
-    if (fs.existsSync(file.fileUrl)) {
-      fs.unlinkSync(file.fileUrl);
+    const rawPath = file.fileUrl || '';
+    const cleanPath = rawPath.replace(/^\/+/, '');
+    const filename = path.basename(cleanPath);
+
+    const candidates = [
+      rawPath,
+      resolveExistingFilePath(rawPath),
+      path.resolve(process.cwd(), cleanPath),
+      path.resolve(process.cwd(), 'uploads', cleanPath.replace(/^uploads\//, '')),
+      path.resolve(process.cwd(), 'uploads', filename),
+    ].filter(Boolean) as string[];
+
+    for (const cand of candidates) {
+      if (cand && fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+        try { fs.unlinkSync(cand); } catch (_) {}
+      }
     }
 
     await prisma.evidenceFile.delete({ where: { id: String(fileId) } });
+
+    // Touch document and invalidate cached PDF
+    await invalidateDocumentPdfCache(String(id || file.documentId));
+
     res.json({ status: 'success', message: 'File deleted successfully' });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -4576,15 +4678,18 @@ router.delete('/:id/evidence/files/:fileId', authenticate, async (req: AuthReque
 // ── DELETE EVIDENCE FOLDER ──
 router.delete('/:id/evidence/folders/:folderId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { folderId } = req.params;
+    const { id, folderId } = req.params;
     const folder = await prisma.evidenceFolder.findUnique({ where: { id: String(folderId) } });
     if (!folder) return res.status(404).json({ status: 'error', message: 'Folder not found' });
 
     const deleteFolderFilesPhysically = async (fid: string) => {
       const files = await prisma.evidenceFile.findMany({ where: { folderId: fid } });
       for (const file of files) {
-        if (fs.existsSync(file.fileUrl)) {
-          fs.unlinkSync(file.fileUrl);
+        if (file.fileUrl) {
+          const cand = resolveExistingFilePath(file.fileUrl);
+          if (cand && fs.existsSync(cand)) {
+            try { fs.unlinkSync(cand); } catch (_) {}
+          }
         }
       }
       const subfolders = await prisma.evidenceFolder.findMany({ where: { parentId: fid } });
@@ -4595,6 +4700,9 @@ router.delete('/:id/evidence/folders/:folderId', authenticate, async (req: AuthR
 
     await deleteFolderFilesPhysically(String(folderId));
     await prisma.evidenceFolder.delete({ where: { id: String(folderId) } });
+
+    await invalidateDocumentPdfCache(String(id));
+
     res.json({ status: 'success', message: 'Folder and contents deleted successfully' });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -4805,55 +4913,48 @@ export async function getDocumentPdfBuffer(
     }
 
     const htmlContent = await injectSignaturesToHtml(rawHtml, allSignatures, baseUrl);
-    const isLandscape = /landscape|\.certificate-sheet|\.cert-page|size:\s*A4\s*landscape/i.test(htmlContent);
-    const isKwitansi = /\.kwitansi-card|kwitansi-bg/i.test(htmlContent);
 
-    const browser = await launchPuppeteerBrowser();
-    const page = await browser.newPage();
-    await page.setViewport(isKwitansi ? { width: 1400, height: 620, deviceScaleFactor: 2 } : (isLandscape ? { width: 1400, height: 990, deviceScaleFactor: 2 } : { width: 794, height: 1123, deviceScaleFactor: 2 }));
-    await page.emulateMediaType('print');
-
-    await page.setContent(htmlContent, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
-
-    const hasExplicitPageBreaks = /page-break-before:\s*always|break-before:\s*page|\.page-break/i.test(htmlContent);
-    const pdfOptions: any = {
-      printBackground: true,
-      preferCSSPageSize: true,
-    };
-    if (isKwitansi) {
-      pdfOptions.width = '240mm';
-      pdfOptions.height = '106mm';
-      pdfOptions.landscape = true;
-      pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
-    } else if (isLandscape) {
-      pdfOptions.format = 'A4';
-      pdfOptions.landscape = true;
-      pdfOptions.margin = { top: 0, bottom: 0, left: 0, right: 0 };
-    } else {
-      pdfOptions.format = 'A4';
-      pdfOptions.landscape = false;
-      if (!hasExplicitPageBreaks) {
-        pdfOptions.scale = 0.95;
-      }
-    }
-    let rawPdfBuffer = await page.pdf(pdfOptions);
-    if (!isLandscape && !isKwitansi && !hasExplicitPageBreaks) {
+    const cachePdfPath = path.join(path.dirname(filePath), `${path.basename(filePath, path.extname(filePath))}_cached_v2.pdf`);
+    let useCached = false;
+    if (fs.existsSync(cachePdfPath)) {
       try {
-        const pDoc = await PDFDocument.load(rawPdfBuffer);
-        if (pDoc.getPageCount() > 1) {
-          const scaledPdfBuffer = await page.pdf({ ...pdfOptions, scale: 0.93 });
-          const scaledDoc = await PDFDocument.load(scaledPdfBuffer);
-          if (scaledDoc.getPageCount() === 1) {
-            rawPdfBuffer = scaledPdfBuffer;
-          }
+        const stat = await fs.promises.stat(cachePdfPath);
+        const docUpdatedTime = (document.updatedAt ? new Date(document.updatedAt) : new Date(0)).getTime();
+        const latestSigTime = (allSignatures || []).reduce((max: number, s: any) => {
+          const t = new Date(s.signedAt || s.actionedAt || 0).getTime();
+          return t > max ? t : max;
+        }, 0);
+        const latestEvidenceTime = (document.evidenceFiles || []).reduce((max: number, ef: any) => {
+          const t = new Date(ef.updatedAt || ef.createdAt || 0).getTime();
+          return t > max ? t : max;
+        }, 0);
+        const latestChangeTime = Math.max(docUpdatedTime, latestSigTime, latestEvidenceTime);
+        if (stat.mtimeMs >= latestChangeTime && stat.size > 1000) {
+          useCached = true;
         }
-      } catch (scaleErr) {
-        console.warn('[PDF] Auto-fit check error (getDocumentPdfBuffer):', scaleErr);
+      } catch (e) {
+        useCached = false;
       }
     }
-    await browser.close();
 
-    const pdfBuffer = await mergePdfWithEvidence(Buffer.from(rawPdfBuffer), document.evidenceFiles || []);
+    if (useCached) {
+      const cachedBuffer = await fs.promises.readFile(cachePdfPath);
+      return {
+        buffer: Buffer.from(cachedBuffer),
+        fileName: safePdfFileName,
+        title: document.title,
+        documentNumber: document.documentNumber || '',
+      };
+    }
+
+    const pdfBuffer = await convertHtmlToPdfBuffer(htmlContent, document.evidenceFiles || []);
+
+    try {
+      await fs.promises.writeFile(cachePdfPath, Buffer.from(pdfBuffer));
+    } catch (cacheErr) {
+      console.warn('[PDF Cache] Could not write cache file (getDocumentPdfBuffer):', cacheErr);
+    }
+
     return {
       buffer: Buffer.from(pdfBuffer),
       fileName: safePdfFileName,
