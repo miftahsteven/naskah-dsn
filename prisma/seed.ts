@@ -106,6 +106,7 @@ async function main() {
     { level: 'BIDANG_FATWA', name: 'Bidang Fatwa' },
     { level: 'BIDANG_LAYANAN', name: 'Bidang Layanan' },
     { level: 'DIARSIPKAN', name: 'Diarsipkan' },
+    { level: 'KEBENDAHARAAN', name: 'Kebendaharaan' },
   ];
 
   for (const item of classifications) {

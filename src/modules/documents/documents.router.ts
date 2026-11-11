@@ -403,10 +403,111 @@ router.get('/:id/verify', async (req: Request, res: Response) => {
 router.get('/meta', authenticate, async (req: Request, res: Response) => {
   try {
     const [categories, classifications] = await Promise.all([
-      prisma.documentCategory.findMany(),
-      prisma.documentClassification.findMany(),
+      prisma.documentCategory.findMany({ orderBy: { name: 'asc' } }),
+      prisma.documentClassification.findMany({ orderBy: { name: 'asc' } }),
     ]);
     res.json({ status: 'success', data: { categories, classifications } });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ── CRUD CLASSIFICATIONS (MANAJEMEN KLASIFIKASI SURAT) ──
+router.get('/classifications', authenticate, async (req: Request, res: Response) => {
+  try {
+    const classifications = await prisma.documentClassification.findMany({
+      include: {
+        _count: {
+          select: { documents: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+    res.json({ status: 'success', data: classifications });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+router.post('/classifications', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { name, level } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ status: 'error', message: 'Nama klasifikasi wajib diisi' });
+    }
+    const trimmedName = name.trim();
+    let generatedLevel = (level && typeof level === 'string' && level.trim())
+      ? level.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_')
+      : trimmedName.toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_');
+
+    if (!generatedLevel) {
+      generatedLevel = `CLS_${Date.now()}`;
+    }
+
+    // Check if level or name already exists
+    const existing = await prisma.documentClassification.findFirst({
+      where: {
+        OR: [
+          { level: generatedLevel },
+          { name: { equals: trimmedName, mode: 'insensitive' } },
+        ],
+      },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Klasifikasi '${trimmedName}' sudah terdaftar.`,
+      });
+    }
+
+    const created = await prisma.documentClassification.create({
+      data: {
+        name: trimmedName,
+        level: generatedLevel,
+      },
+    });
+
+    res.status(201).json({ status: 'success', data: created });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+router.put('/classifications/:id', authenticate, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ status: 'error', message: 'Nama klasifikasi wajib diisi' });
+    }
+    const trimmedName = name.trim();
+    const updated = await prisma.documentClassification.update({
+      where: { id },
+      data: { name: trimmedName },
+    });
+    res.json({ status: 'success', data: updated });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+router.delete('/classifications/:id', authenticate, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const docCount = await prisma.document.count({
+      where: { classificationId: id },
+    });
+    if (docCount > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Klasifikasi tidak dapat dihapus karena sedang digunakan oleh ${docCount} dokumen.`,
+      });
+    }
+    await prisma.documentClassification.delete({
+      where: { id },
+    });
+    res.json({ status: 'success', message: 'Klasifikasi berhasil dihapus' });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
